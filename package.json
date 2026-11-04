@@ -24,6 +24,7 @@
     "check": "node --check lib/analytics.js && node --check lib/i18n.js && node --check background/service-worker.js && node --check content/content.js && node --check sidepanel/sidepanel.js",
     "package:cws": "node scripts/package-cws.mjs",
     "promo": "node scripts/generate-promo.mjs",
+    "format-screens": "node scripts/format-screenshots.mjs",
     "icons": "python3 scripts/generate-icons.py"
   },
   "engines": {
