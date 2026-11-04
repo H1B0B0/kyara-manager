@@ -282,6 +282,51 @@ const tests = [
       assert.equal(i18n.t("verdict.VENDRE"), "VENDER");
       assert.equal(i18n.t("copiesCount", { n: 4 }), "4 copia(s)");
     }
+  },
+  {
+    name: "Fast sales velocity (48h/12h) guardrail prevents clogging 10 slots with slow-moving cards",
+    fn: () => {
+      // 1. Low-margin card with slow 48h pace (< 3 sales/7d): advises RECYCLER to immediately free up Chakra and avoid tying up a 12h slot
+      const slowLowMargin = Analytics.evaluateDuplicate(
+        { id: 201, name: "Tortue Lente", rarity: "C" },
+        { characterId: 201, qty: 3, locked: 0 },
+        { median7d: 8, lowestFixed: 8, sales7d: 1 }, // 1 sale in 7d => ~0.3 sale/48h, very low 12h prob
+        Analytics.DEFAULT_RECYCLE_VALUES,
+        Analytics.DEFAULT_SETTINGS,
+        0
+      );
+      assert.equal(slowLowMargin.isSlowMover, true);
+      assert.equal(slowLowMargin.verdict, "RECYCLER");
+      assert.equal(slowLowMargin.canAutoSell, false);
+      assert.ok(slowLowMargin.verdictReason.includes("48h"));
+
+      // 2. High-value card with slow 48h pace: advises ATTENDRE (not recycling, but don't tie up 10 auto-sell slots)
+      const slowHighValue = Analytics.evaluateDuplicate(
+        { id: 202, name: "Légende Oubliée", rarity: "L" },
+        { characterId: 202, qty: 2, locked: 0 },
+        { median7d: 250, lowestFixed: 250, sales7d: 1 }, // Slow sales pace
+        Analytics.DEFAULT_RECYCLE_VALUES,
+        Analytics.DEFAULT_SETTINGS,
+        0
+      );
+      assert.equal(slowHighValue.isSlowMover, true);
+      assert.equal(slowHighValue.verdict, "ATTENDRE");
+      assert.equal(slowHighValue.canAutoSell, false);
+      assert.ok(slowHighValue.verdictReason.includes("12h"));
+
+      // 3. Fast-moving card (sales7d >= 10, high 12h probability): advises VENDRE and canAutoSell = true
+      const fastCard = Analytics.evaluateDuplicate(
+        { id: 203, name: "Star Rapide", rarity: "R" },
+        { characterId: 203, qty: 3, locked: 0 },
+        { median7d: 25, lowestFixed: 24, sales7d: 28 }, // 4 sales/day, high 12h sales probability
+        Analytics.DEFAULT_RECYCLE_VALUES,
+        Analytics.DEFAULT_SETTINGS,
+        0
+      );
+      assert.equal(fastCard.isSlowMover, false);
+      assert.equal(fastCard.verdict, "VENDRE");
+      assert.equal(fastCard.canAutoSell, true);
+    }
   }
 ];
 

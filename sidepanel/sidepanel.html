@@ -486,8 +486,12 @@
               </select>
             </div>
             <div class="switch-row switch-row--compact">
-              <label for="cfg-guardrail-70">Garde-fou 70% de la médiane 7j (anti-bradage)</label>
+              <label for="cfg-guardrail-70" data-i18n="guardrail70Label">Garde-fou 70% de la médiane 7j (anti-bradage)</label>
               <input type="checkbox" role="switch" id="cfg-guardrail-70" class="switch switch--sm" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-velocity-check" data-i18n="velocityCheckLabel">Vélocité rapide (48h) : ne lister que les cartes vendables en 12h</label>
+              <input type="checkbox" role="switch" id="cfg-velocity-check" class="switch switch--sm" />
             </div>
             <div class="switch-row switch-row--compact">
               <label for="cfg-relist-expired">Retirer et relister les annonces expirées</label>

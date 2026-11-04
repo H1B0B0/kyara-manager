@@ -293,6 +293,7 @@
     setVal("cfg-min-net-gain", currentSettings.autoSellMinNetOverRecycle);
     setVal("cfg-sell-duration", currentSettings.autoSellDurationHours);
     setCheck("cfg-guardrail-70", Number(currentSettings.autoSellMedianFloorPct ?? 70) >= 70);
+    setCheck("cfg-velocity-check", currentSettings.autoSellVelocityFirst !== false);
     setCheck("cfg-relist-expired", Number(currentSettings.autoSellExpireHours ?? 12) > 0);
     setCheck("cfg-hold-surging", currentSettings.speculateHoldSurging !== false);
     setVal("cfg-surge-pct", currentSettings.speculateSurgeThresholdPct ?? 20);
@@ -383,6 +384,7 @@
         autoSellMinNetOverRecycle: Math.max(1, Number(document.getElementById("cfg-min-net-gain").value) || 2),
         autoSellDurationHours: durationHours,
         autoSellMedianFloorPct: guardrailOn ? 70 : 30,
+        autoSellVelocityFirst: document.getElementById("cfg-velocity-check")?.checked !== false,
         autoSellExpireHours: expireOn ? durationHours : 0,
         speculateHoldSurging: document.getElementById("cfg-hold-surging")?.checked !== false,
         speculateSurgeThresholdPct: Math.max(5, Number(document.getElementById("cfg-surge-pct")?.value) || 20),

@@ -751,9 +751,16 @@
     }
 
     const alreadyListedCharIds = new Set(activeListings.map((l) => l.characterId));
-    const candidates = (dashboard?.duplicates || []).filter(
-      (d) => d.canAutoSell && d.spare > 0 && !alreadyListedCharIds.has(d.characterId)
-    );
+    const candidates = (dashboard?.duplicates || [])
+      .filter((d) => d.canAutoSell && d.spare > 0 && !alreadyListedCharIds.has(d.characterId))
+      .sort((a, b) => {
+        // Priorise la vélocité de vente (probabilité de vente rapide en 12h) pour maximiser le roulement des 10 créneaux
+        const pA = a.saleProb?.p12h ?? 10;
+        const pB = b.saleProb?.p12h ?? 10;
+        const evA = pA * (a.fees?.netProceeds ?? 0);
+        const evB = pB * (b.fees?.netProceeds ?? 0);
+        return evB - evA;
+      });
 
     let listedCount = 0;
     for (const cand of candidates) {
