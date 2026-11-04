@@ -20,6 +20,11 @@ if (manifest.manifest_version !== 3) {
   process.exit(1);
 }
 
+if (!manifest.description || manifest.description.length > 132) {
+  console.error(`Error: manifest.description length is ${manifest.description?.length || 0}, max allowed by CWS is 132`);
+  process.exit(1);
+}
+
 const requiredFiles = [
   'manifest.json',
   'LICENSE',
