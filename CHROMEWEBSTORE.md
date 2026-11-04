@@ -28,3 +28,22 @@ This extension provides automated collection management, duplicate selling/recyc
 ## Privacy Practices & Data Usage Disclosure
 - **Remote Code**: No remote code is fetched or executed. All JavaScript and CSS are bundled locally within the extension package.
 - **Data Collection**: Kyara Manager does **not** collect, transmit, or sell any personal data or browsing history to third-party servers. See [`PRIVACY.md`](file:///Users/etiennementrel/Documents/perso/kyara-manager/PRIVACY.md) for the full bilingual privacy policy.
+
+---
+
+## Chrome Web Store Storefront Assets (`promo/`)
+
+All assets meet the strict 24-bit RGB (no alpha channel / sans canal alpha) Chrome Web Store requirements and are available in both **PNG 24-bit** and **JPEG 95%** in the [`promo/`](file:///Users/etiennementrel/Documents/perso/kyara-manager/promo/) directory:
+
+| Emplacement CWS | Fichiers Recommandés | Dimensions | Statut Alpha |
+|---|---|---|---|
+| **Image promotionnelle en haut de la page** (Bannière Hero / Marquee) | `promo/promo-marquee-1400x560.png` ou `.jpg` | `1400 x 560` | `hasAlpha: no` |
+| **Petite image promotionnelle** (Grille recherche CWS) | `promo/promo-small-440x280.png` ou `.jpg` | `440 x 280` | `hasAlpha: no` |
+| **Capture d'écran #1** (Pilote Automatique & ROI) | `promo/screenshot-1-autopilot.png` ou `.jpg` | `1280 x 800` | `hasAlpha: no` |
+| **Capture d'écran #2** (Doublons & Arbitrage) | `promo/screenshot-2-doublons.png` ou `.jpg` | `1280 x 800` | `hasAlpha: no` |
+| **Capture d'écran #3** (Scanner Flips & Marché) | `promo/screenshot-3-marche.png` ou `.jpg` | `1280 x 800` | `hasAlpha: no` |
+| **Capture d'écran #4** (EV Boosters & Tirage Live) | `promo/screenshot-4-boosters.png` ou `.jpg` | `1280 x 800` | `hasAlpha: no` |
+| **Capture d'écran #5** (Sécurité & Sanctuaire Chakra) | `promo/screenshot-5-securite.png` ou `.jpg` | `1280 x 800` | `hasAlpha: no` |
+
+> Pour régénérer toutes les images à tout moment : `npm run promo`.
+

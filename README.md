@@ -49,6 +49,9 @@ npm test
 # Régénérer les icônes PNG (16x16, 32x32, 48x48, 128x128)
 npm run icons
 
+# Générer les images promotionnelles Chrome Web Store (1400x560, 440x280, 1280x800)
+npm run promo
+
 # Générer l'archive prête pour le Chrome Web Store (dist/kyara-manager-cws.zip)
 npm run package:cws
 ```
