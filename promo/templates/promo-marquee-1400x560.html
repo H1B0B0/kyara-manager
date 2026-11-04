@@ -3,12 +3,12 @@
 <head>
 <meta charset="utf-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Unbounded:wght@800;900&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Unbounded:wght@800;900&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     width: 1400px;
     height: 560px;
-    background: radial-gradient(circle at 80% 35%, #1c182a 0%, #0d0c12 55%, #070609 100%);
+    background: #09080c;
     overflow: hidden;
     font-family: 'Zen Kaku Gothic New', system-ui, sans-serif;
     color: #edeae4;
@@ -16,37 +16,57 @@
     position: relative;
   }
 
+  /* AI Artwork Backdrop */
+  .backdrop-ai {
+    position: absolute;
+    right: 0;
+    top: 0;
+    width: 860px;
+    height: 560px;
+    background-image: url('file:///Users/etiennementrel/.gemini/antigravity/brain/b940700c-9447-4038-95e4-aaf2f3023806/kyara_manager_promo_banner_1793817710243.jpg');
+    background-size: cover;
+    background-position: center right;
+    mask-image: linear-gradient(to left, black 65%, transparent 100%);
+    -webkit-mask-image: linear-gradient(to left, black 65%, transparent 100%);
+    opacity: 0.95;
+    z-index: 1;
+  }
+
   .ambient-glow {
     position: absolute;
-    width: 550px;
-    height: 550px;
+    width: 600px;
+    height: 600px;
     border-radius: 50%;
-    filter: blur(90px);
+    filter: blur(100px);
     pointer-events: none;
+    z-index: 1;
   }
 
   .left-col {
-    width: 660px;
+    width: 680px;
     height: 100%;
     padding: 50px 0 45px 65px;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    z-index: 2;
+    position: relative;
+    z-index: 3;
+    background: linear-gradient(to right, rgba(9, 8, 12, 0.95) 75%, transparent 100%);
   }
 
   .tag-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255, 77, 46, 0.12);
-    border: 1px solid rgba(255, 77, 46, 0.35);
+    background: rgba(255, 77, 46, 0.15);
+    border: 1px solid rgba(255, 77, 46, 0.4);
     border-radius: 999px;
     padding: 6px 14px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight: 700;
     color: #ff4d2e;
+    box-shadow: 0 0 16px rgba(255, 77, 46, 0.2);
   }
 
   .brand-row {
@@ -58,31 +78,32 @@
   }
 
   .brand-seal {
-    width: 58px;
-    height: 58px;
-    border-radius: 14px;
+    width: 62px;
+    height: 62px;
+    border-radius: 16px;
     background: linear-gradient(135deg, #262134, #14131b);
     border: 2px solid #ff4d2e;
-    box-shadow: 0 0 24px rgba(255, 77, 46, 0.35);
+    box-shadow: 0 0 28px rgba(255, 77, 46, 0.45);
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Unbounded', sans-serif;
-    font-size: 28px;
+    font-size: 30px;
     font-weight: 900;
     color: #ff4d2e;
   }
 
   .brand-name {
     font-family: 'Unbounded', sans-serif;
-    font-size: 44px;
+    font-size: 46px;
     font-weight: 900;
     color: #fff;
     letter-spacing: -0.5px;
+    text-shadow: 0 4px 20px rgba(0,0,0,0.8);
   }
 
   .hero-tag {
-    font-size: 18px;
+    font-size: 19px;
     font-weight: 700;
     color: #f5c518;
     margin-bottom: 12px;
@@ -91,8 +112,8 @@
   .hero-desc {
     font-size: 13.5px;
     line-height: 1.55;
-    color: #9d98a5;
-    max-width: 560px;
+    color: #b7b2bd;
+    max-width: 550px;
     margin-bottom: 20px;
   }
 
@@ -107,12 +128,13 @@
     display: flex;
     align-items: center;
     gap: 10px;
-    background: rgba(30, 28, 38, 0.75);
+    background: rgba(21, 20, 26, 0.9);
     border: 1px solid #2e2b36;
     border-radius: 10px;
     padding: 8px 12px;
     font-size: 12.5px;
     font-weight: 600;
+    backdrop-filter: blur(10px);
   }
 
   .guarantee {
@@ -122,59 +144,32 @@
     font-family: 'JetBrains Mono', monospace;
   }
 
-  /* Right column with real app screenshot mockup */
-  .right-col {
-    width: 740px;
-    height: 100%;
-    position: relative;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-  }
-
-  .mockup-window {
-    width: 660px;
-    height: 440px;
-    border-radius: 14px;
-    overflow: hidden;
-    border: 1px solid #3f3b4a;
-    box-shadow: 0 24px 60px rgba(0,0,0,0.85), 0 0 40px rgba(255, 77, 46, 0.2);
-    transform: rotate(-1.5deg) translateY(-8px);
-    background: #0e0d12;
-    position: relative;
-  }
-
-  .mockup-img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: top center;
-  }
-
-  .floating-hud-badge {
+  /* Right floating whale HUD banner */
+  .right-hud-float {
     position: absolute;
-    bottom: 24px;
-    left: 20px;
-    background: rgba(21, 20, 26, 0.96);
-    border: 1px solid rgba(255, 77, 46, 0.5);
-    border-radius: 12px;
-    padding: 8px 16px;
+    bottom: 35px;
+    right: 40px;
+    background: rgba(14, 13, 18, 0.94);
+    border: 1px solid #f5c518;
+    border-radius: 14px;
+    padding: 12px 20px;
     display: flex;
     align-items: center;
-    gap: 10px;
-    box-shadow: 0 12px 30px rgba(0,0,0,0.8);
-    z-index: 4;
+    gap: 16px;
+    box-shadow: 0 16px 40px rgba(0,0,0,0.9), 0 0 30px rgba(245, 197, 24, 0.25);
+    z-index: 3;
+    font-family: 'JetBrains Mono', monospace;
   }
 </style>
 </head>
 <body>
-  <div class="ambient-glow" style="top: -100px; right: 100px; background: rgba(255, 77, 46, 0.18);"></div>
+  <div class="backdrop-ai"></div>
+  <div class="ambient-glow" style="top: -100px; left: 300px; background: rgba(255, 77, 46, 0.2);"></div>
 
   <div class="left-col">
     <div>
       <div class="tag-pill">
-        <span style="width:6px; height:6px; border-radius:50%; background:#ff4d2e;"></span>
+        <span style="width:6px; height:6px; border-radius:50%; background:#ff4d2e; box-shadow:0 0 6px #ff4d2e;"></span>
         <span>EXTENSION GOOGLE CHROME · MANIFEST V3</span>
       </div>
 
@@ -186,16 +181,16 @@
       <div class="hero-tag">⚡ Pilote Automatique &amp; Arbitrage Kyara.games</div>
 
       <p class="hero-desc">
-        Gérez vos cartes automatiquement : auto-vente des doublons sans bradage, auto-recyclage intelligent, scanner de flips rentables et ouverture live des boosters conseillés.
+        Gagnez du temps et du Chakra : auto-vente des doublons au meilleur prix, auto-recyclage intelligent, scanner de flips rentables et ouverture live des boosters conseillés.
       </p>
     </div>
 
     <div>
       <div class="pills-grid">
-        <div class="pill-card"><span style="color:#f5c518; font-weight:800;">売</span> Auto-Vente Doublons</div>
+        <div class="pill-card"><span style="color:#f5c518; font-weight:800;">売</span> Auto-Vente (+94 500 ◆ net)</div>
         <div class="pill-card"><span style="color:#3fbf7f; font-weight:800;">転</span> Auto-Recyclage Rentable</div>
-        <div class="pill-card"><span style="color:#4dd6ff; font-weight:800;">市</span> Scanner Flips Marché</div>
-        <div class="pill-card"><span style="color:#ff4d2e; font-weight:800;">札</span> Tirage Live Boosters</div>
+        <div class="pill-card"><span style="color:#4dd6ff; font-weight:800;">市</span> Scanner Flips (+42 850 ◆)</div>
+        <div class="pill-card"><span style="color:#ff4d2e; font-weight:800;">札</span> Tirage Live Boosters (EV 842 ◆)</div>
       </div>
 
       <div class="guarantee">
@@ -204,14 +199,11 @@
     </div>
   </div>
 
-  <div class="right-col">
-    <div class="mockup-window">
-      <img class="mockup-img" src="file:///Users/etiennementrel/Documents/perso/kyara-manager/promo/raw/screen-1-pilote.png" />
-    </div>
-
-    <div class="floating-hud-badge">
-      <span style="width:24px; height:24px; border-radius:6px; background:#ff4d2e; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Unbounded'; font-size:12px; font-weight:900;">操</span>
-      <span style="font-size:12px; font-weight:800; color:#fff;">Pilote Automatique Actif sur Kyara.games</span>
+  <div class="right-hud-float">
+    <div style="width:36px; height:36px; border-radius:8px; background:#ff4d2e; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Unbounded'; font-size:18px; font-weight:900;">操</div>
+    <div>
+      <div style="font-size:11px; color:#f5c518; font-weight:800;">PILOTE ACTIF · COMPTE PRO</div>
+      <div style="font-size:14px; color:#fff; font-weight:800;">285 450 ◆ · +184 250 ◆ GÉNÉRÉS</div>
     </div>
   </div>
 </body>
