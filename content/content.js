@@ -990,24 +990,125 @@
       const targetPath = `/ouvrir/${encodeURIComponent(packId)}`;
       await navigateSpaTo(targetPath);
 
-      // If we were already on /ouvrir/:id in summary state, click "Ouvrir un autre" / reset to ready or wait for .btn-open
-      const openBtn = await waitForElement("button.btn.btn-open", {
-        timeoutMs: 6500,
-        predicate: (btn) => !btn.disabled
+      // 1. Si déjà sur /ouvrir/:id en phase de résumé (précédent tirage), réinitialiser vers le deck
+      const summaryAgainBtn = document.querySelector(".summary button, button.again, button.btn-again");
+      if (summaryAgainBtn && !summaryAgainBtn.disabled) {
+        summaryAgainBtn.click();
+        await sleep(350);
+      }
+
+      // 2. Attendre que l'interface de tirage soit interactive (boutons multiplicateurs ou bouton d'ouverture)
+      await waitForElement(".multi, button.btn.btn-open, button.btn-open, button.btn", {
+        timeoutMs: 6500
       });
 
+      // 3. RÉGLER LE MULTIPLICATEUR EN PREMIER !
+      // Si Kyara avait gardé en mémoire ×5 ou ×10 et que le joueur n'a qu'1 booster gratuit,
+      // l'interface affiche par défaut le prix en Chakra (« Ouvrir 150 ◆ »).
+      // Sélectionner ×1 immédiatement fait basculer le bouton en mode GRATUIT (« Gratuit · 1 restant ») !
+      const targetMult = requestedCount >= 10 ? 10 : requestedCount >= 5 ? 5 : 1;
+      const multButtons = Array.from(
+        document.querySelectorAll(".multi button, button.mult, [class*='multi'] button")
+      );
+      if (multButtons.length > 0) {
+        const matchBtn =
+          multButtons.find((b) => {
+            const txt = (b.textContent || "").trim();
+            return txt === `×${targetMult}` || txt === `x${targetMult}`;
+          }) ||
+          multButtons.find((b) => {
+            const txt = (b.textContent || "").trim();
+            return txt === "×1" || txt === "x1";
+          }) ||
+          multButtons[0];
+
+        if (matchBtn && !matchBtn.classList.contains("on") && !matchBtn.classList.contains("active")) {
+          matchBtn.click();
+          await sleep(250);
+        }
+      }
+
+      // 4. Scanner tous les boutons candidats pour cibler spécifiquement le bouton GRATUIT (FR: Gratuit, EN: Free, ES: Gratis)
+      const scanCandidateButtons = () => {
+        return Array.from(
+          document.querySelectorAll("button.btn.btn-open, button.btn-open, button.btn, button")
+        ).filter((btn) => !btn.disabled && (btn.offsetWidth > 0 || btn.offsetHeight > 0));
+      };
+
+      let candidateButtons = scanCandidateButtons();
+      let openBtn = candidateButtons.find((btn) => {
+        const txt = (btn.innerText || "").trim();
+        const html = btn.innerHTML || "";
+        const isFree =
+          /Free|Gratuit|Gratis/i.test(txt) ||
+          /Free|Gratuit|Gratis/i.test(html) ||
+          btn.classList.contains("free") ||
+          btn.classList.contains("btn-free");
+        const hasChakra = /◆|Chakra/i.test(txt) || /◆|Chakra/i.test(html);
+        return isFree && !hasChakra;
+      });
+
+      // Si pas encore trouvé, retenter en forçant ×1
       if (!openBtn) {
-        // Fallback to API if the page is not interactive (e.g., background/minimized tab or modal blocking)
+        const force1 = multButtons.find((b) => {
+          const txt = (b.textContent || "").trim();
+          return txt === "×1" || txt === "x1";
+        });
+        if (force1 && !force1.classList.contains("on") && !force1.classList.contains("active")) {
+          force1.click();
+          await sleep(250);
+          candidateButtons = scanCandidateButtons();
+          openBtn = candidateButtons.find((btn) => {
+            const txt = (btn.innerText || "").trim();
+            const html = btn.innerHTML || "";
+            const isFree =
+              /Free|Gratuit|Gratis/i.test(txt) ||
+              /Free|Gratuit|Gratis/i.test(html) ||
+              btn.classList.contains("free") ||
+              btn.classList.contains("btn-free");
+            const hasChakra = /◆|Chakra/i.test(txt) || /◆|Chakra/i.test(html);
+            return isFree && !hasChakra;
+          });
+        }
+      }
+
+      // Si toujours pas de bouton explicite gratuit, prendre le bouton d'ouverture principal pour vérification
+      if (!openBtn) {
+        openBtn =
+          candidateButtons.find(
+            (btn) =>
+              btn.classList.contains("btn-open") ||
+              /Ouvrir|Open|Abrir/i.test((btn.innerText || "").trim())
+          ) || candidateButtons[0];
+      }
+
+      if (!openBtn) {
+        // Repli API sécurisé avec maxChakra: 0
         return await fallbackApiOpenBooster(packId, packName, requestedCount);
       }
 
       // --- SÉCURITÉ GARDE-FOU 0 ◆ (INTERDICTION ABSOLUE D'OUVRIR DU PAYANT) ---
       const btnText = (openBtn.innerText || "").trim();
       const btnHtml = openBtn.innerHTML || "";
-      const isExplicitlyFree = /Free|Gratuit/i.test(btnText) || /Free|Gratuit/i.test(btnHtml);
+      const isExplicitlyFree =
+        /Free|Gratuit|Gratis/i.test(btnText) ||
+        /Free|Gratuit|Gratis/i.test(btnHtml) ||
+        openBtn.classList.contains("free") ||
+        openBtn.classList.contains("btn-free");
       const containsChakraPrice = /◆|Chakra/i.test(btnText) || /◆|Chakra/i.test(btnHtml);
 
       if (!isExplicitlyFree || containsChakraPrice) {
+        // Si l'UI affiche du Chakra (ex: pack spécifique ne prenant pas les boosters gratuits, ou glitch UI),
+        // tenter le repli API avec le paramètre strict maxChakra: 0 (l'API rejettera si du chakra est requis)
+        try {
+          const apiRes = await fallbackApiOpenBooster(packId, packName, requestedCount);
+          if (apiRes && apiRes.openedCount > 0) {
+            return apiRes;
+          }
+        } catch {
+          // L'API a également refusé (chakra requis)
+        }
+
         await appendJournal(
           "warn",
           `SÉCURITÉ 0 ◆ : Ce booster n'est pas gratuit (« ${btnText.replace(/\n/g, " ")} »). Ouverture annulée pour protéger votre Chakra !`
@@ -1021,30 +1122,11 @@
       }
 
       // Extraire le nombre de boosters gratuits restants (ex: "Free · 10 left" ou "Gratuit · 3 restants")
-      const freeLeftMatch = btnText.match(/(\d+)\s*(?:left|restant)/i);
+      const freeLeftMatch = btnText.match(/(\d+)\s*(?:left|restant|restante)/i);
       const detectedFreeLeft = freeLeftMatch ? parseInt(freeLeftMatch[1], 10) : null;
       if (detectedFreeLeft !== null && detectedFreeLeft <= 0) {
         await appendJournal("warn", "SÉCURITÉ 0 ◆ : Aucun booster gratuit restant détecté sur l'interface. Clic annulé !");
         return { openedCount: 0, newCardsCount: 0, blockedForChakra: true };
-      }
-
-      // S'assurer que le multiplicateur sélectionné (×1, ×5, ×10) ne dépasse JAMAIS le quota gratuit restant
-      const isSummaryStage = Boolean(document.querySelector(".summary"));
-      if (!isSummaryStage) {
-        const safeLimit = detectedFreeLeft !== null ? Math.min(requestedCount, detectedFreeLeft) : requestedCount;
-        if (safeLimit < 1) {
-          await appendJournal("warn", "SÉCURITÉ 0 ◆ : Aucun booster gratuit disponible pour ce tirage.");
-          return { openedCount: 0, newCardsCount: 0, blockedForChakra: true };
-        }
-        const targetMult = safeLimit >= 10 ? 10 : safeLimit >= 5 ? 5 : 1;
-        const multButtons = Array.from(document.querySelectorAll(".multi button"));
-        const matchBtn =
-          multButtons.find((b) => (b.textContent || "").trim() === `×${targetMult}`) ||
-          multButtons[0];
-        if (matchBtn && !matchBtn.classList.contains("on")) {
-          matchBtn.click();
-          await sleep(160);
-        }
       }
 
       const pullTimestampBefore = Date.now();
