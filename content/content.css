@@ -1,0 +1,169 @@
+/* Kyara Manager — In-page Floating HUD (Kyara Native Obsidian & Vermilion Theme) */
+#km-floating-hud.km-hud {
+  all: initial;
+  position: fixed;
+  left: 16px;
+  bottom: 16px;
+  z-index: 2147483640;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 11px 7px 8px;
+  border-radius: 12px;
+  background: rgba(21, 20, 26, 0.95);
+  border: 1px solid #2e2b36;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  color: #edeae4;
+  font-family: "Zen Kaku Gothic New", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  line-height: 1.25;
+  user-select: none;
+  box-sizing: border-box;
+  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+#km-floating-hud *,
+#km-floating-hud *::before,
+#km-floating-hud *::after {
+  box-sizing: border-box;
+}
+
+#km-floating-hud.km-hud:hover {
+  border-color: #3f3b4a;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.15);
+}
+
+#km-floating-hud.km-hud.is-collapsed {
+  padding: 4px;
+  gap: 0;
+  border-radius: 10px;
+}
+
+#km-floating-hud.km-hud.is-collapsed .km-hud__info,
+#km-floating-hud.km-hud.is-collapsed .km-hud__btn--toggle,
+#km-floating-hud.km-hud.is-collapsed .km-hud__btn--primary,
+#km-floating-hud.km-hud.is-collapsed .km-hud__btn--icon {
+  display: none !important;
+}
+
+.km-hud__seal {
+  appearance: none;
+  border: none;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #1e1c26;
+  border: 1px solid #2e2b36;
+  color: #9d98a5;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 13px;
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.km-hud__seal:hover {
+  border-color: #ff4d2e;
+  color: #edeae4;
+  transform: scale(1.05);
+}
+
+.km-hud__seal:focus-visible {
+  outline: 2px solid #ff4d2e;
+  outline-offset: 2px;
+}
+
+.km-hud__seal.is-on {
+  background: rgba(63, 191, 127, 0.16);
+  border-color: rgba(63, 191, 127, 0.65);
+  color: #3fbf7f;
+  box-shadow: 0 0 10px rgba(63, 191, 127, 0.4);
+}
+
+.km-hud__info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding-right: 2px;
+}
+
+.km-hud__title {
+  font-family: "Unbounded", system-ui, sans-serif;
+  font-weight: 800;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  color: #edeae4;
+}
+
+.km-hud__meta {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 11px;
+  color: #c4bfcc;
+  white-space: nowrap;
+}
+
+.km-hud__btn {
+  appearance: none;
+  border: 1px solid #2e2b36;
+  background: #1e1c26;
+  color: #edeae4;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  padding: 5px 9px;
+  border-radius: 7px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.km-hud__btn:hover {
+  background: #272432;
+  border-color: #3f3b4a;
+  transform: translateY(-1px);
+}
+
+.km-hud__btn:focus-visible {
+  outline: 2px solid #ff4d2e;
+  outline-offset: 2px;
+}
+
+.km-hud__btn--toggle.is-on {
+  background: rgba(63, 191, 127, 0.16);
+  border-color: rgba(63, 191, 127, 0.6);
+  color: #3fbf7f;
+}
+
+.km-hud__btn--primary {
+  background: linear-gradient(135deg, #ff4d2e, #ff6a4d);
+  border-color: #ff6a4d;
+  color: #fff;
+  font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
+  font-weight: 700;
+  box-shadow: 0 2px 8px rgba(255, 77, 46, 0.3);
+}
+
+.km-hud__btn--primary:hover {
+  background: linear-gradient(135deg, #ff6a4d, #ff8266);
+  border-color: #ff7a45;
+}
+
+.km-hud__btn--icon {
+  padding: 3px 6px;
+  font-size: 12px;
+  color: #9d98a5;
+  border-radius: 6px;
+}
+
+.km-hud__btn--icon:hover {
+  color: #edeae4;
+}

@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kyara Manager</title>
+    <link rel="stylesheet" href="sidepanel.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div class="brand-row">
+        <div class="brand">
+          <span class="brand__seal" aria-hidden="true">キ</span>
+          <div class="brand__text">
+            <div class="brand__title-row">
+              <h1 class="brand__title">KYARA MANAGER</h1>
+              <span class="brand__version">v1.1</span>
+            </div>
+            <p class="brand__subtitle" id="account-status">Synchronisation avec kyara.games…</p>
+          </div>
+        </div>
+        <div class="header-actions">
+          <button type="button" id="btn-refresh" class="icon-btn" title="Rafraîchir les données et cours">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+              <path d="M3 3v5h5" />
+              <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16" />
+              <path d="M16 16h5v5" />
+            </svg>
+            <span>Actualiser</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Account KPI Bar (Sleek 2x2 grid with progress gauge) -->
+      <section class="kpi-bar" aria-label="Indicateurs du compte">
+        <div class="kpi-card kpi-card--chakra">
+          <div class="kpi-card__head">
+            <span class="kpi-card__label">CHAKRA</span>
+            <span class="kpi-card__icon" aria-hidden="true">◆</span>
+          </div>
+          <strong class="kpi-card__value kpi-card__value--chakra" id="kpi-chakra">—</strong>
+        </div>
+        <div class="kpi-card kpi-card--packs">
+          <div class="kpi-card__head">
+            <span class="kpi-card__label">BOOSTERS</span>
+            <span class="kpi-card__icon" aria-hidden="true">札</span>
+          </div>
+          <strong class="kpi-card__value" id="kpi-packs">— / 10</strong>
+        </div>
+        <div class="kpi-card kpi-card--listings">
+          <div class="kpi-card__head">
+            <span class="kpi-card__label">MARCHÉ ACTIF</span>
+            <span class="kpi-card__icon" aria-hidden="true">市</span>
+          </div>
+          <strong class="kpi-card__value" id="kpi-listings">— / 10</strong>
+        </div>
+        <div class="kpi-card kpi-card--pity">
+          <div class="kpi-card__head">
+            <span class="kpi-card__label">PITIÉ MYTHIQUE</span>
+            <span class="kpi-card__icon" aria-hidden="true">神</span>
+          </div>
+          <strong class="kpi-card__value" id="kpi-pity">— / 250</strong>
+          <div class="kpi-progress" aria-hidden="true">
+            <div class="kpi-progress__bar" id="kpi-pity-bar" style="width: 0%"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Connection alert if kyara.games is not open or logged in -->
+      <div id="connection-banner" class="alert-banner" hidden>
+        <p id="connection-banner-text">Connexion à kyara.games…</p>
+        <button type="button" id="btn-open-kyara" class="btn btn--primary btn--sm">Ouvrir kyara.games</button>
+      </div>
+
+      <!-- Navigation Tabs (Sleek horizontal pill track) -->
+      <nav class="tab-nav" role="tablist" aria-label="Sections de Kyara Manager">
+        <button type="button" role="tab" aria-selected="true" aria-controls="panel-autopilot" id="tab-autopilot" class="tab-btn is-active" data-tab="autopilot">
+          <span class="k-glyph" aria-hidden="true">操</span>
+          <span class="tab-label">Pilote</span>
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-duplicates" id="tab-duplicates" class="tab-btn" data-tab="duplicates">
+          <span class="k-glyph" aria-hidden="true">集</span>
+          <span class="tab-label">Doublons</span>
+          <span class="tab-badge" id="badge-duplicates">0</span>
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-market" id="tab-market" class="tab-btn" data-tab="market">
+          <span class="k-glyph" aria-hidden="true">市</span>
+          <span class="tab-label">Marché</span>
+          <span class="tab-badge" id="badge-deals">0</span>
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-boosters" id="tab-boosters" class="tab-btn" data-tab="boosters">
+          <span class="k-glyph" aria-hidden="true">札</span>
+          <span class="tab-label">Boosters</span>
+        </button>
+        <button type="button" role="tab" aria-selected="false" aria-controls="panel-settings" id="tab-settings" class="tab-btn" data-tab="settings">
+          <span class="k-glyph" aria-hidden="true">設</span>
+          <span class="tab-label">Réglages</span>
+        </button>
+      </nav>
+    </header>
+
+    <main class="app-main">
+      <!-- TAB 1: AUTOPILOT -->
+      <section id="panel-autopilot" role="tabpanel" aria-labelledby="tab-autopilot" class="tab-panel is-active">
+        <!-- Master Switch Card -->
+        <div class="card card--hero">
+          <div class="hero-top">
+            <div class="hero-status">
+              <span class="status-beacon" id="hero-status-beacon" aria-hidden="true"></span>
+              <span class="hero-status-text" id="hero-status-text">PILOTE EN VEILLE</span>
+            </div>
+            <label class="switch-container" for="sw-master" title="Activer le Pilote Automatique Global">
+              <input type="checkbox" role="switch" id="sw-master" class="switch switch--lg" aria-label="Activer le Pilote Automatique Global" />
+              <span class="switch-track"></span>
+            </label>
+          </div>
+          <div class="hero-body">
+            <h2 class="hero-title">Pilote Automatique Global</h2>
+            <p class="hero-desc">Orchestration en continu : vente des doublons, recyclage des cartes sous-cotées, scans d'arbitrage et ouverture live.</p>
+          </div>
+          <div class="hero-actions">
+            <button type="button" id="btn-run-cycle" class="btn btn--primary btn--hero">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                <polygon points="5 3 19 12 5 21 5 3" />
+              </svg>
+              <span>Lancer un cycle maintenant</span>
+            </button>
+            <span class="dry-run-pill" id="dry-run-indicator" hidden>Mode Simulation</span>
+          </div>
+        </div>
+
+        <!-- Pity Sniper Alert Banner (Triggered when pity >= 240/250) -->
+        <div id="pity-sniper-alert-autopilot" class="pity-banner" hidden>
+          <div class="pity-banner__icon" aria-hidden="true">🎯</div>
+          <div class="pity-banner__content">
+            <strong class="pity-banner__title">Pitié Mythique imminente (<span id="pity-sniper-count-autopilot">0</span>/250) !</strong>
+            <p class="pity-banner__desc">Cible prioritaire optimisée : <strong id="pity-sniper-target-autopilot">—</strong> (maximise les chances de nouveau Mythique).</p>
+          </div>
+        </div>
+
+        <!-- Cumulative ROI / Performance Dashboard -->
+        <div class="card card--roi">
+          <div class="card__header">
+            <div class="roi-title-wrap">
+              <span class="kanji-box kanji-box--gold" aria-hidden="true">益</span>
+              <div>
+                <h2 class="card__title">Tableau de bord des gains (ROI)</h2>
+                <p class="card__subtitle">Gains nets cumulés générés par Kyara Manager</p>
+              </div>
+            </div>
+            <button type="button" id="btn-reset-roi" class="btn btn--ghost btn--xs" title="Réinitialiser les compteurs de gains">Reset</button>
+          </div>
+          <div class="roi-grid">
+            <div class="roi-stat-box roi-stat-box--chakra">
+              <span class="roi-stat-box__label">CHAKRA TOTAL GÉNÉRÉ</span>
+              <strong class="roi-stat-box__val" id="roi-total-chakra">+0 ◆</strong>
+            </div>
+            <div class="roi-stat-box">
+              <span class="roi-stat-box__label">VENTES MARCHÉ</span>
+              <strong class="roi-stat-box__val" id="roi-sales-stats">0 vendue(s) · +0 ◆</strong>
+            </div>
+            <div class="roi-stat-box">
+              <span class="roi-stat-box__label">RECYCLAGES</span>
+              <strong class="roi-stat-box__val" id="roi-recycle-stats">0 recyclée(s) · +0 ◆</strong>
+            </div>
+            <div class="roi-stat-box">
+              <span class="roi-stat-box__label">BOOSTERS GRATUITS</span>
+              <strong class="roi-stat-box__val" id="roi-boosters-stats">0 ouverts · 0 L/M</strong>
+            </div>
+          </div>
+        </div>
+
+        <!-- Module Switches Grid -->
+        <div class="module-grid">
+          <div class="module-card module-card--sell">
+            <div class="switch-row">
+              <div class="tile-head">
+                <span class="kanji-box kanji-box--gold" aria-hidden="true">売</span>
+                <div>
+                  <label for="sw-autosell" class="module-card__title">Auto-Vente des doublons</label>
+                  <p class="module-card__desc">Remplit tes 10 emplacements dès qu'une carte est vendue.</p>
+                </div>
+              </div>
+              <input type="checkbox" role="switch" id="sw-autosell" class="switch" />
+            </div>
+            <div class="module-card__footer">
+              <span class="mono-stat" id="stat-autosell">Potentiel net : — ◆</span>
+              <button type="button" id="btn-sell-now" class="btn btn--ghost btn--xs">Vendre maintenant</button>
+            </div>
+          </div>
+
+          <div class="module-card module-card--recycle">
+            <div class="switch-row">
+              <div class="tile-head">
+                <span class="kanji-box kanji-box--ok" aria-hidden="true">転</span>
+                <div>
+                  <label for="sw-autorecycle" class="module-card__title">Auto-Recyclage intelligent</label>
+                  <p class="module-card__desc">Convertit en Chakra les doublons au prix plancher (garde ≥1 copie).</p>
+                </div>
+              </div>
+              <input type="checkbox" role="switch" id="sw-autorecycle" class="switch" />
+            </div>
+            <div class="module-card__footer">
+              <span class="mono-stat" id="stat-autorecycle">Recyclable : — ◆</span>
+              <button type="button" id="btn-recycle-now" class="btn btn--ghost btn--xs">Recycler maintenant</button>
+            </div>
+          </div>
+
+          <div class="module-card module-card--boosters">
+            <div class="switch-row">
+              <div class="tile-head">
+                <span class="kanji-box kanji-box--acc" aria-hidden="true">札</span>
+                <div>
+                  <label for="sw-autoopen" class="module-card__title">Ouverture Live des Boosters</label>
+                  <p class="module-card__desc">Pilote l'interface d'ouverture en direct sur le booster #1 conseillé.</p>
+                </div>
+              </div>
+              <input type="checkbox" role="switch" id="sw-autoopen" class="switch" />
+            </div>
+            <div class="module-card__footer">
+              <span class="mono-stat" id="stat-autoopen">Conseillé : —</span>
+              <button type="button" id="btn-open-recommended" class="btn btn--ghost btn--xs">Ouvrir en live</button>
+            </div>
+          </div>
+
+          <div class="module-card module-card--market">
+            <div class="switch-row">
+              <div class="tile-head">
+                <span class="kanji-box kanji-box--cyan" aria-hidden="true">市</span>
+                <div>
+                  <label for="sw-autobuy-flip" class="module-card__title">Achat-Revente (Flip Marché)</label>
+                  <p class="module-card__desc">Achète les annonces sous-cotées rentables après taxe (5% + 2%).</p>
+                </div>
+              </div>
+              <input type="checkbox" role="switch" id="sw-autobuy-flip" class="switch" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="sw-autobuy-missing" class="module-card__sublabel">Acheter aussi les personnages manquants à bas prix</label>
+              <input type="checkbox" role="switch" id="sw-autobuy-missing" class="switch switch--sm" />
+            </div>
+          </div>
+
+          <div class="module-row-pair">
+            <div class="module-card module-card--compact">
+              <div class="switch-row">
+                <div class="tile-head tile-head--sm">
+                  <span class="kanji-box kanji-box--sm kanji-box--purple" aria-hidden="true">務</span>
+                  <label for="sw-autoclaim" class="module-card__title">Auto-Missions</label>
+                </div>
+                <input type="checkbox" role="switch" id="sw-autoclaim" class="switch switch--sm" />
+              </div>
+            </div>
+
+            <div class="module-card module-card--compact">
+              <div class="switch-row">
+                <div class="tile-head tile-head--sm">
+                  <span class="kanji-box kanji-box--sm kanji-box--green" aria-hidden="true">守</span>
+                  <label for="sw-antiafk" class="module-card__title">Anti-AFK</label>
+                </div>
+                <input type="checkbox" role="switch" id="sw-antiafk" class="switch switch--sm" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Activity Journal -->
+        <div class="card card--journal">
+          <div class="card__header">
+            <div class="journal-title-wrap">
+              <span class="status-dot-pulse" aria-hidden="true"></span>
+              <h2 class="card__title">Journal d'activité en direct</h2>
+            </div>
+            <button type="button" id="btn-clear-journal" class="btn btn--ghost btn--xs">Effacer</button>
+          </div>
+          <ul id="journal-list" class="journal-list" aria-live="polite">
+            <li class="journal-empty">Aucune opération enregistrée.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- TAB 2: DOUBLONS (VENDRE VS RECYCLER) -->
+      <section id="panel-duplicates" role="tabpanel" aria-labelledby="tab-duplicates" class="tab-panel">
+        <div class="summary-strip">
+          <div class="summary-pill summary-pill--sell">
+            <span class="summary-pill__label">Conseillés à vendre</span>
+            <strong class="summary-pill__val" id="dup-summary-sell">0 copie · 0 ◆ net</strong>
+          </div>
+          <div class="summary-pill summary-pill--recycle">
+            <span class="summary-pill__label">Conseillés à recycler</span>
+            <strong class="summary-pill__val" id="dup-summary-recycle">0 copie · 0 ◆</strong>
+          </div>
+        </div>
+
+        <div class="toolbar">
+          <input type="search" id="dup-search" class="input input--search" placeholder="Nom, série ou rareté (C, U, R, E, L, M)…" aria-label="Filtrer les doublons" />
+          <select id="dup-filter" class="select" aria-label="Filtrer par recommandation">
+            <option value="ALL">Tous</option>
+            <option value="VENDRE">À Vendre</option>
+            <option value="RECYCLER">À Recycler</option>
+            <option value="CONSERVER">En Hausse (Conserver)</option>
+            <option value="PROTÉGÉ">Protégés / Favoris</option>
+          </select>
+        </div>
+
+        <div tabindex="0" role="region" aria-labelledby="duplicates-table-caption" class="table-wrapper">
+          <table class="data-table data-table--duplicates">
+            <caption id="duplicates-table-caption" class="sr-only">Analyse des doublons : vendre ou recycler</caption>
+            <thead>
+              <tr>
+                <th scope="col">Personnage</th>
+                <th scope="col" class="num">Surplus</th>
+                <th scope="col" class="num">Médiane 7j</th>
+                <th scope="col" class="num">Prix (Net)</th>
+                <th scope="col" class="num">Recyclage</th>
+                <th scope="col">Décision</th>
+                <th scope="col" class="num">Protéger</th>
+              </tr>
+            </thead>
+            <tbody id="duplicates-tbody">
+              <tr>
+                <td colspan="7" class="empty-cell">Synchronisation de la collection…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Active listings section -->
+        <div class="card card--sub">
+          <div class="card__header">
+            <h3 class="card__title" id="active-listings-heading">Annonces actives</h3>
+            <span class="mono-badge" id="active-listings-count">0 / 10</span>
+          </div>
+          <div tabindex="0" role="region" aria-labelledby="active-listings-heading" class="table-wrapper">
+            <table class="data-table data-table--listings">
+              <thead>
+                <tr>
+                  <th scope="col">Carte</th>
+                  <th scope="col" class="num">Prix</th>
+                  <th scope="col">Fin</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody id="active-listings-tbody">
+                <tr>
+                  <td colspan="4" class="empty-cell">Aucune annonce en cours.</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: MARCHÉ & ACHAT-REVENTE -->
+      <section id="panel-market" role="tabpanel" aria-labelledby="tab-market" class="tab-panel">
+        <div class="card card--compact">
+          <div class="card__header">
+            <div>
+              <h2 class="card__title">Scanner d'Opportunités &amp; Flip</h2>
+              <p class="card__desc">Cible les annonces sous la médiane 7j avec marge nette positive après taxes (5% + 2%).</p>
+            </div>
+            <button type="button" id="btn-scan-market" class="btn btn--primary btn--sm">
+              Scanner
+            </button>
+          </div>
+          <div class="toolbar toolbar--tight">
+            <select id="market-filter" class="select" aria-label="Filtrer les opportunités">
+              <option value="ALL">Toutes les opportunités</option>
+              <option value="FLIP">Flips rentables uniquement</option>
+              <option value="MISSING">Cartes manquantes uniquement</option>
+            </select>
+          </div>
+        </div>
+
+        <div tabindex="0" role="region" aria-labelledby="market-table-caption" class="table-wrapper">
+          <table class="data-table data-table--market">
+            <caption id="market-table-caption" class="sr-only">Opportunités d'achat-revente sur le marché</caption>
+            <thead>
+              <tr>
+                <th scope="col">Carte</th>
+                <th scope="col" class="num">Achat</th>
+                <th scope="col" class="num">Médiane 7j</th>
+                <th scope="col" class="num">Revente</th>
+                <th scope="col" class="num">Marge nette</th>
+                <th scope="col">Action</th>
+              </tr>
+            </thead>
+            <tbody id="market-tbody">
+              <tr>
+                <td colspan="6" class="empty-cell">Lance un scan pour analyser les annonces actives du marché.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 4: BOOSTERS CONSEILLÉS -->
+      <section id="panel-boosters" role="tabpanel" aria-labelledby="tab-boosters" class="tab-panel">
+        <!-- Pity Sniper Alert Banner (Triggered when pity >= 240/250) -->
+        <div id="pity-sniper-alert-boosters" class="pity-banner" hidden>
+          <div class="pity-banner__icon" aria-hidden="true">🎯</div>
+          <div class="pity-banner__content">
+            <strong class="pity-banner__title">Pitié Mythique imminente (<span id="pity-sniper-count-boosters">0</span>/250) !</strong>
+            <p class="pity-banner__desc">Cible prioritaire optimisée : <strong id="pity-sniper-target-boosters">—</strong>. Ouvre ce booster pour maximiser tes chances de nouveau Mythique !</p>
+          </div>
+        </div>
+
+        <div class="booster-highlights">
+          <div class="card card--rec-new">
+            <div class="rec-header">
+              <span class="kanji-box kanji-box--acc" aria-hidden="true">札</span>
+              <div>
+                <span class="rec-tag rec-tag--new">Recommandation #1 · Collection</span>
+                <h2 class="rec-title" id="rec-new-name">—</h2>
+              </div>
+            </div>
+            <p class="rec-metrics" id="rec-new-metrics">Analyse des pools de personnages…</p>
+            <div class="rec-missing-bars" id="rec-new-rarities"></div>
+            <div class="rec-actions">
+              <button type="button" id="btn-open-rec-1" class="btn btn--primary btn--sm">Ouvrir ×1 en live</button>
+              <button type="button" id="btn-open-rec-max" class="btn btn--secondary btn--sm">Ouvrir max en live</button>
+            </div>
+          </div>
+
+          <div class="card card--rec-ev">
+            <div class="rec-header">
+              <span class="kanji-box" aria-hidden="true">値</span>
+              <div>
+                <span class="rec-tag rec-tag--ev">Recommandation #1 · Espérance Chakra (EV)</span>
+                <h3 class="rec-title" id="rec-ev-name">—</h3>
+              </div>
+            </div>
+            <p class="rec-metrics" id="rec-ev-metrics">—</p>
+          </div>
+        </div>
+
+        <div tabindex="0" role="region" aria-labelledby="boosters-table-caption" class="table-wrapper">
+          <table class="data-table data-table--boosters">
+            <caption id="boosters-table-caption" class="sr-only">Classement des boosters selon votre collection</caption>
+            <thead>
+              <tr>
+                <th scope="col">Booster</th>
+                <th scope="col" class="num">Manquants</th>
+                <th scope="col" class="num">P(≥1 nouv.)</th>
+                <th scope="col" class="num">E[Nouv.]</th>
+                <th scope="col" class="num">EV ◆</th>
+                <th scope="col">Live</th>
+              </tr>
+            </thead>
+            <tbody id="boosters-tbody">
+              <tr>
+                <td colspan="6" class="empty-cell">Calcul des probabilités par booster…</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB 5: RÉGLAGES -->
+      <section id="panel-settings" role="tabpanel" aria-labelledby="tab-settings" class="tab-panel">
+        <form id="settings-form" class="settings-form">
+          <fieldset class="settings-group">
+            <legend class="settings-group__legend">売 · Auto-Vente</legend>
+            <div class="field-row">
+              <label for="cfg-price-strategy">Stratégie de prix</label>
+              <select id="cfg-price-strategy" class="select">
+                <option value="quick">Vente rapide (-1 ◆ sous le min)</option>
+                <option value="balanced">Équilibré (médiane 7j)</option>
+                <option value="max">Marge haute (+15% médiane)</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label for="cfg-max-listings">Emplacements max utilisés (1–10)</label>
+              <input type="number" id="cfg-max-listings" class="input input--num" min="1" max="10" step="1" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-min-net-gain">Gain net min au-dessus du recyclage (◆)</label>
+              <input type="number" id="cfg-min-net-gain" class="input input--num" min="1" max="500" step="1" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-sell-duration">Durée des annonces</label>
+              <select id="cfg-sell-duration" class="select">
+                <option value="12">12 heures</option>
+                <option value="24">24 heures</option>
+                <option value="48">48 heures</option>
+              </select>
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-guardrail-70">Garde-fou 70% de la médiane 7j (anti-bradage)</label>
+              <input type="checkbox" role="switch" id="cfg-guardrail-70" class="switch switch--sm" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-relist-expired">Retirer et relister les annonces expirées</label>
+              <input type="checkbox" role="switch" id="cfg-relist-expired" class="switch switch--sm" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-hold-surging">Conserver les cartes en forte hausse de prix (+20% vs 30j)</label>
+              <input type="checkbox" role="switch" id="cfg-hold-surging" class="switch switch--sm" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-surge-pct">Seuil de hausse pour conservation (%)</label>
+              <input type="number" id="cfg-surge-pct" class="input input--num" min="5" max="200" step="5" />
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-group">
+            <legend class="settings-group__legend">転 · Auto-Recyclage</legend>
+            <div class="field-row">
+              <label for="cfg-keep-copies">Exemplaires toujours conservés</label>
+              <input type="number" id="cfg-keep-copies" class="input input--num" min="1" max="10" step="1" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-recycle-max-market">Seuil net max pour recycler si peu liquide (◆)</label>
+              <input type="number" id="cfg-recycle-max-market" class="input input--num" min="2" max="500" step="1" />
+            </div>
+            <div class="rarity-checks" role="group" aria-label="Raretés autorisées pour l'auto-recyclage">
+              <span class="rarity-checks__label">Raretés :</span>
+              <label class="chip-check"><input type="checkbox" value="C" class="cfg-rec-rarity" /> C</label>
+              <label class="chip-check"><input type="checkbox" value="U" class="cfg-rec-rarity" /> U</label>
+              <label class="chip-check"><input type="checkbox" value="R" class="cfg-rec-rarity" /> R</label>
+              <label class="chip-check"><input type="checkbox" value="E" class="cfg-rec-rarity" /> E</label>
+              <label class="chip-check"><input type="checkbox" value="L" class="cfg-rec-rarity" /> L</label>
+              <label class="chip-check"><input type="checkbox" value="M" class="cfg-rec-rarity" /> M</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-group">
+            <legend class="settings-group__legend">市 · Achat-Revente (Flip)</legend>
+            <div class="field-row">
+              <label for="cfg-buy-reserve">Réserve minimale de Chakra (◆)</label>
+              <input type="number" id="cfg-buy-reserve" class="input input--num" min="0" max="100000" step="50" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-buy-max-price">Prix d'achat max unitaire (◆)</label>
+              <input type="number" id="cfg-buy-max-price" class="input input--num" min="5" max="50000" step="10" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-buy-min-profit">Marge nette minimale après taxes (◆)</label>
+              <input type="number" id="cfg-buy-min-profit" class="input input--num" min="1" max="5000" step="1" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-buy-min-discount">Décote minimale sous médiane 7j (%)</label>
+              <input type="number" id="cfg-buy-min-discount" class="input input--num" min="5" max="90" step="1" />
+            </div>
+            <div class="field-row">
+              <label for="cfg-buy-min-sales7d">Ventes 7j minimum (liquidité)</label>
+              <input type="number" id="cfg-buy-min-sales7d" class="input input--num" min="1" max="50" step="1" />
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-group">
+            <legend class="settings-group__legend">札 · Ouverture Live des Boosters</legend>
+            <div class="field-row">
+              <label for="cfg-open-mode">Cible d'ouverture</label>
+              <select id="cfg-open-mode" class="select">
+                <option value="recommended_new">Booster #1 Nouveaux Personnages</option>
+                <option value="recommended_ev">Booster #1 Rentabilité Chakra (EV)</option>
+              </select>
+            </div>
+            <div class="field-row">
+              <label for="cfg-open-min-batch">Ouvrir dès que N boosters gratuits sont prêts</label>
+              <input type="number" id="cfg-open-min-batch" class="input input--num" min="1" max="10" step="1" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-pity-sniper">Pity Sniper (cibler le pack avec les meilleurs Mythiques à pitié ≥ 240)</label>
+              <input type="checkbox" role="switch" id="cfg-pity-sniper" class="switch switch--sm" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-daily-pack">Pack Journalier Gratuit (réclamer chaque jour sans toucher au Chakra)</label>
+              <input type="checkbox" role="switch" id="cfg-daily-pack" class="switch switch--sm" />
+            </div>
+          </fieldset>
+
+          <fieldset class="settings-group">
+            <legend class="settings-group__legend">守 · Système &amp; Cadence</legend>
+            <div class="field-row">
+              <label for="cfg-loop-interval">Intervalle du cycle auto (secondes)</label>
+              <input type="number" id="cfg-loop-interval" class="input input--num" min="20" max="300" step="5" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-notifications">Notifications bureau (ventes, flips, tirages L/M)</label>
+              <input type="checkbox" role="switch" id="cfg-notifications" class="switch switch--sm" />
+            </div>
+            <div class="switch-row switch-row--compact">
+              <label for="cfg-dry-run">Mode Simulation (Dry-Run : aucune écriture API)</label>
+              <input type="checkbox" role="switch" id="cfg-dry-run" class="switch switch--sm" />
+            </div>
+          </fieldset>
+
+          <div class="settings-actions">
+            <button type="submit" class="btn btn--primary">Enregistrer</button>
+            <button type="button" id="btn-reset-settings" class="btn btn--ghost">Valeurs par défaut</button>
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+    <script src="../lib/analytics.js"></script>
+    <script src="sidepanel.js"></script>
+  </body>
+</html>
