@@ -587,6 +587,19 @@
             </div>
           </fieldset>
 
+          <fieldset class="settings-group">
+            <legend class="settings-group__legend">文 · Langue / Language / Idioma</legend>
+            <div class="field-row">
+              <label for="cfg-language">Langue de l'interface</label>
+              <select id="cfg-language" class="select">
+                <option value="auto">Automatique (Langue de Kyara)</option>
+                <option value="fr">Français</option>
+                <option value="en">English</option>
+                <option value="es">Español</option>
+              </select>
+            </div>
+          </fieldset>
+
           <div class="settings-actions">
             <button type="submit" class="btn btn--primary">Enregistrer</button>
             <button type="button" id="btn-reset-settings" class="btn btn--ghost">Valeurs par défaut</button>
@@ -598,6 +611,7 @@
     <div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
 
     <script src="../lib/analytics.js"></script>
+    <script src="../lib/i18n.js"></script>
     <script src="sidepanel.js"></script>
   </body>
 </html>

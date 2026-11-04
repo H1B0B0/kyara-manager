@@ -1,5 +1,11 @@
 (() => {
   const Analytics = globalThis.KyaraAnalytics;
+  const i18n = globalThis.KyaraI18n || {
+    t: (k) => k,
+    setLanguage: () => "fr",
+    getLanguage: () => "fr",
+    detectLanguage: () => "fr"
+  };
   const fmt = new Intl.NumberFormat("fr-FR");
 
   let currentSettings = { ...Analytics.DEFAULT_SETTINGS };
@@ -50,6 +56,155 @@
     } catch (err) {
       return { ok: false, error: String(err?.message || err) };
     }
+  }
+
+  function applyTranslations() {
+    if (!i18n) return;
+    i18n.setLanguage(currentSettings.language || "auto");
+
+    const setText = (selector, key, params) => {
+      const el = document.querySelector(selector);
+      if (el) el.textContent = i18n.t(key, params);
+    };
+
+    // Header & Brand
+    setText("#btn-refresh span", "refresh");
+    setText("#btn-open-kyara", "openKyara");
+    setText("#connection-banner-text", "connectionBannerText");
+
+    // Tabs
+    const tabMap = {
+      autopilot: "tabAutopilot",
+      duplicates: "tabDuplicates",
+      market: "tabMarket",
+      boosters: "tabBoosters",
+      settings: "tabSettings"
+    };
+    for (const [id, k] of Object.entries(tabMap)) {
+      setText(`#tab-${id} .tab-label`, k);
+    }
+
+    // KPIs
+    setText(".kpi-card--chakra .kpi-card__label", "kpiChakra");
+    setText(".kpi-card--packs .kpi-card__label", "kpiBoosters");
+    setText(".kpi-card--listings .kpi-card__label", "kpiMarket");
+    setText(".kpi-card--pity .kpi-card__label", "kpiPity");
+
+    // Autopilot Hero
+    setText(".hero-title", "heroTitle");
+    setText(".hero-desc", "heroDesc");
+    setText("#btn-run-cycle span", "runCycleNow");
+    setText("#dry-run-indicator", "dryRunPill");
+    const heroText = document.getElementById("hero-status-text");
+    if (heroText) {
+      heroText.textContent = currentSettings.masterEnabled ? i18n.t("statusActive") : i18n.t("statusIdle");
+    }
+
+    // Autopilot Modules
+    setText(".module-card--sell .module-card__title", "modSellTitle");
+    setText(".module-card--sell .module-card__desc", "modSellDesc");
+    setText("#btn-sell-now", "sellNow");
+
+    setText(".module-card--recycle .module-card__title", "modRecycleTitle");
+    setText(".module-card--recycle .module-card__desc", "modRecycleDesc");
+    setText("#btn-recycle-now", "recycleNow");
+
+    setText(".module-card--boosters .module-card__title", "modBoostersTitle");
+    setText(".module-card--boosters .module-card__desc", "modBoostersDesc");
+
+    setText(".module-card--market .module-card__title", "modMarketTitle");
+    setText(".module-card--market .module-card__desc", "modMarketDesc");
+    setText(".module-card__sublabel", "modBuyMissing");
+
+    setText("label[for='sw-autoclaim']", "modMissionsTitle");
+    setText("label[for='sw-antiafk']", "modAntiAfkTitle");
+
+    // ROI Dashboard
+    setText(".card--roi .card__title", "roiTitle");
+    setText(".card--roi .card__subtitle", "roiSubtitle");
+    setText(".roi-stat-box--chakra .roi-stat-box__label", "roiTotalChakra");
+    setText(".roi-stat-box:nth-child(2) .roi-stat-box__label", "roiSales");
+    setText(".roi-stat-box:nth-child(3) .roi-stat-box__label", "roiRecycle");
+    setText(".roi-stat-box:nth-child(4) .roi-stat-box__label", "roiBoosters");
+    setText("#btn-reset-roi", "reset");
+
+    // Journal
+    setText(".journal-title-wrap .card__title", "journalTitle");
+    setText("#btn-clear-journal", "clear");
+
+    // Duplicates filters
+    const dupFilter = document.getElementById("dup-filter");
+    if (dupFilter && dupFilter.options.length >= 5) {
+      dupFilter.options[0].text = i18n.t("filterAll");
+      dupFilter.options[1].text = i18n.t("filterSell");
+      dupFilter.options[2].text = i18n.t("filterRecycle");
+      dupFilter.options[3].text = i18n.t("filterHold");
+      dupFilter.options[4].text = i18n.t("filterProtected");
+    }
+    const dupSearch = document.getElementById("dup-search");
+    if (dupSearch) dupSearch.placeholder = i18n.t("searchPlaceholder");
+
+    // Duplicates table headers
+    const dupThs = document.querySelectorAll(".data-table--duplicates thead th");
+    if (dupThs.length >= 7) {
+      dupThs[0].textContent = i18n.t("thCharacter");
+      dupThs[1].textContent = i18n.t("thSpare");
+      dupThs[2].textContent = i18n.t("thMedian7d");
+      dupThs[3].textContent = i18n.t("thPriceNet");
+      dupThs[4].textContent = i18n.t("thRecycle");
+      dupThs[5].textContent = i18n.t("thDecision");
+      dupThs[6].textContent = i18n.t("thProtect");
+    }
+
+    // Active listings table headers
+    setText(".card--sub .card__title", "activeListingsTitle");
+    const activeThs = document.querySelectorAll(".data-table--active-listings thead th");
+    if (activeThs.length >= 4) {
+      activeThs[0].textContent = i18n.t("thCharacter");
+      activeThs[1].textContent = i18n.t("thPrice");
+      activeThs[2].textContent = i18n.t("thExpires");
+      activeThs[3].textContent = i18n.t("thAction");
+    }
+
+    // Market filters
+    const mktFilter = document.getElementById("market-filter");
+    if (mktFilter && mktFilter.options.length >= 3) {
+      mktFilter.options[0].text = i18n.t("filterAllDeals");
+      mktFilter.options[1].text = i18n.t("filterFlipsOnly");
+      mktFilter.options[2].text = i18n.t("filterMissingOnly");
+    }
+    setText("#btn-scan-market span", "btnScanDeals");
+
+    // Market table headers
+    const mktThs = document.querySelectorAll(".data-table--market thead th");
+    if (mktThs.length >= 6) {
+      mktThs[0].textContent = i18n.t("thCard");
+      mktThs[1].textContent = i18n.t("thBuy");
+      mktThs[2].textContent = i18n.t("thMedian7d");
+      mktThs[3].textContent = i18n.t("thResale");
+      mktThs[4].textContent = i18n.t("thNetMargin");
+      mktThs[5].textContent = i18n.t("thAction");
+    }
+
+    // Boosters headers & tags
+    setText(".rec-tag--new", "recTagNew");
+    setText(".rec-tag--ev", "recTagEv");
+    setText("#panel-boosters .card--sub .card__title", "allPacksTitle");
+    const boosterThs = document.querySelectorAll(".data-table--boosters thead th");
+    if (boosterThs.length >= 6) {
+      boosterThs[0].textContent = i18n.t("thPack");
+      boosterThs[1].textContent = i18n.t("thCompletion");
+      boosterThs[2].textContent = i18n.t("thProbNew");
+      boosterThs[3].textContent = i18n.t("thExpectedNew");
+      boosterThs[4].textContent = i18n.t("thExpectedChakra");
+      boosterThs[5].textContent = i18n.t("thLive");
+    }
+
+    // Settings actions
+    const btnSave = document.querySelector("#settings-form button[type='submit']");
+    if (btnSave) btnSave.textContent = i18n.t("btnSaveSettings");
+    const btnReset = document.getElementById("btn-reset-settings");
+    if (btnReset) btnReset.textContent = i18n.t("btnDefaultSettings");
   }
 
   function setupTabs() {
@@ -164,11 +319,19 @@
     setVal("cfg-loop-interval", currentSettings.loopIntervalSec);
     setCheck("cfg-notifications", currentSettings.notificationsEnabled);
     setCheck("cfg-dry-run", currentSettings.dryRun);
+
+    setVal("cfg-language", currentSettings.language || "auto");
   }
 
   async function updateSettingPatch(patch) {
     currentSettings = { ...currentSettings, ...patch };
     await chrome.storage.local.set({ settings: currentSettings });
+    if (patch.language !== undefined) {
+      applyTranslations();
+      if (currentDashboard) {
+        void renderDashboard();
+      }
+    }
     renderSettingsControls();
   }
 
@@ -240,11 +403,12 @@
 
         loopIntervalSec: Math.max(20, Number(document.getElementById("cfg-loop-interval").value) || 45),
         notificationsEnabled: document.getElementById("cfg-notifications").checked,
-        dryRun: document.getElementById("cfg-dry-run").checked
+        dryRun: document.getElementById("cfg-dry-run").checked,
+        language: document.getElementById("cfg-language")?.value || "auto"
       };
 
       await updateSettingPatch(next);
-      showToast("Réglages enregistrés");
+      showToast(i18n.t("toastSaved"));
       await sendCmd({ type: "km:cmd:refresh", forcePrices: false });
     });
 
@@ -288,15 +452,28 @@
     if (elTotal) elTotal.textContent = `+${formatChakra(totalChakra)}`;
 
     const elSales = document.getElementById("roi-sales-stats");
-    if (elSales) elSales.textContent = `${currentCumulativeStats.cardsSold || 0} vendue(s) · +${formatChakra(currentCumulativeStats.chakraFromSales || 0)}`;
+    if (elSales) {
+      elSales.textContent = i18n.t("soldStat", {
+        n: currentCumulativeStats.cardsSold || 0,
+        amount: formatChakra(currentCumulativeStats.chakraFromSales || 0)
+      });
+    }
 
     const elRec = document.getElementById("roi-recycle-stats");
-    if (elRec) elRec.textContent = `${currentCumulativeStats.cardsRecycled || 0} recyclée(s) · +${formatChakra(currentCumulativeStats.chakraFromRecycle || 0)}`;
+    if (elRec) {
+      elRec.textContent = i18n.t("recycledStat", {
+        n: currentCumulativeStats.cardsRecycled || 0,
+        amount: formatChakra(currentCumulativeStats.chakraFromRecycle || 0)
+      });
+    }
 
     const elBoosters = document.getElementById("roi-boosters-stats");
     if (elBoosters) {
       const rareCount = (currentCumulativeStats.mythicsPulledCount || 0) + (currentCumulativeStats.legendariesPulledCount || 0);
-      elBoosters.textContent = `${currentCumulativeStats.boostersOpenedCount || 0} ouverts · ${rareCount} L/M`;
+      elBoosters.textContent = i18n.t("boostersStat", {
+        opened: currentCumulativeStats.boostersOpenedCount || 0,
+        rares: rareCount
+      });
     }
   }
 
@@ -318,7 +495,12 @@
     const me = currentDashboard.me || {};
     const stats = currentDashboard.collectionStats || {};
     if (statusEl) {
-      statusEl.textContent = `${me.pseudo || "Joueur"} · ${stats.uniqueOwned ?? 0}/${stats.catalogSize ?? 0} cartes (${stats.completionPct ?? 0}%)`;
+      statusEl.textContent = i18n.t("accountStatusConnected", {
+        pseudo: me.pseudo || "Joueur",
+        owned: stats.uniqueOwned ?? 0,
+        total: stats.catalogSize ?? 0,
+        pct: stats.completionPct ?? 0
+      });
     }
 
     const maxSlots = currentSettings.autoSellMaxListings ?? 10;
@@ -342,8 +524,8 @@
     const recCount = stats.recyclableDuplicatesCount ?? 0;
     const recTotal = stats.recyclableChakraTotal ?? 0;
 
-    document.getElementById("stat-autosell").textContent = `${sellCount} copie(s) · +${formatChakra(sellNet)} net`;
-    document.getElementById("stat-autorecycle").textContent = `${recCount} copie(s) · +${formatChakra(recTotal)}`;
+    document.getElementById("stat-autosell").textContent = `${i18n.t("copiesCount", { n: sellCount })} · +${formatChakra(sellNet)}`;
+    document.getElementById("stat-autorecycle").textContent = `${i18n.t("copiesCount", { n: recCount })} · +${formatChakra(recTotal)}`;
 
     const recNew = currentDashboard.boosters?.recommendedNew;
     document.getElementById("stat-autoopen").textContent = recNew
@@ -354,7 +536,7 @@
     if (btnOpenRec) {
       const freeAvailable = Number(recNew?.openableFreeCount ?? 0);
       btnOpenRec.disabled = freeAvailable <= 0;
-      btnOpenRec.textContent = freeAvailable > 0 ? "Ouvrir en live (Gratuit)" : "0 gratuit prêt";
+      btnOpenRec.textContent = freeAvailable > 0 ? i18n.t("openLiveFree") : i18n.t("noFreeReady");
       btnOpenRec.title = freeAvailable > 0 ? `Ouvrir ${recNew.name} en live` : "Recharge en cours (0 ◆ garanti)";
     }
 
@@ -374,17 +556,17 @@
     const p2 = document.getElementById("pity-sniper-alert-boosters");
     if (p1) {
       p1.hidden = !isPityNear;
-      const c1 = document.getElementById("pity-sniper-count-autopilot");
-      if (c1) c1.textContent = String(me.pity ?? 0);
-      const t1 = document.getElementById("pity-sniper-target-autopilot");
-      if (t1) t1.textContent = pityTarget;
+      const title1 = p1.querySelector(".pity-banner__title");
+      if (title1) title1.textContent = i18n.t("pityImminent", { count: me.pity ?? 0 });
+      const desc1 = p1.querySelector(".pity-banner__desc");
+      if (desc1) desc1.innerHTML = i18n.t("pityDescAutopilot", { target: `<strong>${escapeHtml(pityTarget)}</strong>` });
     }
     if (p2) {
       p2.hidden = !isPityNear;
-      const c2 = document.getElementById("pity-sniper-count-boosters");
-      if (c2) c2.textContent = String(me.pity ?? 0);
-      const t2 = document.getElementById("pity-sniper-target-boosters");
-      if (t2) t2.textContent = pityTarget;
+      const title2 = p2.querySelector(".pity-banner__title");
+      if (title2) title2.textContent = i18n.t("pityImminent", { count: me.pity ?? 0 });
+      const desc2 = p2.querySelector(".pity-banner__desc");
+      if (desc2) desc2.innerHTML = i18n.t("pityDescBoosters", { target: `<strong>${escapeHtml(pityTarget)}</strong>` });
     }
 
     await renderDuplicatesTab(allDuplicates, stats, activeListings, maxSlots);
@@ -393,12 +575,12 @@
   }
 
   async function renderDuplicatesTab(allDuplicates, stats, activeListings, maxSlots) {
-    document.getElementById("dup-summary-sell").textContent = `${
-      stats.sellableDuplicatesCount ?? 0
-    } copie(s) · ${formatChakra(stats.sellableNetTotal ?? 0)} net`;
-    document.getElementById("dup-summary-recycle").textContent = `${
-      stats.recyclableDuplicatesCount ?? 0
-    } copie(s) · ${formatChakra(stats.recyclableChakraTotal ?? 0)}`;
+    document.getElementById("dup-summary-sell").textContent = `${i18n.t("copiesCount", {
+      n: stats.sellableDuplicatesCount ?? 0
+    })} · ${formatChakra(stats.sellableNetTotal ?? 0)} net`;
+    document.getElementById("dup-summary-recycle").textContent = `${i18n.t("copiesCount", {
+      n: stats.recyclableDuplicatesCount ?? 0
+    })} · ${formatChakra(stats.recyclableChakraTotal ?? 0)}`;
 
     const query = (document.getElementById("dup-search")?.value || "").trim().toLowerCase();
     const filter = document.getElementById("dup-filter")?.value || "ALL";
@@ -421,7 +603,7 @@
     if (!tbody) return;
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">Aucun doublon correspondant aux critères.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="7" class="empty-cell">${escapeHtml(i18n.t("noDuplicates"))}</td></tr>`;
     } else {
       let deadline = performance.now() + 50;
       const rows = [];
@@ -437,7 +619,8 @@
             : isSell
               ? "verdict-badge--sell"
               : "verdict-badge--recycle";
-        const verdictText = isPinned ? "PROTÉGÉ" : d.verdict;
+        const verdictKey = isPinned ? "PROTÉGÉ" : d.verdict;
+        const verdictText = i18n.t(`verdict.${verdictKey}`) || verdictKey;
         const recPrice = d.prices?.recommended ?? 0;
         const netProc = d.fees?.netProceeds ?? 0;
         const recUnit = d.recycleValue ?? 1;
@@ -452,7 +635,9 @@
           <td class="num">${d.referenceMedian ? `${d.referenceMedian} ◆` : "—"}</td>
           <td class="num">
             <strong>${recPrice} ◆</strong>${
-              d.isSurging ? `<span class="badge-surge" title="+${d.trendPct}% vs médiane 30j">📈 +${d.trendPct}%</span>` : ""
+              d.isSurging
+                ? `<span class="badge-surge" title="${escapeHtml(i18n.t("surgeTooltip", { pct: d.trendPct }))}">📈 +${d.trendPct}%</span>`
+                : ""
             }
             <span class="sub-meta">Net ${netProc} ◆</span>
           </td>
@@ -465,23 +650,23 @@
               <span class="verdict-badge ${badgeClass}">${escapeHtml(verdictText)}</span>
               ${
                 isSell
-                  ? `<button type="button" class="btn btn--primary btn--xs" data-action="sell-one" data-id="${d.characterId}" data-price="${recPrice}">Vendre</button>`
+                  ? `<button type="button" class="btn btn--primary btn--xs" data-action="sell-one" data-id="${d.characterId}" data-price="${recPrice}">${escapeHtml(i18n.t("btnSell"))}</button>`
                   : ""
               }
               ${
                 !isPinned
                   ? `<button type="button" class="btn btn--ghost btn--xs" data-action="recycle-one" data-id="${d.characterId}" data-qty="${d.spare}" data-name="${escapeHtml(
                       d.name
-                    )}">Recycler ×${d.spare}</button>`
+                    )}">${escapeHtml(i18n.t("btnRecycleCount", { n: d.spare }))}</button>`
                   : ""
               }
             </div>
             <span class="sub-meta">${escapeHtml(probText || d.verdictReason)}</span>
           </td>
           <td class="num">
-            <button type="button" class="btn-pin ${isPinned ? "is-pinned" : ""}" data-action="toggle-pin" data-id="${d.characterId}" title="${
-              isPinned ? "Déprotéger cette carte" : "Protéger (ne jamais vendre ni recycler)"
-            }">${isPinned ? "🔒" : "🔓"}</button>
+            <button type="button" class="btn-pin ${isPinned ? "is-pinned" : ""}" data-action="toggle-pin" data-id="${d.characterId}" title="${escapeHtml(
+              isPinned ? i18n.t("pinTooltipUnprotect") : i18n.t("pinTooltipProtect")
+            )}">${isPinned ? "🔒" : "🔓"}</button>
           </td>
         </tr>`);
       }
@@ -493,12 +678,12 @@
     if (!listTbody) return;
 
     if (activeListings.length === 0) {
-      listTbody.innerHTML = `<tr><td colspan="4" class="empty-cell">Aucune annonce en cours.</td></tr>`;
+      listTbody.innerHTML = `<tr><td colspan="4" class="empty-cell">${escapeHtml(i18n.t("noActiveListings"))}</td></tr>`;
     } else {
       listTbody.innerHTML = activeListings
         .map((l) => {
           const exp = l.endsAt
-            ? new Date(l.endsAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })
+            ? new Date(l.endsAt).toLocaleTimeString(i18n.getLanguage() === "en" ? "en-US" : i18n.getLanguage() === "es" ? "es-ES" : "fr-FR", { hour: "2-digit", minute: "2-digit" })
             : "—";
           return `<tr>
             <td>
@@ -513,7 +698,7 @@
               <button type="button" class="btn btn--ghost btn--xs" data-action="cancel-listing" data-id="${escapeHtml(
                 l.id
               )}" data-name="${escapeHtml(l.name || "Annonce")}">
-                Retirer
+                ${escapeHtml(i18n.t("btnCancel"))}
               </button>
             </td>
           </tr>`;
@@ -534,7 +719,7 @@
     });
 
     if (filtered.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="6" class="empty-cell">Aucune opportunité détectée. Clique sur « Scanner » pour rafraîchir le marché.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" class="empty-cell">${escapeHtml(i18n.t("noDeals"))}</td></tr>`;
       return;
     }
 
@@ -563,7 +748,7 @@
           <button type="button" class="btn btn--primary btn--xs" data-action="buy-deal" data-id="${escapeHtml(
             d.listingId
           )}" data-price="${d.buyPrice}" data-name="${escapeHtml(d.name)}">
-            Acheter
+            ${escapeHtml(i18n.t("btnBuy"))}
           </button>
         </td>
       </tr>`);
@@ -578,8 +763,8 @@
     const recEv = boosters.recommendedEv;
 
     if (recNew) {
-      document.getElementById("rec-new-name").textContent = `${recNew.name} · ${recNew.completionPct}% (${recNew.totalMissing} manquants)`;
-      document.getElementById("rec-new-metrics").textContent = `P(≥1 nouv.) : ${recNew.probAtLeastOneNewPct}% · E[Nouv.] : ${recNew.expectedNewCards}/booster · Gratuits : ${recNew.openableFreeCount}`;
+      document.getElementById("rec-new-name").textContent = `${recNew.name} · ${recNew.completionPct}% (${i18n.t("missingCountTag", { n: recNew.totalMissing })})`;
+      document.getElementById("rec-new-metrics").textContent = `${i18n.t("probAtLeastOneNew", { prob: recNew.probAtLeastOneNewPct })} · ${i18n.t("expectedNewPerPack", { exp: recNew.expectedNewCards })} · ${i18n.t("freeCountTag", { n: recNew.openableFreeCount })}`;
 
       const raritiesEl = document.getElementById("rec-new-rarities");
       if (raritiesEl && recNew.missingByRarity && recNew.totalByRarity) {
@@ -601,17 +786,17 @@
         btn1.dataset.packId = recNew.packId;
         btn1.dataset.packName = recNew.name;
         btn1.disabled = !hasFree;
-        btn1.textContent = hasFree ? "Ouvrir ×1 en live (Gratuit)" : "0 gratuit (Recharge…)";
-        btn1.title = hasFree ? "Ouvrir 1 booster gratuit en live" : "Aucun booster gratuit disponible (Garde-fou 0 ◆)";
+        btn1.textContent = hasFree ? i18n.t("openRec1Btn") : i18n.t("rechargeNotice");
+        btn1.title = hasFree ? i18n.t("openRec1Btn") : "Aucun booster gratuit disponible (Garde-fou 0 ◆)";
       }
       if (btnMax) {
         const maxCount = Math.max(1, Math.min(10, recNew.openableFreeCount || 1));
         btnMax.dataset.packId = recNew.packId;
         btnMax.dataset.packName = recNew.name;
         btnMax.dataset.count = String(maxCount);
-        btnMax.textContent = hasFree ? `Ouvrir max en live (×${maxCount})` : "Max indisponible";
+        btnMax.textContent = hasFree ? i18n.t("openRecMaxBtn", { n: maxCount }) : i18n.t("maxUnavailable");
         btnMax.disabled = !hasFree;
-        btnMax.title = hasFree ? `Ouvrir ${maxCount} boosters gratuits` : "Aucun booster gratuit disponible";
+        btnMax.title = hasFree ? `Ouvrir ${maxCount} boosters` : "Max indisponible";
       }
     }
 
@@ -903,7 +1088,11 @@
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
     if (changes.settings?.newValue) {
+      const prevLang = currentSettings.language;
       currentSettings = { ...Analytics.DEFAULT_SETTINGS, ...changes.settings.newValue };
+      if (currentSettings.language !== prevLang) {
+        applyTranslations();
+      }
       renderSettingsControls();
     }
     if (changes.kmDashboard?.newValue) {
@@ -954,6 +1143,7 @@
       currentPinnedCards = new Set(stored.kmPinnedCards.map(Number));
     }
 
+    applyTranslations();
     renderSettingsControls();
     renderJournal();
     renderRoiDashboard();

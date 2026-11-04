@@ -9,6 +9,7 @@
   globalThis.__kyaraManagerInjected = true;
 
   const Analytics = globalThis.KyaraAnalytics;
+  const i18n = globalThis.KyaraI18n;
   const CATALOG_TTL_MS = 12 * 3600 * 1000;
   const PACK_POOLS_TTL_MS = 12 * 3600 * 1000;
   const PRICES_TTL_MS = 15 * 60 * 1000;
@@ -242,6 +243,7 @@
     try {
       const { settings } = await chrome.storage.local.get("settings");
       currentSettings = { ...Analytics.DEFAULT_SETTINGS, ...(settings || {}) };
+      i18n?.setLanguage(currentSettings.language || "auto");
       if (!settings) {
         await chrome.storage.local.set({ settings: currentSettings });
       }

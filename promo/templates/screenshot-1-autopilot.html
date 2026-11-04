@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700;800&family=Unbounded:wght@400;600;700;800;900&family=Zen+Kaku+Gothic+New:wght@400;500;700;900&display=swap');
+
+  :root {
+    --bg: #0a090e;
+    --bg-card: rgba(21, 20, 26, 0.96);
+    --bg-card-raise: #1e1c26;
+    --border: #2e2b36;
+    --border-light: rgba(255, 255, 255, 0.1);
+    --border-focus: #ff4d2e;
+    --fg: #edeae4;
+    --fg-muted: #9d98a5;
+    --fg-dim: #6b6675;
+    --acc: #ff4d2e;
+    --acc-glow: rgba(255, 77, 46, 0.35);
+    --gold: #f5c518;
+    --gold-glow: rgba(245, 197, 24, 0.3);
+    --emerald: #3fbf7f;
+    --cyan: #4dd6ff;
+    --purple: #b072ff;
+    --rarity-m: #ff4d2e;
+    --rarity-l: #f5c518;
+    --rarity-e: #b072ff;
+    --rarity-r: #4d9bff;
+    --rarity-u: #3fbf7f;
+    --rarity-c: #b5b1bb;
+    --font-title: 'Unbounded', system-ui, sans-serif;
+    --font-body: 'Zen Kaku Gothic New', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+
+  .grid-pattern {
+    position: absolute;
+    inset: 0;
+    background-image: 
+      radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px),
+      radial-gradient(rgba(255, 77, 46, 0.04) 1px, transparent 1px);
+    background-size: 24px 24px, 48px 48px;
+    background-position: 0 0, 12px 12px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .glow-orb {
+    position: absolute;
+    border-radius: 50%;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+body {
+  width: 1280px;
+  height: 800px;
+  background: #09080d;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+/* Header Banner */
+.header-banner {
+  height: 94px;
+  background: linear-gradient(180deg, #181522 0%, #0f0e15 100%);
+  border-bottom: 1px solid var(--border);
+  padding: 0 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  position: relative;
+  z-index: 10;
+}
+
+.header-banner__left {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.header-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--acc);
+  letter-spacing: 0.5px;
+}
+
+.header-title {
+  font-family: var(--font-title);
+  font-size: 21px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.3px;
+}
+
+.header-subtitle {
+  font-size: 13px;
+  color: var(--fg-muted);
+}
+
+.header-banner__right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: rgba(30, 28, 38, 0.8);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 8px 14px;
+}
+
+.header-seal {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--acc);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 900;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Main Mockup Area */
+.main-stage {
+  flex: 1;
+  padding: 24px 36px 28px 36px;
+  position: relative;
+  z-index: 2;
+  display: flex;
+  gap: 24px;
+  overflow: hidden;
+}
+
+/* Shared UI Components */
+.kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.kpi-box {
+  background: #15141a;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 9px 12px;
+}
+
+.kpi-box__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-family: var(--font-mono);
+  color: var(--fg-muted);
+  margin-bottom: 4px;
+}
+
+.kpi-box__val {
+  font-size: 17px;
+  font-weight: 800;
+  font-family: var(--font-mono);
+}
+
+.badge-m { background: var(--rarity-m); color: #fff; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: var(--font-mono); }
+.badge-l { background: var(--rarity-l); color: #000; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: var(--font-mono); }
+.badge-e { background: var(--rarity-e); color: #fff; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: var(--font-mono); }
+.badge-c { background: var(--rarity-c); color: #000; font-size: 10px; font-weight: 800; padding: 2px 7px; border-radius: 4px; font-family: var(--font-mono); }
+
+.btn-buy { background: var(--cyan); color: #000; font-weight: 800; font-size: 11px; padding: 6px 12px; border-radius: 6px; border: none; font-family: var(--font-body); }
+.btn-sell { background: var(--gold); color: #000; font-weight: 800; font-size: 11px; padding: 6px 12px; border-radius: 6px; border: none; font-family: var(--font-body); }
+.btn-recycle { background: var(--emerald); color: #000; font-weight: 800; font-size: 11px; padding: 6px 12px; border-radius: 6px; border: none; font-family: var(--font-body); }
+</style>
+</head>
+<body>
+  <div class="grid-pattern"></div>
+  <div class="glow-orb" style="top: 80px; left: 100px; width: 400px; height: 400px; background: rgba(255, 77, 46, 0.1);"></div>
+  <div class="glow-orb" style="bottom: 50px; right: 150px; width: 450px; height: 450px; background: rgba(245, 197, 24, 0.1);"></div>
+
+  <div class="header-banner">
+    <div class="header-banner__left">
+      <div class="header-badge">
+        <span>⚡ KYARA MANAGER</span>
+        <span>•</span>
+        <span>MODULE 01</span>
+      </div>
+      <h1 class="header-title">Pilote Automatique Global & Tableau de Bord des Gains (ROI)</h1>
+      <p class="header-subtitle">Automatisez la vente, le recyclage, les flips et l'ouverture live tout en mesurant vos gains nets en direct.</p>
+    </div>
+    <div class="header-banner__right">
+      <div class="header-brand">
+        <div class="header-seal">操</div>
+        <div>
+          <div style="font-family: var(--font-title); font-size: 13px; font-weight: 900; color: #fff;">KYARA MANAGER</div>
+          <div style="font-size: 10.5px; color: var(--emerald); font-weight: 700;">● Pilote Connecté (v1.1)</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-stage">
+    
+    <!-- Left: Game preview & in-game HUD -->
+    <div style="flex: 1; background: #121117; border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; justify-content: space-between; position: relative;">
+      <div>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px;">
+          <div style="font-size: 12px; font-family: var(--font-mono); color: var(--fg-muted);">NAVIGATION : https://kyara.games/collection</div>
+          <div style="background: rgba(255, 77, 46, 0.15); color: var(--acc); font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px;">PAGE KYARA.GAMES</div>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px;">
+          <div style="background: #181720; border: 1px solid #2e2b36; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 36px; margin: 8px 0;">🥷</div>
+            <div style="font-size: 12px; font-weight: 800; color: #fff;">Sasuke Uchiha</div>
+            <div style="font-size: 10px; color: var(--gold); font-family: var(--font-mono);">Légendaire · 4 200 ◆</div>
+          </div>
+          <div style="background: #181720; border: 1px solid #ff4d2e; border-radius: 10px; padding: 12px; text-align: center; box-shadow: 0 0 16px rgba(255,77,46,0.2);">
+            <div style="font-size: 36px; margin: 8px 0;">⚡</div>
+            <div style="font-size: 12px; font-weight: 800; color: #fff;">Madara Uchiha</div>
+            <div style="font-size: 10px; color: var(--acc); font-family: var(--font-mono);">Mythique · 18 500 ◆</div>
+          </div>
+          <div style="background: #181720; border: 1px solid #2e2b36; border-radius: 10px; padding: 12px; text-align: center;">
+            <div style="font-size: 36px; margin: 8px 0;">🌀</div>
+            <div style="font-size: 12px; font-weight: 800; color: #fff;">Minato Namikaze</div>
+            <div style="font-size: 10px; color: var(--gold); font-family: var(--font-mono);">Légendaire · 6 800 ◆</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- In-Game Floating HUD -->
+      <div style="background: rgba(21, 20, 26, 0.96); border: 1px solid #3f3b4a; border-radius: 12px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 12px 30px rgba(0,0,0,0.8);">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div style="width: 28px; height: 28px; border-radius: 7px; background: var(--acc); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 900; font-size: 14px;">操</div>
+          <div>
+            <div style="font-size: 11.5px; font-weight: 800; color: #fff;">HUD Kyara Manager (En jeu)</div>
+            <div style="font-size: 10px; color: var(--emerald); font-family: var(--font-mono);">Pilote en continu : Vente & Recyclage OK</div>
+          </div>
+        </div>
+        <div style="font-family: var(--font-mono); font-size: 12px; font-weight: 800; color: var(--gold);">48 290 ◆</div>
+      </div>
+    </div>
+
+    <!-- Right: Side Panel Full View -->
+    <div style="width: 580px; background: #15141a; border: 1px solid var(--border); border-radius: 14px; padding: 18px; display: flex; flex-direction: column; gap: 12px; overflow: hidden;">
+      <!-- KPIs -->
+      <div class="kpi-row">
+        <div class="kpi-box">
+          <div class="kpi-box__head"><span>CHAKRA</span> <span>◆</span></div>
+          <div class="kpi-box__val" style="color: var(--gold);">48 290 ◆</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-box__head"><span>BOOSTERS</span> <span>札</span></div>
+          <div class="kpi-box__val" style="color: #fff;">10 / 10</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-box__head"><span>MARCHÉ</span> <span>市</span></div>
+          <div class="kpi-box__val" style="color: #fff;">10 / 10</div>
+        </div>
+        <div class="kpi-box">
+          <div class="kpi-box__head"><span>PITIÉ</span> <span>神</span></div>
+          <div class="kpi-box__val" style="color: var(--gold);">242 / 250</div>
+        </div>
+      </div>
+
+      <!-- Master Hero Switch Card -->
+      <div style="background: linear-gradient(135deg, #201c2b, #171520); border: 1px solid var(--border-light); border-radius: 12px; padding: 14px 16px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); box-shadow: 0 0 8px var(--emerald);"></span>
+            <span style="font-size: 11px; font-weight: 800; font-family: var(--font-mono); color: var(--emerald);">PILOTE ACTIF (EN CONTINU)</span>
+          </div>
+          <div style="width: 44px; height: 24px; background: var(--emerald); border-radius: 12px; padding: 2px; display: flex; justify-content: flex-end; align-items: center;">
+            <div style="width: 20px; height: 20px; border-radius: 50%; background: #fff;"></div>
+          </div>
+        </div>
+        <h2 style="font-size: 15px; font-weight: 800; color: #fff; margin-bottom: 4px;">Pilote Automatique Global</h2>
+        <p style="font-size: 11.5px; color: var(--fg-muted);">Orchestration autonome des 4 modules avec respect des quotas anti-ban et sanctuarisation du Chakra.</p>
+      </div>
+
+      <!-- ROI Card -->
+      <div style="background: #191822; border: 1px solid rgba(245, 197, 24, 0.3); border-radius: 12px; padding: 12px 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+          <span style="font-size: 11px; font-weight: 800; color: var(--gold);">益 TABLEAU DE BORD DES GAINS NETS (ROI)</span>
+          <span style="font-family: var(--font-mono); font-size: 16px; font-weight: 900; color: var(--gold);">+24 680 ◆ TOTAL</span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; font-family: var(--font-mono); font-size: 10.5px;">
+          <div style="background: #14131a; padding: 6px 8px; border-radius: 6px;">Ventes : <b style="color:#fff;">38</b> (+16 200 ◆)</div>
+          <div style="background: #14131a; padding: 6px 8px; border-radius: 6px;">Recyclages : <b style="color:#fff;">142</b> (+8 480 ◆)</div>
+          <div style="background: #14131a; padding: 6px 8px; border-radius: 6px;">Boosters : <b style="color:#fff;">12</b> (2M / 3L)</div>
+        </div>
+      </div>
+
+      <!-- Live Activity Log -->
+      <div style="flex: 1; background: #0e0d13; border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; font-family: var(--font-mono); font-size: 10.5px; display: flex; flex-direction: column; gap: 6px;">
+        <div style="color: var(--fg-muted); font-weight: 700; margin-bottom: 2px;">JOURNAL D'ACTIVITÉ EN TEMPS RÉEL :</div>
+        <div style="color: var(--gold);"><span style="color:var(--fg-dim);">[18:54:12]</span> 💰 Vente réussie : Sasuke Uchiha (L) vendu à 4 200 ◆ (+3 990 ◆ net)</div>
+        <div style="color: var(--emerald);"><span style="color:var(--fg-dim);">[18:53:45]</span> ♻️ 18 doublons recyclés intelligemment (+360 ◆ chakra)</div>
+        <div style="color: var(--acc);"><span style="color:var(--fg-dim);">[18:52:10]</span> 札 Tirage live réussi : Booster Hokage ouvert (Mythique Madara obtenu !)</div>
+        <div style="color: var(--cyan);"><span style="color:var(--fg-dim);">[18:50:02]</span> ⚡ Flip marché détecté et acheté : Pain Tendô (-32% de décote)</div>
+      </div>
+    </div>
+  
+  </div>
+</body>
+</html>

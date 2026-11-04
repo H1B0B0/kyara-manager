@@ -262,6 +262,26 @@ const tests = [
       assert.equal(res.canAutoSell, false);
       assert.equal(res.canAutoRecycle, false);
     }
+  },
+  {
+    name: "KyaraI18n supports French, English, and Spanish dictionaries with parameter substitution",
+    fn: () => {
+      const i18n = require("../lib/i18n.js");
+      i18n.setLanguage("fr");
+      assert.equal(i18n.t("tabAutopilot"), "Pilote");
+      assert.equal(i18n.t("verdict.VENDRE"), "VENDRE");
+      assert.equal(i18n.t("copiesCount", { n: 4 }), "4 copie(s)");
+
+      i18n.setLanguage("en");
+      assert.equal(i18n.t("tabAutopilot"), "Pilot");
+      assert.equal(i18n.t("verdict.VENDRE"), "SELL");
+      assert.equal(i18n.t("copiesCount", { n: 4 }), "4 copy(ies)");
+
+      i18n.setLanguage("es");
+      assert.equal(i18n.t("tabAutopilot"), "Piloto");
+      assert.equal(i18n.t("verdict.VENDRE"), "VENDER");
+      assert.equal(i18n.t("copiesCount", { n: 4 }), "4 copia(s)");
+    }
   }
 ];
 
