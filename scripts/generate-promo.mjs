@@ -6,12 +6,16 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const promoDir = path.join(rootDir, 'promo');
+const rawDir = path.join(promoDir, 'raw');
 const templatesDir = path.join(promoDir, 'templates');
 const brainDir = '/Users/etiennementrel/.gemini/antigravity/brain/b940700c-9447-4038-95e4-aaf2f3023806';
+const previewDir = path.join(brainDir, 'promo-preview');
 const aiBannerPath = path.join(brainDir, 'kyara_manager_promo_banner_1793817710243.jpg');
 
 fs.mkdirSync(promoDir, { recursive: true });
+fs.mkdirSync(rawDir, { recursive: true });
 fs.mkdirSync(templatesDir, { recursive: true });
+fs.mkdirSync(previewDir, { recursive: true });
 
 const CHROME_PATH = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 if (!fs.existsSync(CHROME_PATH)) {
@@ -19,708 +23,46 @@ if (!fs.existsSync(CHROME_PATH)) {
   process.exit(1);
 }
 
-// Read real app files
-const sidepanelHtmlRaw = fs.readFileSync(path.join(rootDir, 'sidepanel', 'sidepanel.html'), 'utf8');
-const sidepanelCss = fs.readFileSync(path.join(rootDir, 'sidepanel', 'sidepanel.css'), 'utf8');
-const contentCss = fs.readFileSync(path.join(rootDir, 'content', 'content.css'), 'utf8');
-const analyticsJs = fs.readFileSync(path.join(rootDir, 'lib', 'analytics.js'), 'utf8');
-const i18nJs = fs.readFileSync(path.join(rootDir, 'lib', 'i18n.js'), 'utf8');
-const sidepanelJs = fs.readFileSync(path.join(rootDir, 'sidepanel', 'sidepanel.js'), 'utf8');
-
-// Extract the header and main content from sidepanel.html
-const bodyMatch = sidepanelHtmlRaw.match(/<header class="app-header">[\s\S]*<\/main>/);
-const realSidepanelBody = bodyMatch ? bodyMatch[0] : '';
-
 // -------------------------------------------------------------------------
-// ANONYMIZED WHALE ACCOUNT MOCK DATA ("GROS CHIFFRES")
-// -------------------------------------------------------------------------
-const mockWhaleDataScript = `
-  const mockSettings = {
-    masterEnabled: true,
-    autoSellDuplicates: true,
-    autoRecycleDuplicates: true,
-    autoBuyFlips: true,
-    autoBuyMissing: true,
-    autoOpenFreeBoosters: true,
-    autoClaimMissions: true,
-    antiAfk: true,
-    chakraReserve: 15000,
-    minUndercutPct: 70,
-    autoSellMaxListings: 10,
-    language: 'fr'
-  };
-
-  const mockDashboard = {
-    authenticated: true,
-    me: {
-      id: 777,
-      pseudo: "KyaraMaster",
-      chakra: 285450,
-      freePacks: 10,
-      freePacksMax: 10,
-      bonusPacks: 5,
-      pity: 244,
-      pityMax: 250
-    },
-    collectionStats: {
-      uniqueOwned: 5842,
-      catalogSize: 6736,
-      completionPct: 86.7,
-      sellableDuplicatesCount: 18,
-      sellableNetTotal: 94500,
-      recyclableDuplicatesCount: 42,
-      recyclableChakraTotal: 2840
-    },
-    activeListings: [
-      { card: { id: 101, name: "Madara Uchiha (Susanoo)", rarity: "M" }, price: 24000, expiresAt: Date.now() + 86400000 },
-      { card: { id: 102, name: "Itachi Uchiha (Edo Tensei)", rarity: "M" }, price: 18500, expiresAt: Date.now() + 86400000 },
-      { card: { id: 103, name: "Goku (Ultra Instinct)", rarity: "M" }, price: 22000, expiresAt: Date.now() + 86400000 },
-      { card: { id: 104, name: "Minato Namikaze", rarity: "L" }, price: 7800, expiresAt: Date.now() + 86400000 },
-      { card: { id: 105, name: "Pain Tendô (Akatsuki)", rarity: "L" }, price: 5400, expiresAt: Date.now() + 86400000 },
-      { card: { id: 106, name: "Sasuke Uchiha (Rinnegan)", rarity: "L" }, price: 6900, expiresAt: Date.now() + 86400000 },
-      { card: { id: 107, name: "Kakashi Hatake (Double Kamui)", rarity: "L" }, price: 5800, expiresAt: Date.now() + 86400000 },
-      { card: { id: 108, name: "Levi Ackerman", rarity: "E" }, price: 2400, expiresAt: Date.now() + 86400000 },
-      { card: { id: 109, name: "Gojo Satoru", rarity: "E" }, price: 2800, expiresAt: Date.now() + 86400000 },
-      { card: { id: 110, name: "Megumin (Explosion)", rarity: "E" }, price: 1950, expiresAt: Date.now() + 86400000 }
-    ],
-    duplicates: [
-      {
-        card: { id: 201, name: "Madara Uchiha (Susanoo)", rarity: "M", resaleUntil: 0 },
-        spareCopies: 2,
-        evaluation: {
-          median7d: 24000,
-          suggestedPrice: 24000,
-          netSalesProceeds: 22320,
-          recycleValue: 500,
-          action: "VENDRE",
-          status: "OK",
-          priceSurge: false
-        }
-      },
-      {
-        card: { id: 202, name: "Itachi Uchiha (Edo Tensei)", rarity: "M", resaleUntil: 0 },
-        spareCopies: 1,
-        evaluation: {
-          median7d: 18500,
-          suggestedPrice: 18500,
-          netSalesProceeds: 17205,
-          recycleValue: 500,
-          action: "VENDRE",
-          status: "OK",
-          priceSurge: false
-        }
-      },
-      {
-        card: { id: 203, name: "Minato Namikaze (Éclair Jaune)", rarity: "L", resaleUntil: 0 },
-        spareCopies: 3,
-        evaluation: {
-          median7d: 7800,
-          suggestedPrice: 7800,
-          netSalesProceeds: 7254,
-          recycleValue: 200,
-          action: "VENDRE",
-          status: "OK",
-          priceSurge: false
-        }
-      },
-      {
-        card: { id: 204, name: "Pain Tendô (Akatsuki)", rarity: "L", resaleUntil: 0 },
-        spareCopies: 2,
-        evaluation: {
-          median7d: 5400,
-          suggestedPrice: 5400,
-          netSalesProceeds: 5022,
-          recycleValue: 200,
-          action: "VENDRE",
-          status: "OK",
-          priceSurge: false
-        }
-      },
-      {
-        card: { id: 205, name: "Ninja de Kiri (Garde)", rarity: "C", resaleUntil: 0 },
-        spareCopies: 28,
-        evaluation: {
-          median7d: 12,
-          suggestedPrice: 12,
-          netSalesProceeds: 10,
-          recycleValue: 20,
-          action: "RECYCLER",
-          status: "OK",
-          priceSurge: false
-        }
-      }
-    ],
-    deals: [
-      {
-        card: { id: 301, name: "Naruto Uzumaki (Mode Kurama)", rarity: "M" },
-        listing: { price: 12500, id: 9001 },
-        median7d: 18900,
-        suggestedResalePrice: 18900,
-        netResaleProceeds: 17577,
-        netMargin: 5077,
-        marginPct: 40.6,
-        isMissing: true
-      },
-      {
-        card: { id: 302, name: "Goku (Super Saiyan)", rarity: "M" },
-        listing: { price: 15000, id: 9002 },
-        median7d: 22000,
-        suggestedResalePrice: 21800,
-        netResaleProceeds: 20274,
-        netMargin: 5274,
-        marginPct: 35.2,
-        isMissing: false
-      },
-      {
-        card: { id: 303, name: "Jiraiya (Mode Ermite)", rarity: "L" },
-        listing: { price: 3400, id: 9003 },
-        median7d: 5200,
-        suggestedResalePrice: 5150,
-        netResaleProceeds: 4790,
-        netMargin: 1390,
-        marginPct: 40.9,
-        isMissing: true
-      },
-      {
-        card: { id: 304, name: "Chelia Blendy", rarity: "C" },
-        listing: { price: 12, id: 9004 },
-        median7d: 20,
-        suggestedResalePrice: 20,
-        netResaleProceeds: 18,
-        netMargin: 6,
-        marginPct: 50.0,
-        isMissing: true
-      }
-    ],
-    boosters: {
-      isPityNear: true,
-      recommendedNew: {
-        id: "hokage",
-        name: "Édition Hokage",
-        probAtLeastOneNewPct: 38.4,
-        expectedNewCards: 1.15,
-        openableFreeCount: 10,
-        expectedChakra: 842
-      },
-      recommendedPity: {
-        id: "hokage",
-        name: "Édition Hokage"
-      },
-      ranking: [
-        { id: "hokage", name: "Édition Hokage", completionPct: 72, probAtLeastOneNewPct: 38.4, expectedNewCards: 1.15, expectedChakra: 842, canOpenNow: true },
-        { id: "shonen", name: "Shōnen Mix", completionPct: 68, probAtLeastOneNewPct: 34.2, expectedNewCards: 0.95, expectedChakra: 620, canOpenNow: true },
-        { id: "waifus", name: "Waifus Edition", completionPct: 65, probAtLeastOneNewPct: 31.0, expectedNewCards: 0.88, expectedChakra: 580, canOpenNow: true },
-        { id: "akatsuki", name: "Édition Akatsuki", completionPct: 82, probAtLeastOneNewPct: 18.2, expectedNewCards: 0.45, expectedChakra: 540, canOpenNow: true }
-      ]
-    }
-  };
-
-  const mockJournal = [
-    { level: "success", text: "Vente réussie : Madara Uchiha (M) vendu à 24 000 ◆ (+22 320 ◆ net)", timestamp: Date.now() - 32000 },
-    { level: "info", text: "Flip marché acheté : Naruto Kurama (M) à 12 500 ◆ (Cote : 18 900 ◆ · Gain net : +5 077 ◆)", timestamp: Date.now() - 95000 },
-    { level: "warn", text: "Booster Hokage ouvert en direct : Tirage Mythique Hashirama !", timestamp: Date.now() - 180000 },
-    { level: "info", text: "34 surplus recyclés intelligemment en Chakra (+680 ◆)", timestamp: Date.now() - 290000 },
-    { level: "success", text: "Vente réussie : Itachi Uchiha (M) vendu à 18 500 ◆ (+17 205 ◆ net)", timestamp: Date.now() - 410000 }
-  ];
-
-  const mockCumulativeStats = {
-    chakraFromSales: 128400,
-    chakraFromRecycle: 34850,
-    cardsSold: 142,
-    cardsRecycled: 580,
-    boostersOpenedCount: 42,
-    mythicsPulledCount: 4,
-    legendariesPulledCount: 4,
-    startedAt: Date.now() - 86400000 * 7
-  };
-
-  window.chrome = {
-    storage: {
-      local: {
-        get: async () => ({
-          settings: mockSettings,
-          kmDashboard: mockDashboard,
-          kmJournal: mockJournal,
-          kmCumulativeStats: mockCumulativeStats,
-          kmPinnedCards: []
-        }),
-        set: async () => {},
-        remove: async () => {}
-      },
-      onChanged: { addListener: () => {} }
-    },
-    runtime: {
-      sendMessage: async (msg) => {
-        if (msg.type === "km:cmd:refresh") return { ok: true, dashboard: mockDashboard };
-        return { ok: true };
-      },
-      onMessage: { addListener: () => {} }
-    }
-  };
-`;
-
-// Helper to construct a screenshot template combining the real game backdrop + real sidepanel
-function buildWhaleScreenshotHtml({ activeTab, badge, title, subtitle }) {
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<title>${title}</title>
-<style>
-${sidepanelCss}
-${contentCss}
-
-* { box-sizing: border-box; }
-body {
-  width: 1280px;
-  height: 800px;
-  margin: 0;
-  padding: 0;
-  background: #09080c;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  display: flex;
-  flex-direction: column;
-}
-
-/* Chrome Browser Top Frame */
-.browser-chrome {
-  height: 74px;
-  background: #181622;
-  border-bottom: 1px solid #282534;
-  display: flex;
-  flex-direction: column;
-  padding: 0 16px;
-  justify-content: center;
-  gap: 6px;
-  flex-shrink: 0;
-  position: relative;
-  z-index: 10;
-}
-
-.browser-dots-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.window-dots {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.dot { width: 12px; height: 12px; border-radius: 50%; }
-.dot-red { background: #ff5f56; }
-.dot-yellow { background: #ffbd2e; }
-.dot-green { background: #27c93f; }
-
-.browser-promo-tag {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11px;
-  font-weight: 700;
-  color: #ff4d2e;
-  background: rgba(255, 77, 46, 0.12);
-  border: 1px solid rgba(255, 77, 46, 0.35);
-  padding: 3px 10px;
-  border-radius: 999px;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.browser-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.nav-arrows {
-  display: flex;
-  gap: 10px;
-  color: #7a7685;
-  font-size: 14px;
-  font-weight: bold;
-}
-
-.url-field {
-  flex: 1;
-  height: 28px;
-  background: #0e0d14;
-  border: 1px solid #2e2b36;
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  padding: 0 12px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 11.5px;
-  color: #edeae4;
-  gap: 8px;
-}
-
-.ext-badge {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(255, 77, 46, 0.15);
-  border: 1px solid #ff4d2e;
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 800;
-  color: #fff;
-}
-
-.ext-badge__seal {
-  background: #ff4d2e;
-  color: #fff;
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 11px;
-  font-weight: 900;
-}
-
-/* Split Workspace */
-.workspace {
-  flex: 1;
-  display: flex;
-  overflow: hidden;
-}
-
-/* Left: Authentic Game Pane */
-.game-pane {
-  flex: 1;
-  background: radial-gradient(circle at 45% 25%, #16141f 0%, #0c0b10 75%);
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  border-right: 2px solid #282534;
-  overflow: hidden;
-  padding: 22px 28px;
-}
-
-.game-navbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid #23212b;
-  padding-bottom: 12px;
-}
-
-.game-logo {
-  font-family: "Unbounded", sans-serif;
-  font-weight: 900;
-  font-size: 18px;
-  color: #fff;
-  letter-spacing: 1px;
-}
-.game-logo span { color: #ff4d2e; }
-
-.game-tabs {
-  display: flex;
-  gap: 16px;
-  font-size: 13px;
-  font-weight: 600;
-  color: #8e8a98;
-}
-.game-tabs .active { color: #fff; border-bottom: 2px solid #ff4d2e; padding-bottom: 4px; }
-
-/* Anonymized Whale Game Header Badge */
-.game-whale-stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.game-stat-capsule {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  background: #171620;
-  border: 1px solid #2e2b36;
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-family: "JetBrains Mono", monospace;
-  font-size: 12px;
-}
-
-.whale-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f5c518, #ff4d2e);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  box-shadow: 0 0 12px rgba(245, 197, 24, 0.4);
-}
-
-/* Feature Spotlight Callout on the Game Pane */
-.spotlight-card {
-  background: rgba(21, 20, 26, 0.94);
-  border: 1px solid #ff4d2e;
-  border-radius: 14px;
-  padding: 16px 20px;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.8), 0 0 30px rgba(255, 77, 46, 0.2);
-  margin-top: 14px;
-  margin-bottom: 16px;
-}
-
-.spotlight-badge {
-  font-family: "JetBrains Mono", monospace;
-  font-size: 10.5px;
-  font-weight: 800;
-  color: #ff4d2e;
-  margin-bottom: 4px;
-}
-
-.spotlight-title {
-  font-family: "Unbounded", sans-serif;
-  font-size: 17px;
-  font-weight: 900;
-  color: #fff;
-  margin-bottom: 6px;
-  letter-spacing: -0.3px;
-}
-
-.spotlight-desc {
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: #b7b2bd;
-}
-
-/* Kyara Cards Banner Display */
-.game-hero-banner {
-  background: linear-gradient(135deg, #1c182a, #110f18);
-  border: 1px solid #2e2b36;
-  border-radius: 14px;
-  padding: 16px 20px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.6);
-  position: relative;
-  overflow: hidden;
-}
-
-.hero-banner-title {
-  font-family: "Unbounded", sans-serif;
-  font-size: 22px;
-  font-weight: 900;
-  color: #fff;
-  letter-spacing: -0.5px;
-}
-
-.hero-cards-preview {
-  display: flex;
-  gap: 10px;
-}
-
-.mini-card {
-  width: 72px;
-  height: 100px;
-  border-radius: 8px;
-  background: #181622;
-  border: 1px solid #2e2b36;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-  padding: 6px;
-  box-shadow: 0 8px 16px rgba(0,0,0,0.6);
-}
-
-.mini-card--mythic {
-  border-color: #ff4d2e;
-  box-shadow: 0 0 16px rgba(255, 77, 46, 0.35);
-}
-
-.mini-card--legendary {
-  border-color: #f5c518;
-  box-shadow: 0 0 14px rgba(245, 197, 24, 0.3);
-}
-
-/* In-Game Floating HUD (Anonymized & Active) */
-#km-floating-hud.km-hud {
-  position: relative;
-  left: 0;
-  bottom: 0;
-  box-shadow: 0 12px 30px rgba(0,0,0,0.8), 0 0 20px rgba(63, 191, 127, 0.25);
-  border-color: rgba(63, 191, 127, 0.5);
-}
-
-/* Right: Real Sidepanel with Huge Numbers */
-.sidepanel-pane {
-  width: 480px;
-  height: 100%;
-  background: var(--bg);
-  color: var(--fg);
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
-  position: relative;
-}
-</style>
-<script>
-${mockWhaleDataScript}
-
-window.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    const tabBtn = document.getElementById('tab-${activeTab}');
-    if (tabBtn) tabBtn.click();
-  }, 120);
-});
-</script>
-</head>
-<body>
-  <div class="browser-chrome">
-    <div class="browser-dots-row">
-      <div class="window-dots">
-        <div class="dot dot-red"></div>
-        <div class="dot dot-yellow"></div>
-        <div class="dot dot-green"></div>
-        <span style="margin-left: 10px; font-size: 11px; font-weight: 600; color: #8e8a98;">Kyara.games — Pilote Automatique (v1.1)</span>
-      </div>
-      <div class="browser-promo-tag">
-        <span>⚡</span>
-        <span>${badge}</span>
-      </div>
-    </div>
-    <div class="browser-bar">
-      <div class="nav-arrows">‹ › ↻</div>
-      <div class="url-field">
-        <span style="color:#3fbf7f;">🔒</span>
-        <span>https://kyara.games/collection</span>
-      </div>
-      <div class="ext-badge">
-        <div class="ext-badge__seal">操</div>
-        <span>Kyara Manager (Actif)</span>
-      </div>
-    </div>
-  </div>
-
-  <div class="workspace">
-    <!-- Left: Anonymized Game Pane with Whale Stats -->
-    <div class="game-pane">
-      <div>
-        <div class="game-navbar">
-          <div class="game-logo">KYARA<span>.GAMES</span></div>
-          <div class="game-tabs">
-            <span class="${activeTab === 'autopilot' || activeTab === 'duplicates' ? 'active' : ''}">Collection</span>
-            <span class="${activeTab === 'market' ? 'active' : ''}">Marché</span>
-            <span class="${activeTab === 'boosters' ? 'active' : ''}">Ouvrir</span>
-            <span>Missions</span>
-          </div>
-          <div class="game-whale-stats">
-            <div class="game-stat-capsule">
-              <span style="color:#ff4d2e; font-weight:800;">札 10/10</span>
-            </div>
-            <div class="game-stat-capsule">
-              <span style="color:#f5c518; font-weight:800;">◆ 285 450</span>
-            </div>
-            <div class="whale-avatar">👑</div>
-          </div>
-        </div>
-
-        <div class="spotlight-card">
-          <div class="spotlight-badge">★ KYARA MANAGER · COMPTE PRO &amp; COLLECTEUR</div>
-          <div class="spotlight-title">${title}</div>
-          <div class="spotlight-desc">${subtitle}</div>
-        </div>
-
-        <div class="game-hero-banner">
-          <div>
-            <div style="font-size:10px; font-family:'JetBrains Mono'; color:#f5c518; font-weight:700; margin-bottom:2px;">ÉDITION LIMITÉE · 2026</div>
-            <div class="hero-banner-title">Automne 2026</div>
-            <div style="font-size:11.5px; color:#9d98a5; margin-top:2px;">Animes de la saison · 5 842 / 6 736 cartes débloquées</div>
-          </div>
-          <div class="hero-cards-preview">
-            <div class="mini-card mini-card--mythic">
-              <span style="font-size:8px; font-weight:800; color:#ff4d2e;">MYTHIQUE</span>
-              <div style="font-size:24px; margin:4px 0;">⚔️</div>
-              <div style="font-size:9.5px; font-weight:800; color:#fff;">Madara</div>
-            </div>
-            <div class="mini-card mini-card--legendary">
-              <span style="font-size:8px; font-weight:800; color:#f5c518;">LÉGENDAIRE</span>
-              <div style="font-size:24px; margin:4px 0;">🌀</div>
-              <div style="font-size:9.5px; font-weight:800; color:#fff;">Minato</div>
-            </div>
-            <div class="mini-card mini-card--mythic">
-              <span style="font-size:8px; font-weight:800; color:#ff4d2e;">MYTHIQUE</span>
-              <div style="font-size:24px; margin:4px 0;">⚡</div>
-              <div style="font-size:9.5px; font-weight:800; color:#fff;">Goku UI</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Real Floating HUD with Anonymized Whale Status -->
-      <aside id="km-floating-hud" class="km-hud">
-        <button type="button" class="km-hud__seal">操</button>
-        <div class="km-hud__info">
-          <strong class="km-hud__title">KYARA MANAGER</strong>
-          <span class="km-hud__meta">KyaraMaster · 285 450 ◆ · 10/10 札 · 10/10 市</span>
-        </div>
-        <button type="button" class="km-hud__btn km-hud__btn--toggle" style="background:rgba(63,191,127,0.25); color:#3fbf7f; border-color:#3fbf7f; font-weight:800;">AUTO ON</button>
-        <button type="button" class="km-hud__btn km-hud__btn--primary">Panneau</button>
-        <button type="button" class="km-hud__btn km-hud__btn--icon">−</button>
-      </aside>
-    </div>
-
-    <!-- Right: Real Kyara Manager Sidepanel with Big Whale Numbers -->
-    <div class="sidepanel-pane">
-      ${realSidepanelBody}
-    </div>
-  </div>
-
-  <script>${analyticsJs}</script>
-  <script>${i18nJs}</script>
-  <script>${sidepanelJs}</script>
-</body>
-</html>`;
-}
-
-// -------------------------------------------------------------------------
-// 1. MARQUEE BANNER (1400 x 560) using AI Artwork + High Numbers
+// 1. MARQUEE BANNER (1400 x 560)
 // -------------------------------------------------------------------------
 const HTML_MARQUEE = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Unbounded:wght@800;900&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Unbounded:wght@700;800;900&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap');
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     width: 1400px;
     height: 560px;
     background: #09080c;
     overflow: hidden;
-    font-family: 'Zen Kaku Gothic New', system-ui, sans-serif;
+    font-family: 'Zen Kaku Gothic New', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
     color: #edeae4;
-    display: flex;
     position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 70px;
   }
 
-  /* AI Artwork Backdrop */
   .backdrop-ai {
     position: absolute;
-    right: 0;
-    top: 0;
-    width: 860px;
-    height: 560px;
+    inset: 0;
     background-image: url('file://${aiBannerPath}');
     background-size: cover;
     background-position: center right;
-    mask-image: linear-gradient(to left, black 65%, transparent 100%);
-    -webkit-mask-image: linear-gradient(to left, black 65%, transparent 100%);
-    opacity: 0.95;
+    opacity: 0.38;
+    filter: saturate(1.2) contrast(1.1);
     z-index: 1;
+  }
+
+  .backdrop-ai::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #09080c 0%, #09080c 45%, rgba(9,8,12,0.85) 65%, rgba(9,8,12,0.4) 100%);
   }
 
   .ambient-glow {
@@ -728,53 +70,49 @@ const HTML_MARQUEE = `<!DOCTYPE html>
     width: 600px;
     height: 600px;
     border-radius: 50%;
-    filter: blur(100px);
+    filter: blur(120px);
     pointer-events: none;
-    z-index: 1;
+    z-index: 2;
   }
 
   .left-col {
-    width: 680px;
-    height: 100%;
-    padding: 50px 0 45px 65px;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
     position: relative;
     z-index: 3;
-    background: linear-gradient(to right, rgba(9, 8, 12, 0.95) 75%, transparent 100%);
+    max-width: 780px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 20px;
   }
 
   .tag-pill {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: rgba(255, 77, 46, 0.15);
-    border: 1px solid rgba(255, 77, 46, 0.4);
+    background: rgba(255, 77, 46, 0.12);
+    border: 1px solid rgba(255, 77, 46, 0.35);
     border-radius: 999px;
     padding: 6px 14px;
     font-family: 'JetBrains Mono', monospace;
     font-size: 11px;
     font-weight: 700;
     color: #ff4d2e;
-    box-shadow: 0 0 16px rgba(255, 77, 46, 0.2);
+    letter-spacing: 0.5px;
   }
 
   .brand-row {
     display: flex;
     align-items: center;
     gap: 16px;
-    margin-top: 14px;
-    margin-bottom: 12px;
   }
 
   .brand-seal {
-    width: 62px;
-    height: 62px;
+    width: 60px;
+    height: 60px;
     border-radius: 16px;
-    background: linear-gradient(135deg, #262134, #14131b);
+    background: linear-gradient(135deg, #2b2438, #15131c);
     border: 2px solid #ff4d2e;
-    box-shadow: 0 0 28px rgba(255, 77, 46, 0.45);
+    box-shadow: 0 0 30px rgba(255, 77, 46, 0.5), inset 0 0 14px rgba(255, 77, 46, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -786,64 +124,65 @@ const HTML_MARQUEE = `<!DOCTYPE html>
 
   .brand-name {
     font-family: 'Unbounded', sans-serif;
-    font-size: 46px;
+    font-size: 44px;
     font-weight: 900;
-    color: #fff;
+    color: #ffffff;
     letter-spacing: -0.5px;
     text-shadow: 0 4px 20px rgba(0,0,0,0.8);
   }
 
   .hero-tag {
-    font-size: 19px;
-    font-weight: 700;
+    font-size: 21px;
+    font-weight: 800;
     color: #f5c518;
-    margin-bottom: 12px;
+    letter-spacing: -0.2px;
   }
 
   .hero-desc {
-    font-size: 13.5px;
-    line-height: 1.55;
+    font-size: 14.5px;
+    line-height: 1.6;
     color: #b7b2bd;
-    max-width: 550px;
-    margin-bottom: 20px;
+    max-width: 680px;
   }
 
   .pills-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, auto);
     gap: 10px;
-    max-width: 560px;
+    max-width: 620px;
+    margin-top: 4px;
   }
 
   .pill-card {
+    background: rgba(21, 20, 26, 0.85);
+    border: 1px solid #282534;
+    border-radius: 10px;
+    padding: 9px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #edeae4;
     display: flex;
     align-items: center;
-    gap: 10px;
-    background: rgba(21, 20, 26, 0.9);
-    border: 1px solid #2e2b36;
-    border-radius: 10px;
-    padding: 8px 12px;
-    font-size: 12.5px;
-    font-weight: 600;
+    gap: 8px;
     backdrop-filter: blur(10px);
   }
 
   .guarantee {
-    margin-top: 16px;
-    font-size: 11.5px;
-    color: #3fbf7f;
     font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: #8e8a98;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 6px;
   }
 
-  /* Right floating whale HUD banner */
   .right-hud-float {
-    position: absolute;
-    bottom: 35px;
-    right: 40px;
-    background: rgba(14, 13, 18, 0.94);
-    border: 1px solid #f5c518;
+    position: relative;
+    background: rgba(21, 20, 26, 0.92);
+    border: 1px solid rgba(255, 77, 46, 0.4);
     border-radius: 14px;
-    padding: 12px 20px;
+    padding: 18px 24px;
     display: flex;
     align-items: center;
     gap: 16px;
@@ -878,10 +217,10 @@ const HTML_MARQUEE = `<!DOCTYPE html>
 
     <div>
       <div class="pills-grid">
-        <div class="pill-card"><span style="color:#f5c518; font-weight:800;">売</span> Auto-Vente (+94 500 ◆ net)</div>
+        <div class="pill-card"><span style="color:#f5c518; font-weight:800;">売</span> Auto-Vente Optimisée</div>
         <div class="pill-card"><span style="color:#3fbf7f; font-weight:800;">転</span> Auto-Recyclage Rentable</div>
-        <div class="pill-card"><span style="color:#4dd6ff; font-weight:800;">市</span> Scanner Flips (+42 850 ◆)</div>
-        <div class="pill-card"><span style="color:#ff4d2e; font-weight:800;">札</span> Tirage Live Boosters (EV 842 ◆)</div>
+        <div class="pill-card"><span style="color:#4dd6ff; font-weight:800;">市</span> Scanner de Flips Marché</div>
+        <div class="pill-card"><span style="color:#ff4d2e; font-weight:800;">札</span> Tirage Live Boosters (EV)</div>
       </div>
 
       <div class="guarantee">
@@ -893,8 +232,8 @@ const HTML_MARQUEE = `<!DOCTYPE html>
   <div class="right-hud-float">
     <div style="width:36px; height:36px; border-radius:8px; background:#ff4d2e; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Unbounded'; font-size:18px; font-weight:900;">操</div>
     <div>
-      <div style="font-size:11px; color:#f5c518; font-weight:800;">PILOTE ACTIF · COMPTE PRO</div>
-      <div style="font-size:14px; color:#fff; font-weight:800;">285 450 ◆ · +184 250 ◆ GÉNÉRÉS</div>
+      <div style="font-size:11px; color:#f5c518; font-weight:800;">PILOTE ACTIF · EXTENSION CHROME</div>
+      <div style="font-size:14px; color:#fff; font-weight:800;">AUTOMATISATION INTELLIGENTE</div>
     </div>
   </div>
 </body>
@@ -1044,70 +383,167 @@ const HTML_SMALL = `<!DOCTYPE html>
 </html>`;
 
 // -------------------------------------------------------------------------
-// Build the 5 Whale Screenshots
+// 3. AUTHENTIC SCREENSHOTS (1280 x 800) WITH SEAMLESS ANONYMIZATION
 // -------------------------------------------------------------------------
-const HTML_SCREENSHOT_1 = buildWhaleScreenshotHtml({
-  activeTab: 'autopilot',
-  badge: '01 / PILOTE AUTOMATIQUE GLOBAL & ROI',
-  title: 'Pilote Automatique Global & Tableau de Bord des Gains (ROI)',
-  subtitle: 'Auto-vente des doublons, auto-recyclage intelligent, scanner d\'arbitrage et widget HUD actif en bas à gauche sur Kyara.games.'
-});
+// Takes the user's authentic screenshots, preserves 100% of the UI, cards and stats,
+// and applies surgical anonymization:
+// 1. Replaces the user's top-right avatar circle with a neutral Kyara seal badge
+// 2. Replaces the user's pseudo "HIB0-2" in the sidepanel header with "Joueur"
+// 3. Replaces the user's pseudo "HIB0-2" in the floating HUD with "Joueur"
+// 4. Cleans up any browser link hover tooltip at the bottom-left
+// 5. Scales 1.25x and centers vertically in 1280x800 with #0e0d12 background
+function buildAnonymizedScreenshotHtml(rawPngPath) {
+  const rawBase64 = fs.readFileSync(rawPngPath).toString('base64');
+  return `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    width: 1280px;
+    height: 800px;
+    background: #0e0d12;
+    overflow: hidden;
+  }
+  canvas {
+    display: block;
+    width: 1280px;
+    height: 800px;
+  }
+</style>
+</head>
+<body>
+<canvas id="cv" width="1280" height="800"></canvas>
+<script>
+async function render() {
+  const img = new Image();
+  await new Promise((res, rej) => {
+    img.onload = res;
+    img.onerror = rej;
+    img.src = "data:image/png;base64,${rawBase64}";
+  });
 
-const HTML_SCREENSHOT_2 = buildWhaleScreenshotHtml({
-  activeTab: 'duplicates',
-  badge: '02 / GESTION DES DOUBLONS & VENTE OPTIMISÉE',
-  title: 'Arbitrage Intelligent des Doublons : Vendre ou Recycler ?',
-  subtitle: 'Comparaison en direct avec les médianes 7 jours réelles, garde-fou anti-bradage à 70% et protection des cartes de collection.'
-});
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
 
-const HTML_SCREENSHOT_3 = buildWhaleScreenshotHtml({
-  activeTab: 'market',
-  badge: '03 / SCANNER D\'OPPORTUNITÉS & FLIPS MARCHÉ',
-  title: 'Radar de Bons Plans & Achat-Revente (Flips Automatiques)',
-  subtitle: 'Détection instantanée des cartes sous-cotées avec calcul automatique du bénéfice net (taxe 5% & dépôt 2% déduits).'
-});
+  // 1. Fill base background with page dark color #0e0d12
+  ctx.fillStyle = "#0e0d12";
+  ctx.fillRect(0, 0, 1280, 800);
 
-const HTML_SCREENSHOT_4 = buildWhaleScreenshotHtml({
-  activeTab: 'boosters',
-  badge: '04 / ESPÉRANCE CHAKRA (EV) & PILOTAGE LIVE',
-  title: 'Rentabilité des Boosters (EV) & Tirage Live Piloté',
-  subtitle: 'Classement probabiliste des packs selon l\'EV en Chakra, alerte de Pitié Mythique (244/250) et animation de tirage en direct.'
-});
+  // 2. Draw raw screenshot scaled 1.25x (1024 * 1.25 = 1280, 560 * 1.25 = 700)
+  // Centered vertically at y = 50px
+  const scale = 1.25;
+  const offX = 0;
+  const offY = 50;
+  ctx.drawImage(img, offX, offY, 1024 * scale, 560 * scale);
 
-const HTML_SCREENSHOT_5 = buildWhaleScreenshotHtml({
-  activeTab: 'settings',
-  badge: '05 / GARDE-FOUS PERSONNALISÉS & SÉCURITÉ',
-  title: 'Sanctuaire de Chakra Protégé & Confidentialité Totale',
-  subtitle: 'Réserve minimale de 15 000 ◆ protégée, filtres stricts par rareté et exécution 100% locale dans votre navigateur (Manifest V3).'
-});
+  // 3. Navbar Avatar patch
+  // Center is at (713.5 * 1.25, 22.5 * 1.25 + 50) = (891.875, 78.125)
+  const avX = 713.5 * scale + offX;
+  const avY = 22.5 * scale + offY;
+  const avR = 14 * scale; // ~17.5px radius
 
-const targets = [
-  { id: 'promo-marquee-1400x560', width: 1400, height: 560, html: HTML_MARQUEE },
-  { id: 'promo-small-440x280', width: 440, height: 280, html: HTML_SMALL },
-  { id: 'screenshot-1-autopilot', width: 1280, height: 800, html: HTML_SCREENSHOT_1 },
-  { id: 'screenshot-2-doublons', width: 1280, height: 800, html: HTML_SCREENSHOT_2 },
-  { id: 'screenshot-3-marche', width: 1280, height: 800, html: HTML_SCREENSHOT_3 },
-  { id: 'screenshot-4-boosters', width: 1280, height: 800, html: HTML_SCREENSHOT_4 },
-  { id: 'screenshot-5-securite', width: 1280, height: 800, html: HTML_SCREENSHOT_5 },
-];
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(avX, avY, avR, 0, Math.PI * 2);
+  ctx.fillStyle = "#1e1d28";
+  ctx.fill();
 
-console.log('Writing anonymized templates with big numbers...');
-for (const t of targets) {
-  const tplPath = path.join(templatesDir, `${t.id}.html`);
-  fs.writeFileSync(tplPath, t.html, 'utf8');
+  // Border ring
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = "#e6a23c";
+  ctx.stroke();
+
+  // Kanji '操' (Pilot / Sou)
+  ctx.fillStyle = "#f5d485";
+  ctx.font = "bold 15px -apple-system, sans-serif";
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.fillText("操", avX, avY);
+  ctx.restore();
+
+  // 4. Sidepanel Header username patch: replace 'HIB0-2' with 'Joueur'
+  const pX = 790 * scale + offX;
+  const pY = 79 * scale + offY;
+  const pW = 38 * scale;
+  const pH = 15 * scale;
+
+  ctx.save();
+  ctx.fillStyle = "#15141b"; // Sidepanel header bg
+  ctx.fillRect(pX, pY, pW, pH);
+
+  ctx.fillStyle = "#9d98a5"; // Sidepanel text color
+  ctx.font = "600 12.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Joueur", pX, pY + pH / 2);
+  ctx.restore();
+
+  // 5. Floating HUD username patch: replace 'HIB0-2' with 'Joueur'
+  const hX = 48 * scale + offX;
+  const hY = 527 * scale + offY;
+  const hW = 28 * scale;
+  const hH = 14 * scale;
+
+  ctx.save();
+  ctx.fillStyle = "#17161e"; // HUD bg
+  ctx.fillRect(hX, hY, hW, hH);
+
+  ctx.fillStyle = "#edeae4"; // HUD text color
+  ctx.font = "500 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+  ctx.textAlign = "left";
+  ctx.textBaseline = "middle";
+  ctx.fillText("Joueur", hX, hY + hH / 2);
+  ctx.restore();
+
+  // 6. Clean browser link hover tooltip if present at bottom-left
+  ctx.fillStyle = "#0e0d12";
+  ctx.fillRect(0, 546 * scale + offY, 200 * scale, 14 * scale);
+}
+render();
+</script>
+</body>
+</html>`;
 }
 
-console.log('Rendering 7 promotional assets at exact Chrome Web Store dimensions...');
+// Map each of the 5 raw screenshots to the 5 Chrome Web Store screenshots
+const screensConfig = [
+  { id: 'screenshot-1-autopilot', raw: 'screen-1-pilote.png', label: 'Onglet 1 : Pilote Automatique Global & HUD' },
+  { id: 'screenshot-2-doublons', raw: 'screen-2-doublons.png', label: 'Onglet 2 : Gestion des Doublons & Vente' },
+  { id: 'screenshot-3-marche', raw: 'screen-3-marche.png', label: 'Onglet 3 : Scanner de Flips Marché' },
+  { id: 'screenshot-4-boosters', raw: 'screen-4-boosters.png', label: 'Onglet 4 : Rentabilité Boosters (EV)' },
+  { id: 'screenshot-5-securite', raw: 'screen-5-reglages.png', label: 'Onglet 5 : Réglages & Sécurité' },
+];
+
+const targets = [
+  { id: 'promo-marquee-1400x560', width: 1400, height: 560, html: HTML_MARQUEE, label: 'Bannière Marquee Hero (1400x560)' },
+  { id: 'promo-small-440x280', width: 440, height: 280, html: HTML_SMALL, label: 'Petite tuile promo (440x280)' },
+  ...screensConfig.map(s => ({
+    id: s.id,
+    width: 1280,
+    height: 800,
+    html: buildAnonymizedScreenshotHtml(path.join(rawDir, s.raw)),
+    label: s.label
+  }))
+];
+
+console.log('--- GÉNÉRATION DES ASSETS CHROME WEB STORE ---');
+console.log(`Cible : ${targets.length} fichiers (7 PNG + 7 JPEG 24-bits sans alpha)\n`);
+
 for (const t of targets) {
   const tplPath = path.join(templatesDir, `${t.id}.html`);
   const pngPath = path.join(promoDir, `${t.id}.png`);
   const jpgPath = path.join(promoDir, `${t.id}.jpg`);
+  const previewJpgPath = path.join(previewDir, `${t.id}.jpg`);
 
-  console.log(`Rendering ${t.id} (${t.width}x${t.height})...`);
+  fs.writeFileSync(tplPath, t.html, 'utf8');
+
+  console.log(`[Rendu] ${t.label} -> ${t.id} (${t.width}x${t.height})...`);
   execFileSync(CHROME_PATH, [
     '--headless=new',
     '--disable-gpu',
-    '--virtual-time-budget=2500',
+    '--virtual-time-budget=2000',
     `--window-size=${t.width},${t.height}`,
     `--screenshot=${pngPath}`,
     `file://${tplPath}`
@@ -1120,6 +556,17 @@ for (const t of targets) {
     pngPath,
     '--out', jpgPath
   ], { stdio: 'ignore' });
+
+  // Copy to preview directory for user viewing
+  fs.copyFileSync(jpgPath, previewJpgPath);
 }
 
-console.log('All anonymized big-number promotional assets generated successfully!');
+console.log('\nVérification des dimensions et canaux alpha (sips)...');
+const checkFiles = fs.readdirSync(promoDir)
+  .filter(f => /\.(png|jpg)$/i.test(f) && !f.startsWith('tmp'))
+  .map(f => path.join(promoDir, f));
+
+const sipsOutput = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', '-g', 'hasAlpha', ...checkFiles], { encoding: 'utf8' });
+console.log(sipsOutput);
+
+console.log('✅ Tous les assets promotionnels ont été générés avec succès !');
