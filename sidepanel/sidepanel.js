@@ -224,6 +224,16 @@
       }
     }
 
+    const tabNav = document.querySelector(".tab-nav");
+    if (tabNav) {
+      tabNav.addEventListener("wheel", (e) => {
+        if (e.deltaY !== 0 && tabNav.scrollWidth > tabNav.clientWidth) {
+          e.preventDefault();
+          tabNav.scrollLeft += e.deltaY;
+        }
+      }, { passive: false });
+    }
+
     buttons.forEach((btn, index) => {
       const isSelected = btn.getAttribute("aria-selected") === "true";
       btn.setAttribute("tabindex", isSelected ? "0" : "-1");
@@ -756,6 +766,40 @@
       </tr>`);
     }
     tbody.innerHTML = rows.join("");
+
+    // Render Profitable Trades Card
+    const tradesBadge = document.getElementById("trades-badge");
+    const tradesList = document.getElementById("trades-list");
+    const tradeItems = Array.isArray(currentDashboard?.trades) ? currentDashboard.trades : [];
+    if (tradesBadge) tradesBadge.textContent = String(tradeItems.length);
+    if (tradesList) {
+      if (tradeItems.length === 0) {
+        tradesList.innerHTML = `<p class="empty-cell" style="padding: 10px; font-size: 11.5px;">Aucun échange avantageux disponible sur le marché pour l'instant.</p>`;
+      } else {
+        tradesList.innerHTML = tradeItems.map((tr) => `
+          <div class="trade-item">
+            <div class="trade-exchange">
+              <div>
+                <span class="rarity-pill rarity-pill--${escapeHtml(tr.wanted.rarity)}">${escapeHtml(tr.wanted.rarity)}</span>
+                <strong>Tu donnes :</strong> ${escapeHtml(tr.wanted.name)} <span style="color:var(--mut);">(${tr.wanted.median7d} ◆)</span>
+              </div>
+              <span style="color:var(--mut); font-weight:700;">➔</span>
+              <div>
+                <span class="rarity-pill rarity-pill--${escapeHtml(tr.offered.rarity)}">${escapeHtml(tr.offered.rarity)}</span>
+                <strong>Tu reçois :</strong> ${escapeHtml(tr.offered.name)} <span style="color:var(--mut);">(${tr.offered.median7d} ◆)</span>
+                ${tr.offered.isMissing ? `<span class="verdict-badge verdict-badge--new">NOUVELLE</span>` : ""}
+              </div>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="trade-gain">+${tr.profit} ◆</span>
+              <a href="https://kyara.games/marche" target="_blank" rel="noopener noreferrer" class="btn btn--xs btn--primary" style="text-decoration:none;">
+                Voir
+              </a>
+            </div>
+          </div>
+        `).join("");
+      }
+    }
   }
 
   function renderBoostersTab(boosters) {

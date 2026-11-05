@@ -557,11 +557,18 @@
     );
 
     let deals = [];
+    let trades = [];
     if (scanMarketDeals) {
-      deals = await scanMarketDealsInternal(ownedSet);
+      const [dealsRes, tradesRes] = await Promise.all([
+        scanMarketDealsInternal(ownedSet),
+        scanProfitableTrades(ownedSet, evaluatedDuplicates)
+      ]);
+      deals = dealsRes;
+      trades = tradesRes;
     } else {
       const stored = await chrome.storage.local.get("kmDashboard");
       deals = stored?.kmDashboard?.deals || [];
+      trades = stored?.kmDashboard?.trades || [];
     }
 
     const sellCandidates = evaluatedDuplicates.filter((d) => d.verdict === "VENDRE" && d.spare > 0);
@@ -607,6 +614,7 @@
       duplicates: evaluatedDuplicates.slice(0, 250),
       boosters: boosterRankings,
       deals: deals.slice(0, 50),
+      trades: trades.slice(0, 30),
       claimableMissions: progress?.claimable ?? 0
     };
 
@@ -649,6 +657,84 @@
     });
 
     return deals;
+  }
+
+  let previousTradesCount = 0;
+  async function scanProfitableTrades(ownedSet, duplicateEntries) {
+    try {
+      const res =
+        (await kyaraApi("/market/listings?type=trade&pageSize=40&page=1", { auth: true }).catch(() => null)) ||
+        (await kyaraApi("/trades", { auth: true }).catch(() => null)) ||
+        (await kyaraApi("/market/trades", { auth: true }).catch(() => null));
+
+      const rawItems = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+      if (!rawItems.length) return [];
+
+      const spareMap = new Map();
+      for (const d of duplicateEntries || []) {
+        if (d.spare > 0 && !d.pinned) {
+          spareMap.set(Number(d.characterId), d);
+        }
+      }
+
+      const profitable = [];
+      for (const item of rawItems) {
+        if (!item || item.isMine || (item.status && item.status !== "active")) continue;
+
+        const offeredChar = item.character || item.offered || {};
+        const offeredId = Number(offeredChar.id ?? item.characterId);
+        const wantedId = Number(
+          item.wantedCharacterId ??
+          item.wantedCharacter?.id ??
+          item.targetCharacterId ??
+          item.wantedId ??
+          item.wanted?.id
+        );
+
+        if (!Number.isFinite(wantedId) || !spareMap.has(wantedId)) continue;
+
+        const myCard = spareMap.get(wantedId);
+        const offeredPrice = runtimeCache.collectionPrices.get(offeredId)?.median7d || 0;
+        const myPrice = runtimeCache.collectionPrices.get(wantedId)?.median7d || 0;
+        const isMissing = ownedSet ? !ownedSet.has(offeredId) : false;
+        const profit = offeredPrice - myPrice;
+
+        if (profit >= 3 || (isMissing && profit >= -5)) {
+          profitable.push({
+            id: item.id,
+            seller: item.seller?.pseudo || "?",
+            offered: {
+              id: offeredId,
+              name: offeredChar.name || `Carte #${offeredId}`,
+              rarity: offeredChar.rarity || "C",
+              median7d: offeredPrice,
+              isMissing
+            },
+            wanted: {
+              id: wantedId,
+              name: myCard.name,
+              rarity: myCard.rarity,
+              median7d: myPrice
+            },
+            profit,
+            createdAt: item.createdAt || null
+          });
+        }
+      }
+
+      if (profitable.length > previousTradesCount && profitable.length > 0) {
+        const top = profitable[0];
+        notifyDesktop(
+          "Échange rentable disponible !",
+          `Donne ${top.wanted.name} (${top.wanted.median7d} ◆) contre ${top.offered.name} (${top.offered.median7d} ◆) · Gain +${top.profit} ◆`,
+          "km-trade"
+        );
+      }
+      previousTradesCount = profitable.length;
+      return profitable;
+    } catch {
+      return [];
+    }
   }
 
   /**
@@ -713,29 +799,84 @@
    */
   async function executeAutoSell(dashboard) {
     const now = Date.now();
-    const expireHours = Number(currentSettings.autoSellExpireHours ?? 0);
+    const expireHours = Number(currentSettings.autoSellExpireHours ?? 2);
     let activeListings = [...(dashboard?.activeListings || [])];
 
+    // Gestion active des annonces non vendues après X heures (par défaut 2h) : baisse de prix ou recyclage immédiat
     if (expireHours > 0) {
       const maxAgeMs = expireHours * 3600 * 1000;
       for (const listing of [...activeListings]) {
         const createdMs = listing.createdAt ? Date.parse(listing.createdAt) : NaN;
         if (Number.isFinite(createdMs) && now - createdMs >= maxAgeMs) {
+          const charId = Number(listing.character?.id ?? listing.characterId);
+          const rarity = listing.character?.rarity || "C";
+          const recycleValue = Number(recycleMap?.[rarity] ?? Analytics.DEFAULT_RECYCLE_VALUES[rarity] ?? 1);
+          const rarityFloor = Number(Analytics.RARITY_PRICE_FLOORS[rarity] ?? 3);
+          const currentNet = Analytics.computeNetProceeds(listing.price);
+
+          // Si c'est une commune/peu commune ou si le net est très proche du recyclage (faible marge non vendue en 2h)
+          const isLowMargin = currentNet <= recycleValue + 1 || rarity === "C" || rarity === "U";
+
           if (currentSettings.dryRun) {
-            await appendJournal("sell", `[SIMULATION] Retirerait l'annonce expirée ${listing.name} (${listing.price} ◆)`);
+            await appendJournal(
+              "sell",
+              `[SIMULATION] Annonce stagnante (> ${expireHours}h) ${listing.name} : ${isLowMargin ? "retirerait et recyclerait" : "baisserait le prix"}`
+            );
             continue;
           }
+
           try {
+            // 1. Annuler l'ancienne annonce stagnante
             await kyaraApi(`/market/listings/${encodeURIComponent(listing.id)}/cancel`, { method: "POST" });
             activeListings = activeListings.filter((x) => x.id !== listing.id);
             previousActiveListings.delete(String(listing.id));
-            await appendJournal("sell", `Annonce retirée (> ${expireHours}h) : ${listing.name} (${listing.price} ◆)`);
-            if (currentSettings.autoSellRecycleExpired) {
-              await kyaraApi(`/me/collection/${listing.characterId}/recycle`, {
+
+            if (isLowMargin || currentSettings.autoSellRecycleExpired) {
+              // 2A. Recyclage immédiat pour libérer l'un des 10 créneaux et encaisser le Chakra
+              await kyaraApi(`/me/collection/${charId}/recycle`, {
                 method: "POST",
                 body: { qty: 1 }
               }).catch(() => {});
-              await appendJournal("recycle", `Annonce expirée recyclée : ${listing.name} ×1`);
+              await appendJournal(
+                "recycle",
+                `Annonce non vendue après ${expireHours}h : ${listing.name} retirée et recyclée (+${recycleValue} ◆) car vente trop lente`
+              );
+            } else {
+              // 2B. Carte de valeur (R, E, L) : baisser le prix de 5% pour accélérer la vente
+              const discountPct = Number(currentSettings.autoSellRepriceDiscountPct ?? 5);
+              const loweredPrice = Math.max(rarityFloor, Math.round(listing.price * (1 - discountPct / 100)));
+
+              if (loweredPrice < listing.price) {
+                const relistRes = await kyaraApi("/market/listings", {
+                  method: "POST",
+                  withPass: true,
+                  body: {
+                    characterId: charId,
+                    type: "fixed",
+                    price: loweredPrice,
+                    buyoutPrice: null,
+                    durationHours: 12
+                  }
+                }).catch(() => null);
+
+                if (relistRes) {
+                  activeListings.push({ ...listing, price: loweredPrice, createdAt: new Date().toISOString() });
+                  await appendJournal(
+                    "sell",
+                    `Repricing auto (> ${expireHours}h sans vente) : ${listing.name} ajustée de ${listing.price} ◆ à ${loweredPrice} ◆`
+                  );
+                }
+              } else {
+                // Déjà au plancher absolu : recycler pour débloquer les 10 créneaux
+                await kyaraApi(`/me/collection/${charId}/recycle`, {
+                  method: "POST",
+                  body: { qty: 1 }
+                }).catch(() => {});
+                await appendJournal(
+                  "recycle",
+                  `Annonce au plancher non vendue (> ${expireHours}h) : ${listing.name} recyclée (+${recycleValue} ◆) pour libérer 1 créneau`
+                );
+              }
             }
           } catch {
             // Listing may have bids or already closed
@@ -990,6 +1131,14 @@
       const targetPath = `/ouvrir/${encodeURIComponent(packId)}`;
       await navigateSpaTo(targetPath);
 
+      // 0. Fermer toute modale, zoom de carte ou overlay de prévisualisation resté ouvert du booster précédent
+      const openModalCloseBtn = document.querySelector(".modal .close, button.close, [class*='modal'] [class*='close'], button[aria-label='Close'], .overlay [class*='close']");
+      if (openModalCloseBtn && !openModalCloseBtn.disabled) {
+        openModalCloseBtn.click();
+        await sleep(200);
+      }
+      window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+
       // 1. Si déjà sur /ouvrir/:id en phase de résumé (précédent tirage), réinitialiser vers le deck
       const summaryAgainBtn = document.querySelector(".summary button, button.again, button.btn-again");
       if (summaryAgainBtn && !summaryAgainBtn.disabled) {
@@ -1140,9 +1289,19 @@
 
       // Step through card reveals live on screen so the user watches every card flip (data-step="i:0" -> "i:1")!
       const revealStart = Date.now();
+      let lastStepAttr = null;
+      let sameStepCount = 0;
+
       while (Date.now() - revealStart < 55000) {
         if (document.querySelector(".summary")) {
           break;
+        }
+
+        // Si une modale de carte s'est ouverte ou est restée au premier plan, la fermer via Escape
+        const activeModal = document.querySelector(".modal, .card-preview, .card-zoom, .dialog");
+        if (activeModal && !activeModal.hidden && activeModal.offsetWidth > 0) {
+          window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true, cancelable: true }));
+          await sleep(200);
         }
 
         // If an Epic/Legendary/Mythic clue screen (`.wo button.skip`) is active, let it play briefly then advance
@@ -1154,15 +1313,45 @@
           continue;
         }
 
-        // Flip or advance the current card on `.reveal .deck` via Space keydown (triggers Kyara's native Io() handler)
-        const deckEl = document.querySelector(".reveal .deck");
+        const globalSkipBtn = document.querySelector(".reveal button.skip, button.skip, button.reveal-all, .btn-skip");
+
+        // Flip or advance the current card on `.reveal .deck`
+        const deckEl = document.querySelector(".reveal .deck, .deck");
         if (deckEl) {
           const stepAttr = deckEl.getAttribute("data-step") || "";
           const isFaceUp = stepAttr.endsWith(":1");
-          deckEl.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true, cancelable: true }));
-          // Give slightly more time right after flipping face-up so the user sees the card art & rarity glow
-          await sleep(isFaceUp ? 420 : 680);
+
+          if (!isFaceUp) {
+            // Carte de dos : révéler l'illustration face recto
+            deckEl.dispatchEvent(new KeyboardEvent("keydown", { key: " ", code: "Space", bubbles: true, cancelable: true }));
+            await sleep(550);
+          } else {
+            // Carte déjà révélée : NE PAS re-presser Space (cela la refait basculer de dos en boucle !)
+            // Pour avancer à la carte suivante, cliquer directement sur le paquet / la carte
+            deckEl.click();
+            const nextBtn = document.querySelector(".reveal button.next, button.next, [class*='next']");
+            if (nextBtn) nextBtn.click();
+            await sleep(450);
+          }
+
+          // Détecter si on est bloqué sur la même carte (même data-step)
+          if (stepAttr === lastStepAttr) {
+            sameStepCount++;
+            if (sameStepCount >= 2) {
+              deckEl.click();
+              if (globalSkipBtn) {
+                globalSkipBtn.click();
+                await sleep(350);
+              }
+            }
+          } else {
+            lastStepAttr = stepAttr;
+            sameStepCount = 0;
+          }
         } else {
+          if (globalSkipBtn) {
+            globalSkipBtn.click();
+          }
           await sleep(300);
         }
       }

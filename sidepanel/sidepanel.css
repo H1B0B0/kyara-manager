@@ -319,13 +319,11 @@ body {
   color: var(--fg2);
 }
 
-/* Tab Navigation (Sleek Horizontal Pill Track with Zero Overlap) */
+/* Tab Navigation (Sleek Multi-Row Pill Grid with Zero Cut-Off on PC / Fixed Displays) */
 .tab-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 5px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
   padding: 2px 2px 8px;
   margin: 0;
 }
@@ -341,16 +339,18 @@ body {
   background: var(--panel);
   color: var(--fg2);
   font-family: var(--body);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 5px 11px;
+  padding: 5px 9px;
   border-radius: 9999px;
   cursor: pointer;
   white-space: nowrap;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
+  justify-content: center;
+  gap: 5px;
+  flex: 1 1 auto;
+  min-width: 0;
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -880,6 +880,40 @@ body {
   .switch:checked::before {
     background-color: HighlightText;
   }
+}
+
+/* Profitable Trades List */
+.trades-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 4px 0;
+}
+
+.trade-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  background: var(--raise);
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.trade-exchange {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11.5px;
+}
+
+.trade-gain {
+  font-family: var(--mono);
+  font-weight: 700;
+  color: var(--ok);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 /* Buttons & Inputs */

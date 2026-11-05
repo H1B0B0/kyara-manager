@@ -300,19 +300,30 @@ const tests = [
       assert.equal(slowLowMargin.canAutoSell, false);
       assert.ok(slowLowMargin.verdictReason.includes("48h"));
 
-      // 2. High-value card with slow 48h pace: advises ATTENDRE (not recycling, but don't tie up 10 auto-sell slots)
-      const slowHighValue = Analytics.evaluateDuplicate(
-        { id: 202, name: "Légende Oubliée", rarity: "L" },
+      // 2. Légendaires en surplus : toujours autorisées à la vente (valeur 100+ ◆) même si le rythme de vente est plus lent
+      const slowLegendary = Analytics.evaluateDuplicate(
+        { id: 202, name: "Légende Rare", rarity: "L" },
         { characterId: 202, qty: 2, locked: 0 },
-        { median7d: 250, lowestFixed: 250, sales7d: 1 }, // Slow sales pace
+        { median7d: 250, lowestFixed: 250, sales7d: 1 },
         Analytics.DEFAULT_RECYCLE_VALUES,
         Analytics.DEFAULT_SETTINGS,
         0
       );
-      assert.equal(slowHighValue.isSlowMover, true);
-      assert.equal(slowHighValue.verdict, "ATTENDRE");
-      assert.equal(slowHighValue.canAutoSell, false);
-      assert.ok(slowHighValue.verdictReason.includes("12h"));
+      assert.equal(slowLegendary.verdict, "VENDRE");
+      assert.equal(slowLegendary.canAutoSell, true);
+
+      // 3. Épique avec vente lente : conseille ATTENDRE pour ne pas bloquer les créneaux
+      const slowEpic = Analytics.evaluateDuplicate(
+        { id: 204, name: "Épique Lente", rarity: "E" },
+        { characterId: 204, qty: 2, locked: 0 },
+        { median7d: 40, lowestFixed: 40, sales7d: 1 },
+        Analytics.DEFAULT_RECYCLE_VALUES,
+        Analytics.DEFAULT_SETTINGS,
+        0
+      );
+      assert.equal(slowEpic.isSlowMover, true);
+      assert.equal(slowEpic.verdict, "ATTENDRE");
+      assert.equal(slowEpic.canAutoSell, false);
 
       // 3. Fast-moving card (sales7d >= 10, high 12h probability): advises VENDRE and canAutoSell = true
       const fastCard = Analytics.evaluateDuplicate(
