@@ -73,7 +73,8 @@
     packPools: {},
     packPoolsAt: 0,
     collectionPrices: new Map(),
-    rarityAvgPrices: { C: 3, U: 3, R: 6, E: 18, L: 130, M: 950 }
+    rarityAvgPrices: { C: 3, U: 3, R: 6, E: 18, L: 130, M: 950 },
+    recycleMap: { ...Analytics.DEFAULT_RECYCLE_VALUES }
   };
 
   // Listen to native Kyara pull events dispatched by the SvelteKit app (`window.dispatchEvent(new CustomEvent("kyara:pull", { detail }))`)
@@ -445,6 +446,7 @@
     const packState = bootstrap?.packs || null;
     const progress = bootstrap?.progress || null;
     const recycleMap = config?.recycle || Analytics.DEFAULT_RECYCLE_VALUES;
+    runtimeCache.recycleMap = recycleMap;
 
     const now = Date.now();
     const activeListings = extractActiveListings(myMarket, now);
@@ -805,11 +807,13 @@
     // Gestion active des annonces non vendues après X heures (par défaut 2h) : baisse de prix ou recyclage immédiat
     if (expireHours > 0) {
       const maxAgeMs = expireHours * 3600 * 1000;
+      const recycleMap = runtimeCache.recycleMap || Analytics.DEFAULT_RECYCLE_VALUES;
       for (const listing of [...activeListings]) {
         const createdMs = listing.createdAt ? Date.parse(listing.createdAt) : NaN;
         if (Number.isFinite(createdMs) && now - createdMs >= maxAgeMs) {
           const charId = Number(listing.character?.id ?? listing.characterId);
           const rarity = listing.character?.rarity || "C";
+          const cardName = listing.character?.name || listing.name || `Carte #${charId}`;
           const recycleValue = Number(recycleMap?.[rarity] ?? Analytics.DEFAULT_RECYCLE_VALUES[rarity] ?? 1);
           const rarityFloor = Number(Analytics.RARITY_PRICE_FLOORS[rarity] ?? 3);
           const currentNet = Analytics.computeNetProceeds(listing.price);
@@ -820,7 +824,7 @@
           if (currentSettings.dryRun) {
             await appendJournal(
               "sell",
-              `[SIMULATION] Annonce stagnante (> ${expireHours}h) ${listing.name} : ${isLowMargin ? "retirerait et recyclerait" : "baisserait le prix"}`
+              `[SIMULATION] Annonce stagnante (> ${expireHours}h) ${cardName} : ${isLowMargin ? "retirerait et recyclerait" : "baisserait le prix"}`
             );
             continue;
           }
@@ -839,7 +843,7 @@
               }).catch(() => {});
               await appendJournal(
                 "recycle",
-                `Annonce non vendue après ${expireHours}h : ${listing.name} retirée et recyclée (+${recycleValue} ◆) car vente trop lente`
+                `Annonce non vendue après ${expireHours}h : ${cardName} retirée et recyclée (+${recycleValue} ◆) car vente trop lente`
               );
             } else {
               // 2B. Carte de valeur (R, E, L) : baisser le prix de 5% pour accélérer la vente
@@ -863,7 +867,7 @@
                   activeListings.push({ ...listing, price: loweredPrice, createdAt: new Date().toISOString() });
                   await appendJournal(
                     "sell",
-                    `Repricing auto (> ${expireHours}h sans vente) : ${listing.name} ajustée de ${listing.price} ◆ à ${loweredPrice} ◆`
+                    `Repricing auto (> ${expireHours}h sans vente) : ${cardName} ajustée de ${listing.price} ◆ à ${loweredPrice} ◆`
                   );
                 }
               } else {
@@ -874,7 +878,7 @@
                 }).catch(() => {});
                 await appendJournal(
                   "recycle",
-                  `Annonce au plancher non vendue (> ${expireHours}h) : ${listing.name} recyclée (+${recycleValue} ◆) pour libérer 1 créneau`
+                  `Annonce au plancher non vendue (> ${expireHours}h) : ${cardName} recyclée (+${recycleValue} ◆) pour libérer 1 créneau`
                 );
               }
             }
