@@ -338,6 +338,111 @@ const tests = [
       assert.equal(fastCard.verdict, "VENDRE");
       assert.equal(fastCard.canAutoSell, true);
     }
+  },
+  {
+    name: "computeLiveMarketDepth accurately computes median, average, and detects market crashes (e.g. Fairy Tail)",
+    fn: () => {
+      // 5 active competitive listings
+      const listings = [
+        { price: 30, status: "active" },
+        { price: 32, status: "active" },
+        { price: 35, status: "active" },
+        { price: 38, status: "active" },
+        { price: 45, status: "active" }
+      ];
+      // Historical 7d median was 100 before the series crash
+      const depth = Analytics.computeLiveMarketDepth(listings, 100);
+      assert.equal(depth.count, 5);
+      assert.equal(depth.lowestFixed, 30);
+      assert.equal(depth.highestFixed, 45);
+      assert.equal(depth.liveMedian20, 35);
+      assert.equal(depth.liveAvg20, 36);
+      assert.equal(depth.isCrashDetected, true);
+      assert.equal(depth.crashDiscountPct, 65);
+    }
+  },
+  {
+    name: "Strategy 'recent20_median' prices cards competitively according to live 20 listings during market drops",
+    fn: () => {
+      // Fairy Tail card with 7d median = 100, but live market crashed to ~35
+      const fairyTailListings = [
+        { price: 33, status: "active" },
+        { price: 34, status: "active" },
+        { price: 35, status: "active" },
+        { price: 36, status: "active" },
+        { price: 40, status: "active" }
+      ];
+      const res = Analytics.evaluateDuplicate(
+        { id: 701, name: "Natsu Dragnir", rarity: "E" },
+        { characterId: 701, qty: 3, locked: 0 },
+        { median7d: 100, liveListings: fairyTailListings, sales7d: 15 },
+        Analytics.DEFAULT_RECYCLE_VALUES,
+        {
+          ...Analytics.DEFAULT_SETTINGS,
+          autoSellStrategy: "recent20_median",
+          autoSellCrashProtection: true
+        }
+      );
+      assert.equal(res.isCrash, true);
+      assert.equal(res.liveMedian20, 35);
+      assert.equal(res.lowestFixed, 33);
+      // Under recent20_median, it targets min(liveMedian20, lowestFixed - 1) = min(35, 32) = 32
+      assert.equal(res.prices.recommended, 32);
+      assert.equal(res.verdict, "VENDRE");
+      assert.equal(res.canAutoSell, true);
+      assert.ok(res.pedagogy);
+      assert.equal(res.pedagogy.isCrash, true);
+    }
+  },
+  {
+    name: "Turbo Liquidity converts low-margin commons into instant Chakra instead of clogging 10 slots",
+    fn: () => {
+      // Common card where market price is 5 ◆, net proceeds is 3 ◆, recycle is 1 ◆ => net gain over recycle = +2 ◆
+      const duplicateCommon = Analytics.evaluateDuplicate(
+        { id: 801, name: "Soldat Inconnu", rarity: "C" },
+        { characterId: 801, qty: 4, locked: 0 },
+        { median7d: 5, lowestFixed: 5, sales7d: 4 },
+        Analytics.DEFAULT_RECYCLE_VALUES,
+        {
+          ...Analytics.DEFAULT_SETTINGS,
+          autoSellTurboLiquidity: true,
+          autoSellTurboMaxNetProfit: 4
+        }
+      );
+      assert.equal(duplicateCommon.verdict, "RECYCLER");
+      assert.equal(duplicateCommon.canAutoRecycle, true);
+      assert.equal(duplicateCommon.canAutoSell, false);
+      assert.ok(duplicateCommon.verdictReason.includes("Turbo Liquidité"));
+    }
+  },
+  {
+    name: "Wishlist generator suggests missing cards near album completion with high score and checks live deals",
+    fn: () => {
+      const catalog = new Map([
+        [1, { id: 1, name: "A1", series: "One Piece", rarity: "C" }],
+        [2, { id: 2, name: "A2", series: "One Piece", rarity: "C" }],
+        [3, { id: 3, name: "A3", series: "One Piece", rarity: "R" }], // missing
+        [4, { id: 4, name: "B1", series: "Bleach", rarity: "C" }] // missing
+      ]);
+      const owned = new Set([1, 2]); // One Piece is 66% completed
+
+      const suggestions = Analytics.generateDailyWishlist(catalog, owned, new Map([[3, { median7d: 12, sales7d: 8 }]]), 10);
+      assert.ok(suggestions.length > 0);
+      assert.equal(suggestions[0].characterId, 3);
+      assert.equal(suggestions[0].name, "A3");
+      assert.ok(suggestions[0].seriesCompletionPct >= 66);
+
+      // Wishlist match evaluation
+      const wishItem = { characterId: 3, name: "A3", maxBudget: 15, autoBuy: true };
+      const listingGood = { id: "lst-good", characterId: 3, type: "fixed", price: 10 };
+      const match = Analytics.evaluateWishlistMatch(wishItem, listingGood, 100, 20);
+      assert.ok(match);
+      assert.equal(match.matches, true);
+      assert.equal(match.isUnderBudget, true);
+      assert.equal(match.canAfford, true);
+      assert.equal(match.shouldAutoBuy, true);
+      assert.equal(match.savings, 5);
+    }
   }
 ];
 

@@ -10,6 +10,7 @@ const templatesDir = path.join(promoDir, 'templates');
 const brainDir = '/Users/etiennementrel/.gemini/antigravity/brain/b940700c-9447-4038-95e4-aaf2f3023806';
 const previewDir = path.join(brainDir, 'promo-preview');
 const aiBannerPath = path.join(brainDir, 'kyara_manager_promo_banner_1793817710243.jpg');
+const officialIconPath = path.join(rootDir, 'icons', 'icon-128.png');
 
 fs.mkdirSync(promoDir, { recursive: true });
 fs.mkdirSync(templatesDir, { recursive: true });
@@ -21,14 +22,14 @@ if (!fs.existsSync(CHROME_PATH)) {
   process.exit(1);
 }
 
-// Common styles for all 5 promotional images (1280 x 800)
+// Common styles for all 5 promotional images (1280 x 800) - 100% Western / Modern Clean Design
 function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, rightCardHtml, glowColor = '#ff4d2e' }) {
   return `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <style>
-  @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Unbounded:wght@700;800;900&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap");
+  @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&family=Unbounded:wght@700;800;900&display=swap");
   * { box-sizing: border-box; margin: 0; padding: 0; }
 
   body {
@@ -36,7 +37,7 @@ function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, r
     height: 800px;
     background: #08070c;
     overflow: hidden;
-    font-family: "Zen Kaku Gothic New", -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     color: #edeae4;
     position: relative;
     display: flex;
@@ -77,7 +78,7 @@ function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, r
     background-image: url("file://${aiBannerPath}");
     background-size: cover;
     background-position: center right;
-    opacity: 0.16;
+    opacity: 0.15;
     filter: saturate(1.2) contrast(1.1);
     z-index: 1;
   }
@@ -236,13 +237,7 @@ function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, r
     width: 28px;
     height: 28px;
     border-radius: 7px;
-    background: #ff4d2e;
-    color: #fff;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 14px;
-    font-weight: 900;
+    object-fit: cover;
   }
 
   .frame-body {
@@ -290,7 +285,7 @@ function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, r
     <div class="showcase-frame">
       <div class="frame-header">
         <div class="frame-title">
-          <div class="frame-seal">操</div>
+          <img src="file://${officialIconPath}" class="frame-seal" alt="Kyara Manager" />
           <span>KYARA MANAGER</span>
         </div>
         <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #3fbf7f; background: rgba(63,191,127,0.15); padding: 4px 8px; border-radius: 6px; font-weight: 700;">● ACTIF</span>
@@ -306,18 +301,18 @@ function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, r
 }
 
 // -------------------------------------------------------------------------
-// SLIDE 1 : PILOTE AUTOMATIQUE & ROI
+// SLIDE 1 : PILOTE AUTOMATIQUE & ROI (ZERO CJK CHARACTERS)
 // -------------------------------------------------------------------------
 const HTML_PROMO_1 = getBaseHtml({
   badge: '★ MODULE 01 · GESTIONNAIRE COMPLET',
   titlePrefix: 'Pilote Automatique',
   titleHighlight: 'Pour Kyara.games',
-  subtitle: 'Automatisez vos routines de jeu en toute sécurité. Gagnez du temps et optimisez chaque session directement depuis le panneau latéral.',
+  subtitle: 'Automatisez vos routines de jeu en toute sécurité. Gagnez du temps et optimisez chaque session directement depuis le panneau latéral de Chrome.',
   features: [
-    { icon: '売', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Auto-Vente Optimisée', desc: 'Remplissage des 10 slots selon la cote 7j' },
-    { icon: '転', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Auto-Recyclage', desc: 'Recyclage immédiat des cartes sans valeur' },
-    { icon: '市', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Radar de Flips', desc: 'Détection des annonces sous-cotées' },
-    { icon: '操', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: 'Mini-HUD en jeu', desc: 'Suivi live discret en bas de page' },
+    { icon: '💰', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Auto-Vente Optimisée', desc: 'Remplissage des 10 slots selon la cote 7j' },
+    { icon: '♻️', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Auto-Recyclage', desc: 'Recyclage immédiat des cartes sans valeur' },
+    { icon: '🎯', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Radar de Flips', desc: 'Détection des annonces sous-cotées' },
+    { icon: '⚡', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: 'Mini-HUD en jeu', desc: 'Suivi live discret en bas de page' },
   ],
   rightCardHtml: `
     <div style="background:#191822; border:1px solid #282434; border-radius:14px; padding:16px;">
@@ -347,7 +342,7 @@ const HTML_PROMO_1 = getBaseHtml({
 
     <div style="background:#191822; border:1px solid #282434; border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
       <div style="display:flex; align-items:center; gap:10px;">
-        <span style="color:#f5c518; font-weight:800;">売</span>
+        <span style="color:#f5c518; font-size:15px;">💰</span>
         <span style="font-size:12.5px; font-weight:700;">Auto-Vente des doublons (10 slots)</span>
       </div>
       <div style="width:36px; height:20px; background:#3fbf7f; border-radius:999px; position:relative;">
@@ -372,7 +367,7 @@ const HTML_PROMO_1 = getBaseHtml({
 });
 
 // -------------------------------------------------------------------------
-// SLIDE 2 : AUTO-VENTE DES DOUBLONS
+// SLIDE 2 : AUTO-VENTE DES DOUBLONS (ZERO CJK CHARACTERS)
 // -------------------------------------------------------------------------
 const HTML_PROMO_2 = getBaseHtml({
   badge: '★ MODULE 02 · ARBITRAGE DES DOUBLONS',
@@ -440,7 +435,7 @@ const HTML_PROMO_2 = getBaseHtml({
 });
 
 // -------------------------------------------------------------------------
-// SLIDE 3 : SCANNER DE FLIPS MARCHÉ
+// SLIDE 3 : SCANNER DE FLIPS MARCHÉ (ZERO CJK CHARACTERS)
 // -------------------------------------------------------------------------
 const HTML_PROMO_3 = getBaseHtml({
   badge: '★ MODULE 03 · ARBITRAGE DU MARCHÉ',
@@ -495,7 +490,7 @@ const HTML_PROMO_3 = getBaseHtml({
 });
 
 // -------------------------------------------------------------------------
-// SLIDE 4 : RENTABILITÉ DES BOOSTERS (EV) & PITY SNIPER
+// SLIDE 4 : RENTABILITÉ DES BOOSTERS (EV) & PITY SNIPER (ZERO CJK CHARACTERS)
 // -------------------------------------------------------------------------
 const HTML_PROMO_4 = getBaseHtml({
   badge: '★ MODULE 04 · PROBABILITÉS & TIRAGES',
@@ -552,7 +547,7 @@ const HTML_PROMO_4 = getBaseHtml({
 });
 
 // -------------------------------------------------------------------------
-// SLIDE 5 : SÉCURITÉ 0 CHAKRA & CONFIDENTIALITÉ
+// SLIDE 5 : SÉCURITÉ 0 CHAKRA & CONFIDENTIALITÉ (ZERO CJK CHARACTERS)
 // -------------------------------------------------------------------------
 const HTML_PROMO_5 = getBaseHtml({
   badge: '★ MODULE 05 · CONTRÔLE & PROTECTION',
@@ -617,21 +612,21 @@ const HTML_PROMO_5 = getBaseHtml({
 });
 
 // -------------------------------------------------------------------------
-// 6. MARQUEE HERO BANNER (1400 x 560)
+// 6. MARQUEE HERO BANNER (1400 x 560) - ZERO CJK CHARACTERS
 // -------------------------------------------------------------------------
 const HTML_MARQUEE = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Unbounded:wght@700;800;900&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap');
+  @import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@600;700;800&family=Unbounded:wght@700;800;900&display=swap");
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     width: 1400px;
     height: 560px;
     background: #09080c;
     overflow: hidden;
-    font-family: 'Zen Kaku Gothic New', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
     color: #edeae4;
     position: relative;
     display: flex;
@@ -699,20 +694,11 @@ const HTML_MARQUEE = `<!DOCTYPE html>
     gap: 16px;
   }
 
-  .brand-seal {
+  .brand-logo-img {
     width: 60px;
     height: 60px;
     border-radius: 16px;
-    background: linear-gradient(135deg, #2b2438, #15131c);
-    border: 2px solid #ff4d2e;
-    box-shadow: 0 0 30px rgba(255, 77, 46, 0.5), inset 0 0 14px rgba(255, 77, 46, 0.2);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Unbounded', sans-serif;
-    font-size: 30px;
-    font-weight: 900;
-    color: #ff4d2e;
+    box-shadow: 0 0 30px rgba(255, 77, 46, 0.5);
   }
 
   .brand-name {
@@ -797,7 +783,7 @@ const HTML_MARQUEE = `<!DOCTYPE html>
       </div>
 
       <div class="brand-row">
-        <div class="brand-seal">操</div>
+        <img src="file://${officialIconPath}" class="brand-logo-img" alt="Kyara Manager" />
         <h1 class="brand-name">KYARA MANAGER</h1>
       </div>
 
@@ -810,10 +796,10 @@ const HTML_MARQUEE = `<!DOCTYPE html>
 
     <div>
       <div class="pills-grid">
-        <div class="pill-card"><span style="color:#f5c518; font-weight:800;">売</span> Auto-Vente Optimisée</div>
-        <div class="pill-card"><span style="color:#3fbf7f; font-weight:800;">転</span> Auto-Recyclage Rentable</div>
-        <div class="pill-card"><span style="color:#4dd6ff; font-weight:800;">市</span> Scanner de Flips Marché</div>
-        <div class="pill-card"><span style="color:#ff4d2e; font-weight:800;">札</span> Tirage Live Boosters (EV)</div>
+        <div class="pill-card"><span style="color:#f5c518; font-weight:800;">💰</span> Auto-Vente Optimisée</div>
+        <div class="pill-card"><span style="color:#3fbf7f; font-weight:800;">♻️</span> Auto-Recyclage Rentable</div>
+        <div class="pill-card"><span style="color:#4dd6ff; font-weight:800;">🎯</span> Scanner de Flips Marché</div>
+        <div class="pill-card"><span style="color:#ff4d2e; font-weight:800;">📦</span> Tirage Live Boosters (EV)</div>
       </div>
 
       <div class="guarantee">
@@ -823,7 +809,7 @@ const HTML_MARQUEE = `<!DOCTYPE html>
   </div>
 
   <div class="right-hud-float">
-    <div style="width:36px; height:36px; border-radius:8px; background:#ff4d2e; color:#fff; display:flex; align-items:center; justify-content:center; font-family:'Unbounded'; font-size:18px; font-weight:900;">操</div>
+    <img src="file://${officialIconPath}" style="width:36px; height:36px; border-radius:8px;" alt="Icon" />
     <div>
       <div style="font-size:11px; color:#f5c518; font-weight:800;">PILOTE ACTIF · EXTENSION CHROME</div>
       <div style="font-size:14px; color:#fff; font-weight:800;">AUTOMATISATION INTELLIGENTE</div>
@@ -833,21 +819,21 @@ const HTML_MARQUEE = `<!DOCTYPE html>
 </html>`;
 
 // -------------------------------------------------------------------------
-// 7. SMALL PROMO TILE (440 x 280)
+// 7. SMALL PROMO TILE (440 x 280) - ZERO CJK CHARACTERS
 // -------------------------------------------------------------------------
 const HTML_SMALL = `<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700&family=Unbounded:wght@800;900&family=Zen+Kaku+Gothic+New:wght@500;700&display=swap');
+  @import url("https://fonts.googleapis.com/css2?family=Inter:wght@500;700;800;900&family=JetBrains+Mono:wght@700&family=Unbounded:wght@800;900&display=swap");
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body {
     width: 440px;
     height: 280px;
     background: #09080c;
     overflow: hidden;
-    font-family: 'Zen Kaku Gothic New', system-ui, sans-serif;
+    font-family: 'Inter', system-ui, sans-serif;
     color: #edeae4;
     display: flex;
     flex-direction: column;
@@ -894,20 +880,11 @@ const HTML_SMALL = `<!DOCTYPE html>
     z-index: 2;
   }
 
-  .brand-seal-lg {
-    width: 62px;
-    height: 62px;
+  .brand-logo-small {
+    width: 58px;
+    height: 58px;
     border-radius: 16px;
-    background: linear-gradient(135deg, #282236, #14131a);
-    border: 2px solid #ff4d2e;
     box-shadow: 0 0 28px rgba(255, 77, 46, 0.45);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: 'Unbounded', sans-serif;
-    font-size: 30px;
-    font-weight: 900;
-    color: #ff4d2e;
   }
 
   .brand-heading {
@@ -957,16 +934,16 @@ const HTML_SMALL = `<!DOCTYPE html>
   <div class="top-pill">★ EXTENSION CHROME · MANIFEST V3</div>
 
   <div class="center-box">
-    <div class="brand-seal-lg">操</div>
+    <img src="file://${officialIconPath}" class="brand-logo-small" alt="Kyara Manager" />
     <div class="brand-heading">KYARA MANAGER</div>
     <div class="brand-tag">Pilote Automatique &amp; Arbitrage</div>
   </div>
 
   <div class="features-strip">
-    <div class="strip-pill"><span style="color:#f5c518">売</span> Auto-Vente</div>
-    <div class="strip-pill"><span style="color:#3fbf7f">転</span> Recyclage</div>
-    <div class="strip-pill"><span style="color:#4dd6ff">市</span> Flips</div>
-    <div class="strip-pill"><span style="color:#ff4d2e">札</span> Boosters</div>
+    <div class="strip-pill"><span style="color:#f5c518">💰</span> Auto-Vente</div>
+    <div class="strip-pill"><span style="color:#3fbf7f">♻️</span> Recyclage</div>
+    <div class="strip-pill"><span style="color:#4dd6ff">🎯</span> Flips</div>
+    <div class="strip-pill"><span style="color:#ff4d2e">📦</span> Boosters</div>
   </div>
 
   <div class="footer-text">
@@ -1026,4 +1003,4 @@ const checkFiles = fs.readdirSync(promoDir)
 const sipsOutput = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', '-g', 'hasAlpha', ...checkFiles], { encoding: 'utf8' });
 console.log(sipsOutput);
 
-console.log('✅ Les 5 images promotionnelles officielles ont été générées avec succès !');
+console.log('✅ Les 5 images promotionnelles officielles ont été générées avec succès (zéro caractère japonais) !');
