@@ -24,7 +24,7 @@ if (!fs.existsSync(CHROME_PATH)) {
 }
 
 // -------------------------------------------------------------------------
-// 1. MARQUEE BANNER (1400 x 560)
+// 1. MARQUEE HERO BANNER (1400 x 560)
 // -------------------------------------------------------------------------
 const HTML_MARQUEE = `<!DOCTYPE html>
 <html lang="fr">
@@ -383,145 +383,326 @@ const HTML_SMALL = `<!DOCTYPE html>
 </html>`;
 
 // -------------------------------------------------------------------------
-// 3. AUTHENTIC SCREENSHOTS (1280 x 800) WITH SEAMLESS ANONYMIZATION
+// 3. 5 SHOWCASE SLIDES (1280 x 800) FOR CHROME WEB STORE CAROUSEL
 // -------------------------------------------------------------------------
-// Takes the user's authentic screenshots, preserves 100% of the UI, cards and stats,
-// and applies surgical anonymization:
-// - If isGuest is true: user already took the screen with an anonymous guest account (Invité-DA66E2),
-//   so we preserve 100% of the original pixels and seamlessly format to 1280x800.
-// - If isGuest is false: replaces personal avatar and HIB0-2 with clean neutral values.
-function buildAnonymizedScreenshotHtml(rawPngPath, isGuest = false) {
-  const rawBase64 = fs.readFileSync(rawPngPath).toString('base64');
+// Formats each real screenshot with a clear, high-impact header showcase banner:
+// - Badge, H1 title, subtitle, and 3 feature pills
+// - 100% genuine Kyara app interface below, seamlessly anonymized as Invité-DA66E2
+function buildShowcaseHtml(config) {
+  const rawBase64 = fs.readFileSync(path.join(rawDir, config.raw)).toString('base64');
   return `<!DOCTYPE html>
-<html>
+<html lang="fr">
 <head>
 <meta charset="utf-8">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Unbounded:wght@800;900&family=Zen+Kaku+Gothic+New:wght@600;700;900&display=swap');
   * { margin:0; padding:0; box-sizing:border-box; }
   body {
     width: 1280px;
     height: 800px;
-    background: #0e0d12;
+    background: #0b0a0f;
     overflow: hidden;
+    font-family: 'Zen Kaku Gothic New', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+    color: #edeae4;
+    position: relative;
   }
+
+  /* Header banner (y: 0 to 95px) */
+  .header-bar {
+    width: 1280px;
+    height: 95px;
+    background: linear-gradient(180deg, #171522 0%, #0d0c12 100%);
+    border-bottom: 2px solid #282434;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 32px;
+    position: relative;
+    z-index: 10;
+  }
+
+  .header-bar::after {
+    content: '';
+    position: absolute;
+    bottom: -2px;
+    left: 0;
+    width: 360px;
+    height: 2px;
+    background: linear-gradient(90deg, #ff4d2e, #f5c518, transparent);
+  }
+
+  .title-group {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-width: 820px;
+  }
+
+  .tag-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .badge-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 77, 46, 0.16);
+    border: 1px solid rgba(255, 77, 46, 0.45);
+    border-radius: 999px;
+    padding: 2px 10px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    font-weight: 800;
+    color: #ff4d2e;
+    letter-spacing: 0.5px;
+  }
+
+  .subline {
+    font-size: 12.5px;
+    color: #9d98a5;
+    font-weight: 500;
+  }
+
+  .headline {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 20px;
+    font-weight: 900;
+    color: #ffffff;
+    letter-spacing: -0.3px;
+  }
+
+  .headline span {
+    color: #f5c518;
+  }
+
+  .features-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .feature-pill {
+    background: #171620;
+    border: 1px solid #282534;
+    border-radius: 8px;
+    padding: 7px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    color: #d8d4dc;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .canvas-wrapper {
+    width: 1280px;
+    height: 705px;
+    position: relative;
+    background: #0e0d12;
+  }
+
   canvas {
     display: block;
     width: 1280px;
-    height: 800px;
+    height: 705px;
   }
 </style>
 </head>
 <body>
-<canvas id="cv" width="1280" height="800"></canvas>
-<script>
-async function render() {
-  const img = new Image();
-  await new Promise((res, rej) => {
-    img.onload = res;
-    img.onerror = rej;
-    img.src = "data:image/png;base64,${rawBase64}";
-  });
+  <div class="header-bar">
+    <div class="title-group">
+      <div class="tag-row">
+        <span class="badge-tag">${config.badge}</span>
+        <span class="subline">${config.subtitle}</span>
+      </div>
+      <h1 class="headline">${config.titleHtml}</h1>
+    </div>
 
-  const cv = document.getElementById("cv");
-  const ctx = cv.getContext("2d");
+    <div class="features-strip">
+      ${config.pills.map(p => `<div class="feature-pill">${p}</div>`).join('\n      ')}
+    </div>
+  </div>
 
-  // 1. Fill base background with page dark color #0e0d12
-  ctx.fillStyle = "#0e0d12";
-  ctx.fillRect(0, 0, 1280, 800);
+  <div class="canvas-wrapper">
+    <canvas id="cv" width="1280" height="705"></canvas>
+  </div>
 
-  // 2. Right sidepanel background extends full height (from x=960 to 1280)
-  ctx.fillStyle = "#111015";
-  ctx.fillRect(960, 0, 320, 800);
+  <script>
+  async function run() {
+    const img = new Image();
+    await new Promise((res, rej) => {
+      img.onload = res;
+      img.onerror = rej;
+      img.src = "data:image/png;base64,${rawBase64}";
+    });
 
-  // 3. Draw raw screenshot scaled 1.25x (1024 * 1.25 = 1280, 560 * 1.25 = 700)
-  // Centered vertically at y = 50px
-  const scale = 1.25;
-  const offX = 0;
-  const offY = 50;
-  ctx.drawImage(img, offX, offY, 1024 * scale, 560 * scale);
+    const cv = document.getElementById("cv");
+    const ctx = cv.getContext("2d");
 
-  ${isGuest ? `
-  // Screenshot is already 100% anonymous (guest account Invité-DA66E2)
-  // Just ensure clean letterboxing top and bottom
-  ctx.fillStyle = "#0e0d12";
-  ctx.fillRect(0, 0, 960, 50);
-  ctx.fillStyle = "#111015";
-  ctx.fillRect(960, 750, 320, 50);
-  ` : `
-  // Navbar Avatar patch
-  const avX = 713.5 * scale + offX;
-  const avY = 22.5 * scale + offY;
-  const avR = 14 * scale;
+    // 1. Fill base background with page dark color #0e0d12
+    ctx.fillStyle = "#0e0d12";
+    ctx.fillRect(0, 0, 1280, 705);
 
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(avX, avY, avR, 0, Math.PI * 2);
-  ctx.fillStyle = "#1e1d28";
-  ctx.fill();
+    // 2. Right sidepanel background extends full height (from x=960 to 1280)
+    ctx.fillStyle = "#111015";
+    ctx.fillRect(960, 0, 320, 705);
 
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = "#e6a23c";
-  ctx.stroke();
+    // 3. Draw raw screenshot scaled 1.25x (1024 * 1.25 = 1280, 560 * 1.25 = 700)
+    // Placed at y = 2px
+    const scale = 1.25;
+    const offX = 0;
+    const offY = 2;
+    ctx.drawImage(img, offX, offY, 1024 * scale, 560 * scale);
 
-  ctx.fillStyle = "#f5d485";
-  ctx.font = "bold 15px -apple-system, sans-serif";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-  ctx.fillText("操", avX, avY);
-  ctx.restore();
+    ${config.isGuest ? `
+    // Screenshot 1 is already natively taken with guest account Invité-DA66E2
+    // Top & bottom blend
+    ctx.fillStyle = "#0e0d12";
+    ctx.fillRect(0, 0, 960, 2);
+    ctx.fillStyle = "#111015";
+    ctx.fillRect(960, 702, 320, 3);
+    ` : `
+    // Navbar Avatar patch (match guest avatar / neutral seal 操)
+    const avX = 713.5 * scale + offX;
+    const avY = 22.5 * scale + offY;
+    const avR = 14 * scale;
 
-  // Sidepanel Header username patch: replace 'HIB0-2' with 'Joueur'
-  const pX = 790 * scale + offX;
-  const pY = 79 * scale + offY;
-  const pW = 38 * scale;
-  const pH = 15 * scale;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(avX, avY, avR, 0, Math.PI * 2);
+    ctx.fillStyle = "#1e1d28";
+    ctx.fill();
 
-  ctx.save();
-  ctx.fillStyle = "#15141b";
-  ctx.fillRect(pX, pY, pW, pH);
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = "#e6a23c";
+    ctx.stroke();
 
-  ctx.fillStyle = "#9d98a5";
-  ctx.font = "600 12.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Joueur", pX, pY + pH / 2);
-  ctx.restore();
+    ctx.fillStyle = "#f5d485";
+    ctx.font = "bold 15px -apple-system, sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("操", avX, avY);
+    ctx.restore();
 
-  // Floating HUD username patch: replace 'HIB0-2' with 'Joueur'
-  const hX = 48 * scale + offX;
-  const hY = 527 * scale + offY;
-  const hW = 28 * scale;
-  const hH = 14 * scale;
+    // Sidepanel Header username patch: replace HIB0-2 with Invité-DA66E2
+    const pX = 790 * scale + offX;
+    const pY = 79 * scale + offY;
+    const pW = 85 * scale;
+    const pH = 15 * scale;
 
-  ctx.save();
-  ctx.fillStyle = "#17161e";
-  ctx.fillRect(hX, hY, hW, hH);
+    ctx.save();
+    ctx.fillStyle = "#15141b";
+    ctx.fillRect(pX, pY, pW, pH);
 
-  ctx.fillStyle = "#edeae4";
-  ctx.font = "500 11px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-  ctx.textAlign = "left";
-  ctx.textBaseline = "middle";
-  ctx.fillText("Joueur", hX, hY + hH / 2);
-  ctx.restore();
+    ctx.fillStyle = "#9d98a5";
+    ctx.font = "600 11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Invité-DA66E2 · 0/6736 cartes", pX, pY + pH / 2);
+    ctx.restore();
 
-  // Clean browser link hover tooltip if present at bottom-left
-  ctx.fillStyle = "#0e0d12";
-  ctx.fillRect(0, 546 * scale + offY, 200 * scale, 14 * scale);
-  `}
-}
-render();
-</script>
+    // Floating HUD username patch: replace HIB0-2 with Invité-DA66E2
+    const hX = 48 * scale + offX;
+    const hY = 527 * scale + offY;
+    const hW = 60 * scale;
+    const hH = 14 * scale;
+
+    ctx.save();
+    ctx.fillStyle = "#17161e";
+    ctx.fillRect(hX, hY, hW, hH);
+
+    ctx.fillStyle = "#edeae4";
+    ctx.font = "500 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    ctx.fillText("Invité-DA66E2", hX, hY + hH / 2);
+    ctx.restore();
+
+    // Clean browser link hover tooltip if present at bottom-left
+    ctx.fillStyle = "#0e0d12";
+    ctx.fillRect(0, 546 * scale + offY, 200 * scale, 14 * scale);
+    `}
+  }
+  run();
+  </script>
 </body>
 </html>`;
 }
 
-// Map each of the 5 raw screenshots to the 5 Chrome Web Store screenshots
 const screensConfig = [
-  { id: 'screenshot-1-autopilot', raw: 'screen-1-pilote.png', isGuest: true, label: 'Onglet 1 : Pilote Automatique Global & HUD' },
-  { id: 'screenshot-2-doublons', raw: 'screen-2-doublons.png', isGuest: false, label: 'Onglet 2 : Gestion des Doublons & Vente' },
-  { id: 'screenshot-3-marche', raw: 'screen-3-marche.png', isGuest: false, label: 'Onglet 3 : Scanner de Flips Marché' },
-  { id: 'screenshot-4-boosters', raw: 'screen-4-boosters.png', isGuest: false, label: 'Onglet 4 : Rentabilité Boosters (EV)' },
-  { id: 'screenshot-5-securite', raw: 'screen-5-reglages.png', isGuest: false, label: 'Onglet 5 : Réglages & Sécurité' },
+  {
+    id: 'screenshot-1-autopilot',
+    raw: 'screen-1-pilote.png',
+    isGuest: true,
+    badge: '⚡ MODULE 01 · PILOTE AUTOMATIQUE',
+    titleHtml: 'Pilote Automatique Global &amp; <span>Tableau de Bord ROI</span>',
+    subtitle: 'Orchestration en continu sans brader vos cartes sur Kyara.games',
+    pills: [
+      '<span style="color:#f5c518;">売</span> Auto-Vente',
+      '<span style="color:#3fbf7f;">転</span> Auto-Recyclage',
+      '<span style="color:#ff4d2e;">操</span> HUD en jeu'
+    ],
+    label: 'Capture 1 : Pilote Automatique Global & HUD'
+  },
+  {
+    id: 'screenshot-2-doublons',
+    raw: 'screen-2-doublons.png',
+    isGuest: false,
+    badge: '💎 MODULE 02 · GESTION DES DOUBLONS',
+    titleHtml: 'Arbitrage Doublons : <span>Vendre au Meilleur Prix ou Recycler</span>',
+    subtitle: 'Calcul en direct des prix nets après taxes (5% + 2%) avec garde-fou anti-bradage',
+    pills: [
+      '<span style="color:#f5c518;">📊</span> Médianes 7j',
+      '<span style="color:#ff4d2e;">🛡️</span> Garde-fou 70%',
+      '<span style="color:#3fbf7f;">🔒</span> Protection cartes'
+    ],
+    label: 'Capture 2 : Gestion des Doublons & Vente'
+  },
+  {
+    id: 'screenshot-3-marche',
+    raw: 'screen-3-marche.png',
+    isGuest: false,
+    badge: '🎯 MODULE 03 · SCANNER DE FLIPS MARCHÉ',
+    titleHtml: 'Radar d\'Opportunités &amp; <span>Achat-Revente (Flips Directs)</span>',
+    subtitle: 'Détection instantanée des annonces sous-cotées avec calcul automatique du bénéfice net',
+    pills: [
+      '<span style="color:#4dd6ff;">📈</span> Marge nette +◆',
+      '<span style="color:#f5c518;">⚡</span> Achat 1-clic',
+      '<span style="color:#ff4d2e;">🏷️</span> Filtres raretés'
+    ],
+    label: 'Capture 3 : Scanner de Flips Marché'
+  },
+  {
+    id: 'screenshot-4-boosters',
+    raw: 'screen-4-boosters.png',
+    isGuest: false,
+    badge: '📦 MODULE 04 · ESPÉRANCE CHAKRA (EV)',
+    titleHtml: 'Rentabilité des Boosters (EV) &amp; <span>Pity Sniper Mythique</span>',
+    subtitle: 'Classement probabiliste des packs selon l\'EV en Chakra et Pity Sniper dès 240/250',
+    pills: [
+      '<span style="color:#3fbf7f;">🎲</span> P(≥1 nouvelle)',
+      '<span style="color:#f5c518;">🎯</span> Pity (240/250)',
+      '<span style="color:#ff4d2e;">⚡</span> Tirage Live'
+    ],
+    label: 'Capture 4 : Rentabilité Boosters (EV)'
+  },
+  {
+    id: 'screenshot-5-securite',
+    raw: 'screen-5-reglages.png',
+    isGuest: false,
+    badge: '🛡️ MODULE 05 · CONTRÔLE & SÉCURITÉ',
+    titleHtml: 'Sanctuaire de Chakra Protégé &amp; <span>Confidentialité 100% Locale</span>',
+    subtitle: 'Sécurité stricte 0 Chakra sur les boosters, réserve minimale et zéro télémétrie',
+    pills: [
+      '<span style="color:#3fbf7f;">✓</span> 0 Chakra garanti',
+      '<span style="color:#f5c518;">🔒</span> Réserve protégée',
+      '<span style="color:#4dd6ff;">🛡️</span> 100% Local MV3'
+    ],
+    label: 'Capture 5 : Réglages & Sécurité'
+  }
 ];
 
 const targets = [
@@ -531,12 +712,12 @@ const targets = [
     id: s.id,
     width: 1280,
     height: 800,
-    html: buildAnonymizedScreenshotHtml(path.join(rawDir, s.raw), s.isGuest),
+    html: buildShowcaseHtml(s),
     label: s.label
   }))
 ];
 
-console.log('--- GÉNÉRATION DES ASSETS CHROME WEB STORE ---');
+console.log('--- GÉNÉRATION DES 5 SHOWCASES + BANNIÈRES CHROME WEB STORE ---');
 console.log(`Cible : ${targets.length} fichiers (7 PNG + 7 JPEG 24-bits sans alpha)\n`);
 
 for (const t of targets) {
@@ -577,4 +758,4 @@ const checkFiles = fs.readdirSync(promoDir)
 const sipsOutput = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', '-g', 'hasAlpha', ...checkFiles], { encoding: 'utf8' });
 console.log(sipsOutput);
 
-console.log('✅ Tous les assets promotionnels ont été générés avec succès !');
+console.log('✅ Tous les 5 visuels de présentation ont été générés avec succès !');
