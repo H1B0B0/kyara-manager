@@ -1598,3 +1598,253 @@ body {
   color: var(--fg2);
   line-height: 1.35;
 }
+
+/* ==========================================================================
+   Turbo Liquidité Banner
+   ========================================================================== */
+.turbo-banner {
+  background: linear-gradient(135deg, rgba(255, 77, 46, 0.16), rgba(245, 197, 24, 0.14));
+  border: 1px solid rgba(255, 77, 46, 0.45);
+  border-radius: 10px;
+  padding: 10px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+}
+
+.turbo-banner[hidden] {
+  display: none;
+}
+
+.turbo-banner__main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.turbo-banner__icon {
+  font-size: 20px;
+  color: #ff9800;
+  flex-shrink: 0;
+  animation: beacon-pulse 2s infinite ease-in-out;
+}
+
+.turbo-banner__title {
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  color: #ff9800;
+}
+
+.turbo-banner__desc {
+  margin: 2px 0 0;
+  font-size: 11px;
+  color: var(--fg2);
+  line-height: 1.3;
+}
+
+/* ==========================================================================
+   Wishlist Tab (Mes envies)
+   ========================================================================== */
+.wishlist-add-bar {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  position: relative;
+}
+
+.wishlist-add-bar input[type="search"] {
+  flex: 1;
+}
+
+.wishlist-add-bar .input--num {
+  width: 90px;
+}
+
+.wishlist-autocomplete {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 50;
+  background: var(--panel2);
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  margin-top: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+
+.wishlist-autocomplete[hidden] {
+  display: none;
+}
+
+.autocomplete-item {
+  padding: 8px 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+  font-size: 12px;
+}
+
+.autocomplete-item:hover {
+  background: var(--raise);
+}
+
+.wishlist-suggestions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.wishlist-suggestion-card {
+  background: var(--panel2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.wishlist-suggestion-card:hover {
+  border-color: rgba(245, 197, 24, 0.4);
+}
+
+.wishlist-suggestion-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.wishlist-suggestion-name {
+  font-weight: 700;
+  font-size: 12px;
+  color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.wishlist-suggestion-metrics {
+  font-size: 10.5px;
+  color: var(--mut);
+}
+
+/* ==========================================================================
+   Pédagogie Décisionnelle (Explorateur interactif)
+   ========================================================================== */
+.pedagogy-toggle {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-pedagogy-toggle {
+  background: transparent;
+  border: 1px solid var(--line2);
+  color: var(--fg2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.btn-pedagogy-toggle:hover,
+.btn-pedagogy-toggle.is-active {
+  background: var(--bg3);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.badge-crash {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ff6b6b;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pedagogy-card {
+  background: rgba(20, 18, 28, 0.95);
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.pedagogy-card__title {
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--gold);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pedagogy-card__row {
+  margin: 3px 0;
+}
+
+.pedagogy-card__row strong {
+  color: var(--fg);
+}
+
+/* ==========================================================================
+   Full-Screen Cockpit Mode (?mode=full)
+   ========================================================================== */
+html.km-mode-full body {
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 16px 28px;
+  font-size: 13px;
+  background-color: #0c0b10;
+}
+
+html.km-mode-full .kpi-bar {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+html.km-mode-full .card {
+  padding: 14px 18px;
+}
+
+html.km-mode-full .data-table {
+  font-size: 13px;
+}
+
+html.km-mode-full .data-table th,
+html.km-mode-full .data-table td {
+  padding: 10px 12px;
+}
+
+html.km-mode-full .tab-nav {
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+html.km-mode-full .tab-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+}

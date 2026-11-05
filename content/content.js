@@ -558,12 +558,21 @@
       packState
     );
 
+    const { kmWishlist = [] } = await chrome.storage.local.get("kmWishlist");
+    const wishlistMap = new Map((Array.isArray(kmWishlist) ? kmWishlist : []).map((w) => [Number(w.characterId), w]));
+    const dailyWishlistSuggestions = Analytics.generateDailyWishlist(
+      catalogById,
+      ownedSet,
+      runtimeCache.collectionPrices,
+      20
+    );
+
     let deals = [];
     let trades = [];
     if (scanMarketDeals) {
       const [dealsRes, tradesRes] = await Promise.all([
-        scanMarketDealsInternal(ownedSet),
-        scanProfitableTrades(ownedSet, evaluatedDuplicates)
+        scanMarketDealsInternal(ownedSet, wishlistMap, me?.chakra ?? 0),
+        scanProfitableTrades(ownedSet, evaluatedDuplicates, wishlistMap)
       ]);
       deals = dealsRes;
       trades = tradesRes;
@@ -617,6 +626,8 @@
       boosters: boosterRankings,
       deals: deals.slice(0, 50),
       trades: trades.slice(0, 30),
+      wishlist: Array.isArray(kmWishlist) ? kmWishlist : [],
+      wishlistSuggestions: dailyWishlistSuggestions,
       claimableMissions: progress?.claimable ?? 0
     };
 
@@ -626,9 +637,9 @@
   }
 
   /**
-   * Scan market listings (`newest` + `price_asc`) to find profitable flips and missing cards.
+   * Scan market listings (`newest` + `price_asc`) to find profitable flips, missing cards, and wishlist matches.
    */
-  async function scanMarketDealsInternal(ownedSet) {
+  async function scanMarketDealsInternal(ownedSet, wishlistMap = new Map(), userChakra = 0) {
     const [newestPage, cheapPage] = await Promise.all([
       kyaraApi("/market/listings?sort=newest&pageSize=50&page=1", { auth: true }).catch(() => ({ items: [] })),
       kyaraApi("/market/listings?type=fixed&sort=price_asc&pageSize=50&page=1", { auth: true }).catch(() => ({
@@ -643,17 +654,40 @@
     ];
 
     const deals = [];
+    const minReserve = Math.max(0, Number(currentSettings.autoBuyMinChakraReserve ?? 500));
+
     for (const item of combined) {
       if (!item?.id || seen.has(item.id)) continue;
       seen.add(item.id);
+
+      const charId = Number(item.character?.id ?? item.characterId);
       const deal = Analytics.evaluateDeal(item, ownedSet, currentSettings);
       if (!deal) continue;
-      if (deal.isGoodFlip || deal.isGoodMissingBuy || (deal.discountPct && deal.discountPct >= 15)) {
+
+      // Croisement Wishlist (Mes envies)
+      if (wishlistMap && wishlistMap.has(charId)) {
+        const wish = wishlistMap.get(charId);
+        const match = Analytics.evaluateWishlistMatch(wish, item, userChakra, minReserve);
+        if (match) {
+          deal.isWishlistMatch = true;
+          deal.wishlistMatch = match;
+          if (match.shouldAutoBuy && currentSettings.wishlistAutoBuyEnabled) {
+            deal.autoBuyWish = true;
+          }
+        }
+      }
+
+      if (deal.isWishlistMatch || deal.isGoodFlip || deal.isGoodMissingBuy || (deal.discountPct && deal.discountPct >= 15)) {
         deals.push(deal);
       }
     }
 
     deals.sort((a, b) => {
+      // Priorité 1 : Cartes convoitées de la Wishlist sous budget
+      if (Number(Boolean(b.isWishlistMatch)) !== Number(Boolean(a.isWishlistMatch))) {
+        return Number(Boolean(b.isWishlistMatch)) - Number(Boolean(a.isWishlistMatch));
+      }
+      // Priorité 2 : Flips rentables
       if (Number(b.isGoodFlip) !== Number(a.isGoodFlip)) return Number(b.isGoodFlip) - Number(a.isGoodFlip);
       return (b.flipProfit ?? -9999) - (a.flipProfit ?? -9999);
     });
@@ -662,7 +696,7 @@
   }
 
   let previousTradesCount = 0;
-  async function scanProfitableTrades(ownedSet, duplicateEntries) {
+  async function scanProfitableTrades(ownedSet, duplicateEntries, wishlistMap = new Map()) {
     try {
       const res =
         (await kyaraApi("/market/listings?type=trade&pageSize=40&page=1", { auth: true }).catch(() => null)) ||
@@ -699,18 +733,21 @@
         const offeredPrice = runtimeCache.collectionPrices.get(offeredId)?.median7d || 0;
         const myPrice = runtimeCache.collectionPrices.get(wantedId)?.median7d || 0;
         const isMissing = ownedSet ? !ownedSet.has(offeredId) : false;
+        const isWish = wishlistMap && wishlistMap.has(offeredId);
         const profit = offeredPrice - myPrice;
 
-        if (profit >= 3 || (isMissing && profit >= -5)) {
+        if (isWish || profit >= 3 || (isMissing && profit >= -5)) {
           profitable.push({
             id: item.id,
             seller: item.seller?.pseudo || "?",
+            isWish: Boolean(isWish),
             offered: {
               id: offeredId,
               name: offeredChar.name || `Carte #${offeredId}`,
               rarity: offeredChar.rarity || "C",
               median7d: offeredPrice,
-              isMissing
+              isMissing,
+              isWish: Boolean(isWish)
             },
             wanted: {
               id: wantedId,
@@ -724,11 +761,16 @@
         }
       }
 
+      profitable.sort((a, b) => {
+        if (Number(b.isWish) !== Number(a.isWish)) return Number(b.isWish) - Number(a.isWish);
+        return b.profit - a.profit;
+      });
+
       if (profitable.length > previousTradesCount && profitable.length > 0) {
         const top = profitable[0];
         notifyDesktop(
-          "Échange rentable disponible !",
-          `Donne ${top.wanted.name} (${top.wanted.median7d} ◆) contre ${top.offered.name} (${top.offered.median7d} ◆) · Gain +${top.profit} ◆`,
+          top.isWish ? "Échange pour carte de vos envies !" : "Échange rentable disponible !",
+          `Donne ${top.wanted.name} (${top.wanted.median7d} ◆) contre ${top.offered.name} (${top.offered.median7d} ◆) ${top.isWish ? "★ Dans vos envies !" : `· Gain +${top.profit} ◆`}`,
           "km-trade"
         );
       }
@@ -919,21 +961,18 @@
         kyaraApi(`/market/prices/${cand.characterId}`, { auth: false }).catch(() => null)
       ]);
 
-      const activeComp = (Array.isArray(liveListingsRes?.items) ? liveListingsRes.items : []).filter(
-        (item) => item.status === "active" && (!item.endsAt || Date.parse(item.endsAt) > Date.now())
-      );
-      const lowestFixed =
-        activeComp.length > 0 ? Math.min(...activeComp.map((i) => Number(i.price) || Infinity)) : null;
-      const highestFixed = activeComp.length > 0 ? Math.max(...activeComp.map((i) => Number(i.price) || 0)) : null;
+      const refMedian = livePricesRes?.median7d ?? cand.median7d;
+      const liveDepth = Analytics.computeLiveMarketDepth(liveListingsRes?.items, refMedian);
       const orders = Array.isArray(liveOrdersRes) ? liveOrdersRes : [];
       const bestBuyOrder = orders.length > 0 ? Math.max(...orders.map((o) => Number(o.price) || 0)) : null;
 
       const liveStats = {
-        median7d: livePricesRes?.median7d ?? cand.median7d,
+        median7d: refMedian,
         median30d: livePricesRes?.median30d ?? cand.median30d,
         sales7d: livePricesRes?.sales7d ?? cand.sales7d,
-        lowestFixed: Number.isFinite(lowestFixed) ? lowestFixed : null,
-        highestFixed: Number.isFinite(highestFixed) && highestFixed > 0 ? highestFixed : null,
+        liveDepth,
+        lowestFixed: liveDepth.lowestFixed,
+        highestFixed: liveDepth.highestFixed,
         bestBuyOrder: Number.isFinite(bestBuyOrder) && bestBuyOrder > 0 ? bestBuyOrder : null
       };
 
@@ -945,6 +984,17 @@
         currentSettings,
         cand.activeListedQty
       );
+
+      if (reevaluated.verdict === "RECYCLER") {
+        if (currentSettings.autoSellTurboLiquidity !== false) {
+          try {
+            await kyaraApi(`/me/collection/${cand.characterId}/recycle`, { method: "POST", body: { qty: 1 } });
+            await recordCumulativeMetric({ chakraFromRecycle: cand.recycleValue, cardsRecycled: 1 });
+            await appendJournal("recycle", `Recyclage Turbo direct : ${cand.name} (+${cand.recycleValue} ◆) car rentabilité de vente trop faible`);
+          } catch {}
+        }
+        continue;
+      }
 
       if (reevaluated.verdict !== "VENDRE") {
         continue;
@@ -1007,10 +1057,10 @@
   }
 
   /**
-   * 3. AUTO-ACHAT / FLIP : Automatically buy underpriced market deals.
+   * 3. AUTO-ACHAT / FLIP / WISHLIST : Automatically buy underpriced market deals and wanted wishlist cards.
    */
   async function executeAutoBuy(dashboard) {
-    if (!currentSettings.autoBuyFlipEnabled && !currentSettings.autoBuyMissingEnabled) {
+    if (!currentSettings.autoBuyFlipEnabled && !currentSettings.autoBuyMissingEnabled && !currentSettings.wishlistAutoBuyEnabled) {
       return { boughtCount: 0 };
     }
 
@@ -1020,7 +1070,10 @@
       if (e.qty > 0) ownedSet.add(Number(e.characterId));
     }
 
-    const deals = await scanMarketDealsInternal(ownedSet);
+    const { kmWishlist = [] } = await chrome.storage.local.get("kmWishlist");
+    const wishlistMap = new Map((Array.isArray(kmWishlist) ? kmWishlist : []).map((w) => [Number(w.characterId), w]));
+
+    const deals = await scanMarketDealsInternal(ownedSet, wishlistMap, Number(dashboard?.me?.chakra ?? 0));
     let currentChakra = Number(dashboard?.me?.chakra ?? 0);
     const minReserve = Math.max(0, Number(currentSettings.autoBuyMinChakraReserve ?? 500));
     let boughtCount = 0;
@@ -1029,7 +1082,8 @@
       const shouldBuyFlip = currentSettings.autoBuyFlipEnabled && deal.isGoodFlip;
       const shouldBuyMissing =
         currentSettings.autoBuyMissingEnabled && deal.isGoodMissingBuy && !ownedSet.has(deal.characterId);
-      if (!shouldBuyFlip && !shouldBuyMissing) continue;
+      const shouldBuyWish = currentSettings.wishlistAutoBuyEnabled && deal.autoBuyWish;
+      if (!shouldBuyFlip && !shouldBuyMissing && !shouldBuyWish) continue;
 
       if (currentChakra - deal.buyPrice < minReserve) {
         continue;
@@ -1047,7 +1101,7 @@
           await appendJournal(
             "buy",
             `[SIMULATION] Achèterait ${deal.name} [${deal.rarity}] à ${freshPrice} ◆ (${
-              shouldBuyFlip ? `Flip net +${deal.flipProfit} ◆` : "Carte manquante"
+              shouldBuyWish ? "Envie de collection" : shouldBuyFlip ? `Flip net +${deal.flipProfit} ◆` : "Carte manquante"
             })`
           );
           continue;
@@ -1060,12 +1114,14 @@
         boughtCount += 1;
         currentChakra = Number(buyRes?.user?.chakra ?? currentChakra - freshPrice);
         ownedSet.add(deal.characterId);
-        const reasonTag = shouldBuyFlip
-          ? `Flip : revente cible ~${deal.targetResalePrice} ◆ (net +${deal.flipProfit} ◆, -${deal.discountPct}%)`
-          : `Nouvelle carte pour la collection (médiane ${deal.refMedian ?? "?"} ◆)`;
+        const reasonTag = shouldBuyWish
+          ? `Envie de collection (budget max : ${deal.wishlistMatch?.maxBudget} ◆)`
+          : shouldBuyFlip
+            ? `Flip : revente cible ~${deal.targetResalePrice} ◆ (net +${deal.flipProfit} ◆, -${deal.discountPct}%)`
+            : `Nouvelle carte pour la collection (médiane ${deal.refMedian ?? "?"} ◆)`;
         await appendJournal("buy", `Achat auto : ${deal.name} [${deal.rarity}] pour ${freshPrice} ◆ · ${reasonTag}`);
         notifyDesktop(
-          "Bon plan acheté !",
+          shouldBuyWish ? "Carte de vos envies achetée !" : "Bon plan acheté !",
           `${deal.name} [${deal.rarity}] achetée à ${freshPrice} ◆ (${reasonTag})`,
           "km-buy"
         );
@@ -1967,6 +2023,76 @@
           const openRes = await pilotLiveBoosterOpening(packId, packName, Number(count) || 1);
           const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
           sendResponse({ ok: true, openRes, dashboard });
+          return;
+        }
+
+        if (message.type === "km:cmd:bulk-recycle") {
+          const { maxNetGain = 4, excludeRarities = ["L", "M"] } = message;
+          const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+          const candidates = (dashboard.duplicates || []).filter((d) => {
+            if (d.pinned || d.spare <= 0) return false;
+            if (excludeRarities.includes(d.rarity)) return false;
+            return d.verdict === "RECYCLER" || (d.fees?.netGainOverRecycle <= maxNetGain && (d.rarity === "C" || d.rarity === "U"));
+          });
+
+          let totalRecycled = 0;
+          let totalChakra = 0;
+          for (const item of candidates) {
+            try {
+              const res = await kyaraApi(`/me/collection/${item.characterId}/recycle`, {
+                method: "POST",
+                body: { qty: item.spare }
+              });
+              const gained = Number(res?.gained ?? item.spare * item.recycleValue);
+              totalRecycled += item.spare;
+              totalChakra += gained;
+              await recordCumulativeMetric({ chakraFromRecycle: gained, cardsRecycled: item.spare });
+              await sleep(250);
+            } catch (err) {
+              console.warn(`[KyaraManager] Erreur recyclage groupé sur ${item.name}:`, err);
+            }
+          }
+
+          await appendJournal("recycle", `Recyclage Turbo groupé terminé : ${totalRecycled} carte(s) recyclée(s) (+${totalChakra} ◆ générés)`);
+          const updated = await refreshDashboardSnapshot({ forcePrices: false });
+          sendResponse({ ok: true, totalRecycled, totalChakra, dashboard: updated });
+          return;
+        }
+
+        if (message.type === "km:cmd:wishlist-add") {
+          const { characterId, name, series, rarity, maxBudget, autoBuy } = message;
+          const { kmWishlist = [] } = await chrome.storage.local.get("kmWishlist");
+          const list = Array.isArray(kmWishlist) ? [...kmWishlist] : [];
+          const idx = list.findIndex((w) => Number(w.characterId) === Number(characterId));
+          const item = {
+            characterId: Number(characterId),
+            name: name || `Carte #${characterId}`,
+            series: series || "",
+            rarity: rarity || "C",
+            maxBudget: Number(maxBudget) || 30,
+            autoBuy: Boolean(autoBuy),
+            addedAt: Date.now()
+          };
+          if (idx >= 0) {
+            list[idx] = item;
+          } else {
+            list.push(item);
+          }
+          await chrome.storage.local.set({ kmWishlist: list });
+          await appendJournal("info", `Envie ajoutée : ${item.name} (Budget max : ${item.maxBudget} ◆)`);
+          const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+          sendResponse({ ok: true, wishlist: list, dashboard });
+          return;
+        }
+
+        if (message.type === "km:cmd:wishlist-remove") {
+          const charId = Number(message.characterId);
+          const { kmWishlist = [] } = await chrome.storage.local.get("kmWishlist");
+          const list = (Array.isArray(kmWishlist) ? kmWishlist : []).filter((w) => Number(w.characterId) !== charId);
+          await chrome.storage.local.set({ kmWishlist: list });
+          await appendJournal("info", `Envie retirée : Carte #${charId}`);
+          const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+          sendResponse({ ok: true, wishlist: list, dashboard });
           return;
         }
 

@@ -23,6 +23,7 @@
     startedAt: Date.now()
   };
   let currentPinnedCards = new Set();
+  let currentWishlist = [];
   let toastTimeout = null;
 
   function showToast(text) {
@@ -70,6 +71,9 @@
     // Header & Brand
     setText("#btn-refresh span", "refresh");
     setText("#btn-open-kyara", "openKyara");
+    setText("#btn-fullscreen span", "btnFullscreen");
+    const btnFs = document.getElementById("btn-fullscreen");
+    if (btnFs) btnFs.title = i18n.t("btnFullscreen");
     setText("#connection-banner-text", "connectionBannerText");
 
     // Tabs
@@ -77,6 +81,7 @@
       autopilot: "tabAutopilot",
       duplicates: "tabDuplicates",
       market: "tabMarket",
+      wishlist: "tabWishlist",
       boosters: "tabBoosters",
       settings: "tabSettings"
     };
@@ -200,6 +205,25 @@
       boosterThs[5].textContent = i18n.t("thLive");
     }
 
+    // Wishlist headers & tags
+    setText("#panel-wishlist .card__title", "wishlistTitle");
+    setText("#panel-wishlist .card__desc", "wishlistDesc");
+    const wishSearch = document.getElementById("wishlist-search-input");
+    if (wishSearch) wishSearch.placeholder = i18n.t("wishlistSearchPlaceholder");
+    const wishBudget = document.getElementById("wishlist-budget-input");
+    if (wishBudget) wishBudget.placeholder = i18n.t("wishlistBudgetLabel");
+    setText("#btn-add-wish span", "wishlistBtnAdd");
+    const wishThs = document.querySelectorAll(".data-table--wishlist thead th");
+    if (wishThs.length >= 5) {
+      wishThs[0].textContent = i18n.t("thWishCharacter");
+      wishThs[1].textContent = i18n.t("thWishFloor");
+      wishThs[2].textContent = i18n.t("thWishBudget");
+      wishThs[3].textContent = i18n.t("thWishStatus");
+      wishThs[4].textContent = i18n.t("thWishAction");
+    }
+    setText("#panel-wishlist .card--sub .card__title", "wishlistDailySuggestions");
+    setText("#turbo-liquidite-banner .turbo-banner__title", "turboBannerTitle");
+
     // Settings actions
     const btnSave = document.querySelector("#settings-form button[type='submit']");
     if (btnSave) btnSave.textContent = i18n.t("btnSaveSettings");
@@ -303,6 +327,10 @@
     setVal("cfg-min-net-gain", currentSettings.autoSellMinNetOverRecycle);
     setVal("cfg-sell-duration", currentSettings.autoSellDurationHours);
     setCheck("cfg-guardrail-70", Number(currentSettings.autoSellMedianFloorPct ?? 70) >= 70);
+    setCheck("cfg-crash-protection", currentSettings.autoSellCrashProtection !== false);
+    setCheck("cfg-turbo-liquidity", currentSettings.autoSellTurboLiquidity !== false);
+    setVal("cfg-turbo-max-net", currentSettings.autoSellTurboMaxNetProfit ?? 4);
+    setCheck("cfg-wishlist-autobuy", Boolean(currentSettings.wishlistAutoBuyEnabled));
     setCheck("cfg-velocity-check", currentSettings.autoSellVelocityFirst !== false);
     setCheck("cfg-relist-expired", Number(currentSettings.autoSellExpireHours ?? 12) > 0);
     setCheck("cfg-hold-surging", currentSettings.speculateHoldSurging !== false);
@@ -394,6 +422,10 @@
         autoSellMinNetOverRecycle: Math.max(1, Number(document.getElementById("cfg-min-net-gain").value) || 2),
         autoSellDurationHours: durationHours,
         autoSellMedianFloorPct: guardrailOn ? 70 : 30,
+        autoSellCrashProtection: document.getElementById("cfg-crash-protection")?.checked !== false,
+        autoSellTurboLiquidity: document.getElementById("cfg-turbo-liquidity")?.checked !== false,
+        autoSellTurboMaxNetProfit: Math.max(1, Number(document.getElementById("cfg-turbo-max-net")?.value) || 4),
+        wishlistAutoBuyEnabled: Boolean(document.getElementById("cfg-wishlist-autobuy")?.checked),
         autoSellVelocityFirst: document.getElementById("cfg-velocity-check")?.checked !== false,
         autoSellExpireHours: expireOn ? durationHours : 0,
         speculateHoldSurging: document.getElementById("cfg-hold-surging")?.checked !== false,
@@ -583,6 +615,7 @@
 
     await renderDuplicatesTab(allDuplicates, stats, activeListings, maxSlots);
     await renderMarketTab(deals);
+    await renderWishlistTab(wishlist, currentDashboard.wishlistSuggestions || []);
     renderBoostersTab(currentDashboard.boosters);
   }
 
@@ -593,6 +626,26 @@
     document.getElementById("dup-summary-recycle").textContent = `${i18n.t("copiesCount", {
       n: stats.recyclableDuplicatesCount ?? 0
     })} · ${formatChakra(stats.recyclableChakraTotal ?? 0)}`;
+
+    // Turbo Liquidity Banner check (désengorgement de la file)
+    const turboCandidates = allDuplicates.filter(
+      (d) => d.verdict === "RECYCLER" && !d.pinned && !currentPinnedCards.has(d.characterId)
+    );
+    const turboCopies = turboCandidates.reduce((acc, c) => acc + (c.spare || 1), 0);
+    const turboChakra = turboCandidates.reduce((acc, c) => acc + (c.spare || 1) * (c.recycleValue || 1), 0);
+    const bannerTurbo = document.getElementById("turbo-liquidite-banner");
+    if (bannerTurbo) {
+      const showTurbo = (currentSettings.autoSellTurboLiquidity !== false) && turboCopies > 0;
+      bannerTurbo.hidden = !showTurbo;
+      if (showTurbo) {
+        const descEl = document.getElementById("turbo-banner-text");
+        if (descEl) descEl.textContent = i18n.t("turboBannerDesc", { n: turboCopies });
+        const btnBulkLabel = document.getElementById("btn-bulk-recycle-label");
+        if (btnBulkLabel) {
+          btnBulkLabel.textContent = i18n.t("btnBulkRecycle", { n: turboCopies, chakra: formatChakra(turboChakra) });
+        }
+      }
+    }
 
     const query = (document.getElementById("dup-search")?.value || "").trim().toLowerCase();
     const filter = document.getElementById("dup-filter")?.value || "ALL";
@@ -637,6 +690,8 @@
         const netProc = d.fees?.netProceeds ?? 0;
         const recUnit = d.recycleValue ?? 1;
         const probText = d.saleProb?.label ? `24h: ${d.saleProb.p24h}% (${d.saleProb.label})` : "";
+        const p = d.pedagogy || {};
+
         rows.push(`<tr>
           <td>
             <span class="rarity-pill rarity-pill--${escapeHtml(d.rarity)}">${escapeHtml(d.rarity)}</span>
@@ -658,8 +713,9 @@
             <span class="sub-meta">Total ${recUnit * d.spare} ◆</span>
           </td>
           <td>
-            <div>
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
               <span class="verdict-badge ${badgeClass}">${escapeHtml(verdictText)}</span>
+              <button type="button" class="btn-pedagogy-toggle" data-action="toggle-pedagogy" data-id="${d.characterId}" title="Détails de l'analyse">ℹ️</button>
               ${
                 isSell
                   ? `<button type="button" class="btn btn--primary btn--xs" data-action="sell-one" data-id="${d.characterId}" data-price="${recPrice}">${escapeHtml(i18n.t("btnSell"))}</button>`
@@ -679,6 +735,23 @@
             <button type="button" class="btn-pin ${isPinned ? "is-pinned" : ""}" data-action="toggle-pin" data-id="${d.characterId}" title="${escapeHtml(
               isPinned ? i18n.t("pinTooltipUnprotect") : i18n.t("pinTooltipProtect")
             )}">${isPinned ? "🔒" : "🔓"}</button>
+          </td>
+        </tr>
+        <tr class="pedagogy-row" id="pedagogy-${d.characterId}" hidden>
+          <td colspan="7">
+            <div class="pedagogy-card">
+              <div class="pedagogy-card__title">
+                <span>${escapeHtml(p.title || d.name)}</span>
+                ${p.isCrash ? `<span class="badge-crash">🚨 Chute du marché (-${p.crashDiscountPct}%)</span>` : ""}
+              </div>
+              <p class="pedagogy-card__why">${escapeHtml(p.why || d.verdictReason || "")}</p>
+              <div class="pedagogy-card__row">
+                <span>⏱️ <strong>Délai estimé :</strong> ${escapeHtml(p.delayEstimate || "12h-24h")}</span> ·
+                <span>💰 <strong>Gain net :</strong> ${escapeHtml(p.gainAnalysis || `${netProc} ◆ net vs ${recUnit * d.spare} ◆ recyclage`)}</span> ·
+                <span>👥 <strong>Concurrence :</strong> ${escapeHtml(p.competition || "Normale")}</span>
+                ${p.hourlyExpectedChakra ? ` · <span>⚡ <strong>Rendement :</strong> ~${p.hourlyExpectedChakra} ◆/h</span>` : ""}
+              </div>
+            </div>
           </td>
         </tr>`);
       }
@@ -802,6 +875,214 @@
     }
   }
 
+  async function renderWishlistTab(wishlist, suggestions) {
+    const list = Array.isArray(wishlist) ? wishlist : [];
+    const tbody = document.getElementById("wishlist-tbody");
+    const badge = document.getElementById("badge-wishlist");
+    if (badge) badge.textContent = String(list.length);
+
+    if (tbody) {
+      if (list.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="5" class="empty-cell">${escapeHtml(i18n.t("wishlistEmpty"))}</td></tr>`;
+      } else {
+        const rows = list.map((item) => {
+          const hasPrice = Number.isFinite(item.lowestMarketPrice) && item.lowestMarketPrice > 0;
+          const hasBudget = Number.isFinite(item.budgetChakra) && item.budgetChakra > 0;
+          let statusBadge = "";
+          let canBuy = false;
+
+          if (hasPrice) {
+            if (!hasBudget || item.lowestMarketPrice <= item.budgetChakra) {
+              statusBadge = `<span class="verdict-badge verdict-badge--sell">${escapeHtml(i18n.t("wishStatusAvailable") || "Disponible !")}</span>`;
+              canBuy = Boolean(item.bestListingId);
+            } else {
+              statusBadge = `<span class="verdict-badge verdict-badge--hold">${escapeHtml(i18n.t("wishStatusTooExpensive") || "Trop cher")}</span>`;
+            }
+          } else {
+            statusBadge = `<span class="verdict-badge">${escapeHtml(i18n.t("wishStatusNoOffers") || "Aucune offre")}</span>`;
+          }
+
+          return `<tr>
+            <td>
+              <span class="rarity-pill rarity-pill--${escapeHtml(item.rarity || 'C')}">${escapeHtml(item.rarity || '?')}</span>
+              <strong>${escapeHtml(item.name || `#${item.characterId}`)}</strong>
+              ${item.series ? `<span class="sub-meta">${escapeHtml(item.series)}</span>` : ""}
+            </td>
+            <td class="num">${hasPrice ? `<strong>${item.lowestMarketPrice} ◆</strong>` : `<span style="color:var(--mut);">—</span>`}</td>
+            <td class="num">${hasBudget ? `${item.budgetChakra} ◆` : `<span style="color:var(--mut);">Illimité</span>`}</td>
+            <td>${statusBadge}</td>
+            <td>
+              <div style="display:flex; gap:6px; align-items:center;">
+                ${canBuy ? `<button type="button" class="btn btn--primary btn--xs" data-action="buy-deal" data-id="${escapeHtml(item.bestListingId)}" data-price="${item.lowestMarketPrice}" data-name="${escapeHtml(item.name)}">${escapeHtml(i18n.t("btnBuy"))}</button>` : ""}
+                <button type="button" class="btn btn--ghost btn--xs" data-action="remove-wish" data-id="${item.characterId}" title="Retirer des envies">✕</button>
+              </div>
+            </td>
+          </tr>`;
+        });
+        tbody.innerHTML = rows.join("");
+      }
+    }
+
+    // Render suggestions
+    const suggList = Array.isArray(suggestions) ? suggestions : [];
+    const countEl = document.getElementById("wishlist-suggestions-count");
+    if (countEl) countEl.textContent = String(suggList.length);
+    const gridEl = document.getElementById("wishlist-suggestions-list");
+    if (gridEl) {
+      if (suggList.length === 0) {
+        gridEl.innerHTML = `<p class="empty-cell" style="padding: 10px; font-size: 11.5px;">Toutes vos séries avancées sont complètes ou en cours d'analyse !</p>`;
+      } else {
+        gridEl.innerHTML = suggList.map((s) => `
+          <div class="wishlist-suggestion-card">
+            <div class="wishlist-suggestion-card__header">
+              <div>
+                <span class="rarity-pill rarity-pill--${escapeHtml(s.rarity || 'C')}">${escapeHtml(s.rarity || '?')}</span>
+                <strong>${escapeHtml(s.name)}</strong>
+              </div>
+              <span class="mono-badge">${s.completionPct}% série</span>
+            </div>
+            <div class="wishlist-suggestion-card__meta">
+              <span>Série : ${escapeHtml(s.series || "—")}</span>
+              <span>Cote : ~${s.refMedian ? `${s.refMedian} ◆` : "—"}</span>
+            </div>
+            <button type="button" class="btn btn--ghost btn--xs" data-action="add-suggestion" data-id="${s.characterId}" data-name="${escapeHtml(s.name)}" data-series="${escapeHtml(s.series || "")}" data-rarity="${escapeHtml(s.rarity || "")}" data-median="${s.refMedian || 50}" style="margin-top:6px; width:100%;">
+              + Ajouter aux envies
+            </button>
+          </div>
+        `).join("");
+      }
+    }
+  }
+
+  function setupWishlistAutocomplete() {
+    const searchInput = document.getElementById("wishlist-search-input");
+    const budgetInput = document.getElementById("wishlist-budget-input");
+    const autoBox = document.getElementById("wishlist-autocomplete");
+    const btnAdd = document.getElementById("btn-add-wish");
+
+    if (!searchInput || !autoBox) return;
+
+    let selectedCharacter = null;
+
+    searchInput.addEventListener("input", () => {
+      const q = (searchInput.value || "").trim().toLowerCase();
+      selectedCharacter = null;
+      if (q.length < 2) {
+        autoBox.hidden = true;
+        autoBox.innerHTML = "";
+        return;
+      }
+
+      const pool = new Map();
+      const addPool = (arr) => {
+        if (!Array.isArray(arr)) return;
+        for (const item of arr) {
+          const id = Number(item.characterId || item.id);
+          const name = item.name || item.characterName;
+          if (id && name && !pool.has(id)) {
+            pool.set(id, {
+              characterId: id,
+              name,
+              series: item.series || "",
+              rarity: item.rarity || "C",
+              refMedian: item.referenceMedian || item.refMedian || item.median7d || 50
+            });
+          }
+        }
+      };
+
+      addPool(currentDashboard?.duplicates);
+      addPool(currentDashboard?.wishlistSuggestions);
+      addPool(currentDashboard?.deals);
+
+      const matches = Array.from(pool.values()).filter((c) =>
+        c.name.toLowerCase().includes(q) || c.series.toLowerCase().includes(q)
+      ).slice(0, 8);
+
+      if (matches.length === 0) {
+        autoBox.innerHTML = `<div class="wishlist-autocomplete__item" style="color:var(--mut);">Appuyez sur "+ Ajouter" pour ajouter "${escapeHtml(searchInput.value.trim())}"</div>`;
+        autoBox.hidden = false;
+        return;
+      }
+
+      autoBox.innerHTML = matches.map((m) => `
+        <div class="wishlist-autocomplete__item" data-id="${m.characterId}" data-name="${escapeHtml(m.name)}" data-series="${escapeHtml(m.series)}" data-rarity="${escapeHtml(m.rarity)}" data-median="${m.refMedian}">
+          <span class="rarity-pill rarity-pill--${escapeHtml(m.rarity)}">${escapeHtml(m.rarity)}</span>
+          <strong>${escapeHtml(m.name)}</strong>
+          <span style="color:var(--mut); font-size:11px;">(${escapeHtml(m.series || "—")}) · ~${m.refMedian} ◆</span>
+        </div>
+      `).join("");
+      autoBox.hidden = false;
+    });
+
+    autoBox.addEventListener("click", (e) => {
+      const item = e.target.closest(".wishlist-autocomplete__item");
+      if (!item || !item.dataset.id) return;
+      selectedCharacter = {
+        characterId: Number(item.dataset.id),
+        name: item.dataset.name,
+        series: item.dataset.series,
+        rarity: item.dataset.rarity,
+        budgetChakra: Number(item.dataset.median) || 50
+      };
+      searchInput.value = selectedCharacter.name;
+      if (budgetInput && !budgetInput.value) {
+        budgetInput.value = selectedCharacter.budgetChakra;
+      }
+      autoBox.hidden = true;
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".wishlist-add-bar") && !e.target.closest("#wishlist-autocomplete")) {
+        autoBox.hidden = true;
+      }
+    });
+
+    btnAdd?.addEventListener("click", async () => {
+      const name = (searchInput.value || "").trim();
+      if (!name) {
+        showToast("Veuillez saisir un nom de personnage");
+        return;
+      }
+      const budgetChakra = Number(budgetInput?.value) || 0;
+      const characterId = selectedCharacter?.characterId || Math.abs(hashString(name));
+      const series = selectedCharacter?.series || "";
+      const rarity = selectedCharacter?.rarity || "C";
+
+      const res = await sendCmd({
+        type: "km:cmd:wishlist-add",
+        characterId,
+        name,
+        series,
+        rarity,
+        budgetChakra
+      });
+
+      if (res?.ok) {
+        showToast(i18n.t("toastWishAdded", { name }) || `${name} ajouté aux envies !`);
+        searchInput.value = "";
+        if (budgetInput) budgetInput.value = "";
+        selectedCharacter = null;
+        if (res.wishlist) {
+          currentWishlist = res.wishlist;
+          if (currentDashboard) currentDashboard.wishlist = res.wishlist;
+          await renderWishlistTab(currentWishlist, currentDashboard?.wishlistSuggestions || []);
+        }
+      } else {
+        showToast(res?.error || "Erreur d'ajout");
+      }
+    });
+  }
+
+  function hashString(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
+  }
+
   function renderBoostersTab(boosters) {
     if (!boosters) return;
 
@@ -886,6 +1167,27 @@
   function setupActionsAndDelegation() {
     document.getElementById("btn-open-kyara")?.addEventListener("click", () => {
       void sendCmd({ type: "km:open-kyara-tab" });
+    });
+
+    document.getElementById("btn-fullscreen")?.addEventListener("click", () => {
+      chrome.tabs.create({ url: chrome.runtime.getURL("sidepanel/sidepanel.html?mode=full") });
+    });
+
+    document.getElementById("btn-bulk-recycle")?.addEventListener("click", async () => {
+      showToast("Recyclage Turbo Liquidité en cours…");
+      const res = await sendCmd({ type: "km:cmd:bulk-recycle" });
+      if (res?.ok) {
+        showToast(
+          i18n.t("toastBulkRecycleDone", { count: res.recycledCount, chakra: res.chakraGained }) ||
+          `${res.recycledCount} cartes recyclées (+${res.chakraGained} ◆)`
+        );
+        if (res.dashboard) {
+          currentDashboard = res.dashboard;
+          await renderDashboard();
+        }
+      } else {
+        showToast(res?.error || "Erreur de recyclage");
+      }
     });
 
     document.getElementById("btn-refresh")?.addEventListener("click", async () => {
@@ -1127,6 +1429,54 @@
             await renderDashboard();
           }
         }
+      } else if (action === "toggle-pedagogy") {
+        const charId = btn.dataset.id;
+        const row = document.getElementById(`pedagogy-${charId}`);
+        if (row) {
+          row.hidden = !row.hidden;
+          btn.classList.toggle("is-active", !row.hidden);
+        }
+      } else if (action === "remove-wish") {
+        const characterId = Number(btn.dataset.id);
+        btn.disabled = true;
+        const res = await sendCmd({ type: "km:cmd:wishlist-remove", characterId });
+        btn.disabled = false;
+        if (res?.ok) {
+          showToast(i18n.t("toastWishRemoved") || "Retiré des envies");
+          if (res.wishlist) {
+            currentWishlist = res.wishlist;
+            if (currentDashboard) currentDashboard.wishlist = res.wishlist;
+            await renderWishlistTab(currentWishlist, currentDashboard?.wishlistSuggestions || []);
+          }
+        } else {
+          showToast(res?.error || "Erreur");
+        }
+      } else if (action === "add-suggestion") {
+        const characterId = Number(btn.dataset.id);
+        const name = btn.dataset.name || `Carte #${characterId}`;
+        const series = btn.dataset.series || "";
+        const rarity = btn.dataset.rarity || "C";
+        const budgetChakra = Number(btn.dataset.median) || 0;
+        btn.disabled = true;
+        const res = await sendCmd({
+          type: "km:cmd:wishlist-add",
+          characterId,
+          name,
+          series,
+          rarity,
+          budgetChakra
+        });
+        btn.disabled = false;
+        if (res?.ok) {
+          showToast(i18n.t("toastWishAdded", { name }) || `${name} ajouté aux envies !`);
+          if (res.wishlist) {
+            currentWishlist = res.wishlist;
+            if (currentDashboard) currentDashboard.wishlist = res.wishlist;
+            await renderWishlistTab(currentWishlist, currentDashboard?.wishlistSuggestions || []);
+          }
+        } else {
+          showToast(res?.error || "Erreur d'ajout");
+        }
       }
     });
   }
@@ -1144,6 +1494,13 @@
     if (changes.kmDashboard?.newValue) {
       currentDashboard = changes.kmDashboard.newValue;
       void renderDashboard();
+    }
+    if (changes.kmWishlist?.newValue) {
+      currentWishlist = Array.isArray(changes.kmWishlist.newValue) ? changes.kmWishlist.newValue : [];
+      if (currentDashboard) {
+        currentDashboard.wishlist = currentWishlist;
+      }
+      void renderWishlistTab(currentWishlist, currentDashboard?.wishlistSuggestions || []);
     }
     if (changes.kmJournal?.newValue) {
       currentJournal = changes.kmJournal.newValue;
@@ -1167,9 +1524,14 @@
   });
 
   (async () => {
+    if (window.location.search.includes("mode=full")) {
+      document.documentElement.classList.add("km-mode-full");
+    }
+
     setupTabs();
     setupQuickSwitches();
     setupSettingsForm();
+    setupWishlistAutocomplete();
     setupActionsAndDelegation();
 
     const stored = await chrome.storage.local.get([
@@ -1177,11 +1539,13 @@
       "kmDashboard",
       "kmJournal",
       "kmCumulativeStats",
-      "kmPinnedCards"
+      "kmPinnedCards",
+      "kmWishlist"
     ]);
     currentSettings = { ...Analytics.DEFAULT_SETTINGS, ...(stored.settings || {}) };
     currentDashboard = stored.kmDashboard || null;
     currentJournal = Array.isArray(stored.kmJournal) ? stored.kmJournal : [];
+    currentWishlist = Array.isArray(stored.kmWishlist) ? stored.kmWishlist : [];
     if (stored.kmCumulativeStats) {
       currentCumulativeStats = { ...currentCumulativeStats, ...stored.kmCumulativeStats };
     }
