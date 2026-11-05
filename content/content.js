@@ -1236,9 +1236,34 @@
         return await fallbackApiOpenBooster(packId, packName, requestedCount);
       }
 
+      // Fermer systématiquement toute boîte de dialogue / zoom de carte qui bloquerait la page
+      const openDialog = document.querySelector("dialog[open], .modal, .card-zoom");
+      if (openDialog) {
+        try { if (typeof openDialog.close === "function") openDialog.close(); } catch {}
+        window.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", code: "Escape", bubbles: true }));
+        await sleep(250);
+      }
+
+      // Si le bouton d'ouverture contient du Chakra (ex: sur la page de résumé où ×7 est présélectionné alors qu'il ne reste que 6 gratuits : "Open again ×7 6 free + 175 ◆"),
+      // basculer sur un multiplicateur inférieur (×1 ou ×5) pour ne dépenser STRICTEMENT 0 ◆
+      let btnText = (openBtn.innerText || "").trim();
+      let btnHtml = openBtn.innerHTML || "";
+      if (/◆|Chakra/i.test(btnText) || /◆|Chakra/i.test(btnHtml)) {
+        const multButtons = Array.from(document.querySelectorAll("button")).filter((b) => /^×\d+$/.test((b.innerText || "").trim()));
+        const safeMultiplier = multButtons.find((b) => (b.innerText || "").trim() === "×1") || multButtons[0];
+        if (safeMultiplier) {
+          safeMultiplier.click();
+          await sleep(300);
+          const refreshedOpen = Array.from(document.querySelectorAll("button")).find((b) =>
+            /Open again|Ouvrir à nouveau|Abrir de nuevo|Open Free|Ouvrir gratuit/i.test((b.innerText || "").trim())
+          );
+          if (refreshedOpen) openBtn = refreshedOpen;
+        }
+      }
+
       // --- SÉCURITÉ GARDE-FOU 0 ◆ (INTERDICTION ABSOLUE D'OUVRIR DU PAYANT) ---
-      const btnText = (openBtn.innerText || "").trim();
-      const btnHtml = openBtn.innerHTML || "";
+      btnText = (openBtn.innerText || "").trim();
+      btnHtml = openBtn.innerHTML || "";
       const isExplicitlyFree =
         /Free|Gratuit|Gratis/i.test(btnText) ||
         /Free|Gratuit|Gratis/i.test(btnHtml) ||
@@ -1295,6 +1320,16 @@
       while (Date.now() - revealStart < 55000) {
         if (document.querySelector(".summary")) {
           break;
+        }
+
+        // Si le bouton officiel "Reveal all" est disponible, l'actionner immédiatement pour afficher le tirage complet sans blocage
+        const revealAllBtn = Array.from(document.querySelectorAll("button")).find((b) =>
+          /Reveal all|Tout révéler|Revelar todo/i.test((b.innerText || "").trim())
+        );
+        if (revealAllBtn) {
+          revealAllBtn.click();
+          await sleep(600);
+          if (document.querySelector(".summary")) break;
         }
 
         // Si une modale de carte s'est ouverte ou est restée au premier plan, la fermer via Escape
