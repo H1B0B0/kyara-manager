@@ -6,14 +6,12 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const promoDir = path.join(rootDir, 'promo');
-const rawDir = path.join(promoDir, 'raw');
 const templatesDir = path.join(promoDir, 'templates');
 const brainDir = '/Users/etiennementrel/.gemini/antigravity/brain/b940700c-9447-4038-95e4-aaf2f3023806';
 const previewDir = path.join(brainDir, 'promo-preview');
 const aiBannerPath = path.join(brainDir, 'kyara_manager_promo_banner_1793817710243.jpg');
 
 fs.mkdirSync(promoDir, { recursive: true });
-fs.mkdirSync(rawDir, { recursive: true });
 fs.mkdirSync(templatesDir, { recursive: true });
 fs.mkdirSync(previewDir, { recursive: true });
 
@@ -23,8 +21,603 @@ if (!fs.existsSync(CHROME_PATH)) {
   process.exit(1);
 }
 
+// Common styles for all 5 promotional images (1280 x 800)
+function getBaseHtml({ badge, titlePrefix, titleHighlight, subtitle, features, rightCardHtml, glowColor = '#ff4d2e' }) {
+  return `<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@600;700;800&family=Unbounded:wght@700;800;900&family=Zen+Kaku+Gothic+New:wght@500;700;900&display=swap");
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    width: 1280px;
+    height: 800px;
+    background: #08070c;
+    overflow: hidden;
+    font-family: "Zen Kaku Gothic New", -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+    color: #edeae4;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 70px;
+  }
+
+  .bg-glow-1 {
+    position: absolute;
+    width: 600px;
+    height: 600px;
+    border-radius: 50%;
+    background: radial-gradient(circle, ${glowColor}33 0%, transparent 70%);
+    top: -150px;
+    left: 180px;
+    filter: blur(80px);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .bg-glow-2 {
+    position: absolute;
+    width: 500px;
+    height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(245, 197, 24, 0.14) 0%, transparent 70%);
+    bottom: -120px;
+    right: 120px;
+    filter: blur(90px);
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .bg-art {
+    position: absolute;
+    inset: 0;
+    background-image: url("file://${aiBannerPath}");
+    background-size: cover;
+    background-position: center right;
+    opacity: 0.16;
+    filter: saturate(1.2) contrast(1.1);
+    z-index: 1;
+  }
+  .bg-art::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(90deg, #08070c 0%, #08070c 45%, rgba(8,7,12,0.85) 70%, rgba(8,7,12,0.45) 100%);
+  }
+
+  /* Left Column */
+  .left-col {
+    position: relative;
+    z-index: 2;
+    max-width: 610px;
+    display: flex;
+    flex-direction: column;
+    gap: 22px;
+  }
+
+  .top-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 77, 46, 0.14);
+    border: 1px solid rgba(255, 77, 46, 0.45);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    font-weight: 800;
+    color: #ff4d2e;
+    letter-spacing: 0.8px;
+    width: fit-content;
+  }
+
+  .brand-title {
+    font-family: "Unbounded", sans-serif;
+    font-size: 40px;
+    font-weight: 900;
+    line-height: 1.15;
+    color: #ffffff;
+    letter-spacing: -0.5px;
+  }
+  .brand-title span {
+    background: linear-gradient(135deg, #f5c518 0%, #ff4d2e 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+
+  .brand-sub {
+    font-size: 15.5px;
+    line-height: 1.55;
+    color: #b7b2bf;
+    max-width: 560px;
+  }
+
+  .features-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    max-width: 580px;
+  }
+
+  .feat-card {
+    background: rgba(22, 20, 28, 0.85);
+    border: 1px solid #282434;
+    border-radius: 12px;
+    padding: 12px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    backdrop-filter: blur(12px);
+  }
+
+  .feat-icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    font-weight: 800;
+    flex-shrink: 0;
+  }
+
+  .feat-text {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .feat-title {
+    font-size: 13px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+  .feat-desc {
+    font-size: 11.5px;
+    color: #9d98a5;
+    line-height: 1.35;
+  }
+
+  .trust-bar {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    font-family: "JetBrains Mono", monospace;
+    font-size: 11px;
+    color: #8e8a98;
+    margin-top: 2px;
+  }
+  .trust-bar span {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  /* Right Column (Showcase Frame) */
+  .right-col {
+    position: relative;
+    z-index: 2;
+    width: 490px;
+  }
+
+  .showcase-frame {
+    background: #14131b;
+    border: 1px solid #2e2a3c;
+    border-radius: 20px;
+    box-shadow: 0 25px 60px rgba(0,0,0,0.85), 0 0 40px ${glowColor}2b;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .frame-header {
+    background: #1c1a24;
+    border-bottom: 1px solid #282434;
+    padding: 14px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .frame-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-family: "Unbounded", sans-serif;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #ffffff;
+  }
+
+  .frame-seal {
+    width: 28px;
+    height: 28px;
+    border-radius: 7px;
+    background: #ff4d2e;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 900;
+  }
+
+  .frame-body {
+    padding: 18px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+</style>
+</head>
+<body>
+  <div class="bg-art"></div>
+  <div class="bg-glow-1"></div>
+  <div class="bg-glow-2"></div>
+
+  <div class="left-col">
+    <div class="top-pill">${badge}</div>
+
+    <h1 class="brand-title">
+      ${titlePrefix}<br>
+      <span>${titleHighlight}</span>
+    </h1>
+
+    <p class="brand-sub">${subtitle}</p>
+
+    <div class="features-grid">
+      ${features.map(f => `
+      <div class="feat-card">
+        <div class="feat-icon" style="background: ${f.bg}; color: ${f.color};">${f.icon}</div>
+        <div class="feat-text">
+          <div class="feat-title">${f.title}</div>
+          <div class="feat-desc">${f.desc}</div>
+        </div>
+      </div>`).join('')}
+    </div>
+
+    <div class="trust-bar">
+      <span><strong style="color:#3fbf7f;">✓</strong> 100% Local (Manifest V3)</span>
+      <span><strong style="color:#3fbf7f;">✓</strong> Sécurité 0 Chakra</span>
+      <span><strong style="color:#3fbf7f;">✓</strong> kyara.games</span>
+    </div>
+  </div>
+
+  <div class="right-col">
+    <div class="showcase-frame">
+      <div class="frame-header">
+        <div class="frame-title">
+          <div class="frame-seal">操</div>
+          <span>KYARA MANAGER</span>
+        </div>
+        <span style="font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #3fbf7f; background: rgba(63,191,127,0.15); padding: 4px 8px; border-radius: 6px; font-weight: 700;">● ACTIF</span>
+      </div>
+
+      <div class="frame-body">
+        ${rightCardHtml}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
 // -------------------------------------------------------------------------
-// 1. MARQUEE HERO BANNER (1400 x 560)
+// SLIDE 1 : PILOTE AUTOMATIQUE & ROI
+// -------------------------------------------------------------------------
+const HTML_PROMO_1 = getBaseHtml({
+  badge: '★ MODULE 01 · GESTIONNAIRE COMPLET',
+  titlePrefix: 'Pilote Automatique',
+  titleHighlight: 'Pour Kyara.games',
+  subtitle: 'Automatisez vos routines de jeu en toute sécurité. Gagnez du temps et optimisez chaque session directement depuis le panneau latéral.',
+  features: [
+    { icon: '売', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Auto-Vente Optimisée', desc: 'Remplissage des 10 slots selon la cote 7j' },
+    { icon: '転', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Auto-Recyclage', desc: 'Recyclage immédiat des cartes sans valeur' },
+    { icon: '市', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Radar de Flips', desc: 'Détection des annonces sous-cotées' },
+    { icon: '操', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: 'Mini-HUD en jeu', desc: 'Suivi live discret en bas de page' },
+  ],
+  rightCardHtml: `
+    <div style="background:#191822; border:1px solid #282434; border-radius:14px; padding:16px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <span style="font-size:12px; font-weight:800; color:#edeae4;">📊 Tableau de bord des gains (ROI)</span>
+        <span style="font-size:10.5px; color:#8e8a98; font-family:'JetBrains Mono',monospace;">Session live</span>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px;">
+          <div style="font-size:10px; color:#8e8a98; font-family:'JetBrains Mono',monospace;">CHAKRA GÉNÉRÉ</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:800; color:#f5c518; margin-top:2px;">+1 240 ◆</div>
+        </div>
+        <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px;">
+          <div style="font-size:10px; color:#8e8a98; font-family:'JetBrains Mono',monospace;">VENTES MARCHÉ</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:800; color:#3fbf7f; margin-top:2px;">10 vendue(s)</div>
+        </div>
+        <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px;">
+          <div style="font-size:10px; color:#8e8a98; font-family:'JetBrains Mono',monospace;">RECYCLAGES</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:800; color:#edeae4; margin-top:2px;">14 cartes</div>
+        </div>
+        <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px;">
+          <div style="font-size:10px; color:#8e8a98; font-family:'JetBrains Mono',monospace;">BOOSTERS PRÊTS</div>
+          <div style="font-family:'JetBrains Mono',monospace; font-size:16px; font-weight:800; color:#ff4d2e; margin-top:2px;">10 / 10</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#191822; border:1px solid #282434; border-radius:12px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center;">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <span style="color:#f5c518; font-weight:800;">売</span>
+        <span style="font-size:12.5px; font-weight:700;">Auto-Vente des doublons (10 slots)</span>
+      </div>
+      <div style="width:36px; height:20px; background:#3fbf7f; border-radius:999px; position:relative;">
+        <span style="position:absolute; width:14px; height:14px; border-radius:50%; background:#fff; right:3px; top:3px;"></span>
+      </div>
+    </div>
+
+    <div style="background:#111016; border:1px solid #23202c; border-radius:10px; padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:11px; display:flex; flex-direction:column; gap:6px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="width:6px; height:6px; border-radius:50%; background:#3fbf7f;"></span>
+        <span style="color:#edeae4;">Carte vendue : Haruka Tenou pour 18 ◆ (net +16 ◆)</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="width:6px; height:6px; border-radius:50%; background:#4dd6ff;"></span>
+        <span style="color:#edeae4;">Flip détecté : Chelia Blendy (-48% sous la cote)</span>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        <span style="width:6px; height:6px; border-radius:50%; background:#f5c518;"></span>
+        <span style="color:#8e8a98;">Sécurité 0 Chakra : protection active</span>
+      </div>
+    </div>`
+});
+
+// -------------------------------------------------------------------------
+// SLIDE 2 : AUTO-VENTE DES DOUBLONS
+// -------------------------------------------------------------------------
+const HTML_PROMO_2 = getBaseHtml({
+  badge: '★ MODULE 02 · ARBITRAGE DES DOUBLONS',
+  titlePrefix: 'Vente Intelligente',
+  titleHighlight: 'Sans Jamais Brader',
+  subtitle: 'Calcul automatique des prix de vente basé sur les médianes réelles à 7 jours. Vos 10 emplacements sont toujours remplis au prix le plus rentable.',
+  glowColor: '#f5c518',
+  features: [
+    { icon: '📊', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Médiane Réelle 7j', desc: 'Analyse continue des transactions du marché' },
+    { icon: '🛡️', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: 'Garde-fou 70%', desc: 'Protection anti-crash pour ne pas casser les cours' },
+    { icon: '💰', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Taxes Déduites', desc: 'Calcul net exact (taxe 5% + 2% frais de dépôt)' },
+    { icon: '🔒', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Protection Collection', desc: 'Conserve toujours ≥1 exemplaire pour vos albums' },
+  ],
+  rightCardHtml: `
+    <div style="background:#191822; border:1px solid #282434; border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; font-weight:800; color:#edeae4;">💎 Cartes en surplus détectées</span>
+        <span style="font-size:11px; color:#f5c518; font-weight:700;">Conseil vente active</span>
+      </div>
+
+      <!-- Card row 1 -->
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:#1c3d5a; color:#4dd6ff; font-size:10px; font-weight:800; padding:1px 5px; border-radius:4px; font-family:'JetBrains Mono';">R</span>
+            <span style="font-size:13px; font-weight:700; color:#fff;">Haruka Tenou</span>
+            <span style="font-size:11px; color:#8e8a98;">(Surplus ×1)</span>
+          </div>
+          <div style="font-size:11px; color:#8e8a98; margin-top:3px; font-family:'JetBrains Mono';">Médiane 7j : 18 ◆ · Net : 16 ◆ · 24h: 99%</div>
+        </div>
+        <div style="background:#3fbf7f; color:#0b0a0f; font-size:11px; font-weight:800; padding:5px 12px; border-radius:6px; font-family:'JetBrains Mono';">VENDRE</div>
+      </div>
+
+      <!-- Card row 2 -->
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:#1c3d5a; color:#4dd6ff; font-size:10px; font-weight:800; padding:1px 5px; border-radius:4px; font-family:'JetBrains Mono';">R</span>
+            <span style="font-size:13px; font-weight:700; color:#fff;">Evileye</span>
+            <span style="font-size:11px; color:#8e8a98;">(Surplus ×1)</span>
+          </div>
+          <div style="font-size:11px; color:#8e8a98; margin-top:3px; font-family:'JetBrains Mono';">Médiane 7j : 7 ◆ · Net : 5 ◆ · 24h: 99%</div>
+        </div>
+        <div style="background:#3fbf7f; color:#0b0a0f; font-size:11px; font-weight:800; padding:5px 12px; border-radius:6px; font-family:'JetBrains Mono';">VENDRE</div>
+      </div>
+
+      <!-- Card row 3 (recycle) -->
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:#2a2834; color:#a8a3b0; font-size:10px; font-weight:800; padding:1px 5px; border-radius:4px; font-family:'JetBrains Mono';">C</span>
+            <span style="font-size:13px; font-weight:700; color:#fff;">Danzou Shimura</span>
+            <span style="font-size:11px; color:#8e8a98;">(Surplus ×2)</span>
+          </div>
+          <div style="font-size:11px; color:#8e8a98; margin-top:3px; font-family:'JetBrains Mono';">Prix plancher · Recyclage immédiat : 3 ◆/u</div>
+        </div>
+        <div style="background:#ff4d2e; color:#fff; font-size:11px; font-weight:800; padding:5px 10px; border-radius:6px; font-family:'JetBrains Mono';">RECYCLER</div>
+      </div>
+    </div>
+
+    <div style="background:#191822; border:1px solid #282434; border-radius:12px; padding:12px 14px; font-size:12px; color:#edeae4; display:flex; align-items:center; gap:10px;">
+      <span style="color:#ff4d2e; font-size:16px;">🛡️</span>
+      <span><strong>Garde-fou 70% actif :</strong> impossible de brader une carte sous sa valeur de marché.</span>
+    </div>`
+});
+
+// -------------------------------------------------------------------------
+// SLIDE 3 : SCANNER DE FLIPS MARCHÉ
+// -------------------------------------------------------------------------
+const HTML_PROMO_3 = getBaseHtml({
+  badge: '★ MODULE 03 · ARBITRAGE DU MARCHÉ',
+  titlePrefix: 'Scanner de Flips',
+  titleHighlight: 'Radar de Bons Plans',
+  subtitle: 'Repérez immédiatement les cartes vendues sous leur cours moyen et achetez-les en un clic pour dégager un profit net garanti à la revente.',
+  glowColor: '#4dd6ff',
+  features: [
+    { icon: '🎯', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Radar Temps Réel', desc: 'Scan automatique des dernières annonces' },
+    { icon: '📈', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Marge Nette +◆', desc: 'Calcul du bénéfice réel après déduction des taxes' },
+    { icon: '⚡', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Achat en 1 Clic', desc: 'Acquisition instantanée sans quitter votre page' },
+    { icon: '🏷️', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: 'Filtres de Rareté', desc: 'Ciblez les cartes Communes, Rares ou Épiques' },
+  ],
+  rightCardHtml: `
+    <div style="background:#191822; border:1px solid #282434; border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; font-weight:800; color:#edeae4;">🎯 Opportunités de Flips Rentables</span>
+        <span style="font-size:11px; color:#4dd6ff; font-weight:700;">Radar actif</span>
+      </div>
+
+      <!-- Flip 1 -->
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:#2a2834; color:#a8a3b0; font-size:10px; font-weight:800; padding:1px 5px; border-radius:4px; font-family:'JetBrains Mono';">C</span>
+            <span style="font-size:13px; font-weight:700; color:#fff;">Chelia Blendy</span>
+            <span style="background:rgba(63,191,127,0.2); color:#3fbf7f; font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; font-family:'JetBrains Mono';">-48% sous cote</span>
+          </div>
+          <div style="font-size:11px; color:#8e8a98; margin-top:3px; font-family:'JetBrains Mono';">Achat : 12 ◆ · Revente : 20 ◆ · <strong>Marge : +6 ◆ (ROI 50%)</strong></div>
+        </div>
+        <button style="background:#ff4d2e; color:#fff; border:none; padding:7px 14px; border-radius:6px; font-weight:800; font-family:'JetBrains Mono'; font-size:11px; cursor:pointer;">Acheter</button>
+      </div>
+
+      <!-- Flip 2 -->
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:#3d1a45; color:#d946ef; font-size:10px; font-weight:800; padding:1px 5px; border-radius:4px; font-family:'JetBrains Mono';">E</span>
+            <span style="font-size:13px; font-weight:700; color:#fff;">Mejiro McQueen</span>
+            <span style="background:rgba(63,191,127,0.2); color:#3fbf7f; font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; font-family:'JetBrains Mono';">-24% sous cote</span>
+          </div>
+          <div style="font-size:11px; color:#8e8a98; margin-top:3px; font-family:'JetBrains Mono';">Achat : 25 ◆ · Revente : 32 ◆ · <strong>Marge : +4 ◆ (ROI 16%)</strong></div>
+        </div>
+        <button style="background:#ff4d2e; color:#fff; border:none; padding:7px 14px; border-radius:6px; font-weight:800; font-family:'JetBrains Mono'; font-size:11px; cursor:pointer;">Acheter</button>
+      </div>
+    </div>
+
+    <div style="background:#191822; border:1px solid #282434; border-radius:12px; padding:12px 14px; font-size:12px; color:#edeae4; display:flex; align-items:center; gap:10px;">
+      <span style="color:#4dd6ff; font-size:16px;">💡</span>
+      <span><strong>Calcul automatique :</strong> la marge affichée intègre déjà les 5% de taxe et 2% de frais de dépôt.</span>
+    </div>`
+});
+
+// -------------------------------------------------------------------------
+// SLIDE 4 : RENTABILITÉ DES BOOSTERS (EV) & PITY SNIPER
+// -------------------------------------------------------------------------
+const HTML_PROMO_4 = getBaseHtml({
+  badge: '★ MODULE 04 · PROBABILITÉS & TIRAGES',
+  titlePrefix: 'Rentabilité Boosters',
+  titleHighlight: 'Espérance Chakra (EV)',
+  subtitle: 'Ne tirez plus au hasard. Ouvrez les boosters les plus rentables mathématiquement et sécurisez vos cartes Mythiques manquantes dès que la Pitié approche.',
+  glowColor: '#3fbf7f',
+  features: [
+    { icon: '🎲', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Espérance de Valeur (EV)', desc: 'Chakra moyen attendu par booster ouvert' },
+    { icon: '✨', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Probabilité Nouvelles', desc: 'Chances d\'obtenir une carte manquante' },
+    { icon: '🎯', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: 'Pity Sniper (240/250)', desc: 'Cible le pack avec le plus de Mythiques manquantes' },
+    { icon: '📦', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Tirage Live Piloté', desc: 'Ouverture instantanée depuis le volet latéral' },
+  ],
+  rightCardHtml: `
+    <div style="background:#191822; border:1px solid #282434; border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; font-weight:800; color:#edeae4;">📦 Classement des Boosters par Rentabilité</span>
+        <span style="font-size:11px; color:#3fbf7f; font-weight:700;">EV live</span>
+      </div>
+
+      <!-- Booster 1 -->
+      <div style="background:#121118; border:1px solid #2e2a3c; border-radius:10px; padding:12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="display:flex; align-items:center; gap:6px;">
+            <span style="background:rgba(245,197,24,0.2); color:#f5c518; font-size:10px; font-weight:800; padding:1px 6px; border-radius:4px; font-family:'JetBrains Mono';">#1 CONSEILLÉ</span>
+            <span style="font-size:13.5px; font-weight:700; color:#fff;">Shōnen Mix</span>
+          </div>
+          <div style="font-size:11px; color:#8e8a98; margin-top:4px; font-family:'JetBrains Mono';">
+            EV : <strong>~40 ◆</strong> · P(≥1 nouvelle) : <strong style="color:#3fbf7f;">99.4%</strong> · Manquants : 4 651
+          </div>
+        </div>
+        <button style="background:#ff4d2e; color:#fff; border:none; padding:8px 14px; border-radius:6px; font-weight:800; font-family:'JetBrains Mono'; font-size:11px; cursor:pointer;">Ouvrir</button>
+      </div>
+
+      <!-- Pity Sniper Banner -->
+      <div style="background:linear-gradient(135deg, rgba(245,197,24,0.15), rgba(255,77,46,0.15)); border:1px solid #f5c518; border-radius:10px; padding:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; font-weight:800; color:#f5c518;">🎯 JAUGE PITIÉ MYTHIQUE</span>
+          <span style="font-family:'JetBrains Mono'; font-weight:800; color:#fff; font-size:12px;">240 / 250</span>
+        </div>
+        <div style="width:100%; height:6px; background:#121118; border-radius:999px; overflow:hidden; margin-bottom:6px;">
+          <div style="width:96%; height:100%; background:linear-gradient(90deg, #f5c518, #ff4d2e);"></div>
+        </div>
+        <div style="font-size:10.5px; color:#edeae4; font-family:'JetBrains Mono';">
+          Alerte active : sélection automatique du booster maximisant vos Mythiques.
+        </div>
+      </div>
+    </div>
+
+    <div style="background:#191822; border:1px solid #282434; border-radius:12px; padding:12px 14px; font-size:12px; color:#edeae4; display:flex; align-items:center; gap:10px;">
+      <span style="color:#f5c518; font-size:16px;">✨</span>
+      <span><strong>Sécurité 0 Chakra :</strong> seuls les boosters gratuits sont ouverts, aucun achat payant par erreur.</span>
+    </div>`
+});
+
+// -------------------------------------------------------------------------
+// SLIDE 5 : SÉCURITÉ 0 CHAKRA & CONFIDENTIALITÉ
+// -------------------------------------------------------------------------
+const HTML_PROMO_5 = getBaseHtml({
+  badge: '★ MODULE 05 · CONTRÔLE & PROTECTION',
+  titlePrefix: 'Sanctuaire de Chakra',
+  titleHighlight: 'Sécurité & Contrôle Total',
+  subtitle: 'Une architecture sécurisée et 100% locale pour jouer en toute sérénité. Vos ressources sont protégées par des garde-fous stricts.',
+  glowColor: '#3fbf7f',
+  features: [
+    { icon: '🛡️', bg: 'rgba(63,191,127,0.15)', color: '#3fbf7f', title: 'Sécurité 0 Chakra', desc: 'Impossible d\'ouvrir un pack payant par erreur' },
+    { icon: '🔒', bg: 'rgba(245,197,24,0.15)', color: '#f5c518', title: 'Réserve Intouchable', desc: 'Seuil minimal inviolable sous lequel aucun flip n\'est acheté' },
+    { icon: '🔐', bg: 'rgba(77,214,255,0.15)', color: '#4dd6ff', title: 'Cadenas de Cartes', desc: 'Verrouillez vos cartes précieuses du recyclage' },
+    { icon: '💻', bg: 'rgba(255,77,46,0.15)', color: '#ff4d2e', title: '100% Local (MV3)', desc: 'Aucun serveur distant, zéro tracking, open-source' },
+  ],
+  rightCardHtml: `
+    <div style="background:#191822; border:1px solid #282434; border-radius:14px; padding:16px; display:flex; flex-direction:column; gap:10px;">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <span style="font-size:12px; font-weight:800; color:#edeae4;">🛡️ Garde-fous et Réglages de Sécurité</span>
+        <span style="font-size:11px; color:#3fbf7f; font-weight:700;">Haute sécurité</span>
+      </div>
+
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:12.5px; font-weight:700; color:#fff;">Garde-fou 70% de la médiane 7j</div>
+          <div style="font-size:10.5px; color:#8e8a98;">Bloque la mise en vente sous 70% de la cote</div>
+        </div>
+        <div style="width:34px; height:18px; background:#3fbf7f; border-radius:999px; position:relative;">
+          <span style="position:absolute; width:12px; height:12px; border-radius:50%; background:#fff; right:3px; top:3px;"></span>
+        </div>
+      </div>
+
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:12.5px; font-weight:700; color:#fff;">Vélocité rapide du marché (48h)</div>
+          <div style="font-size:10.5px; color:#8e8a98;">Ne liste que les cartes vendables en 12h</div>
+        </div>
+        <div style="width:34px; height:18px; background:#3fbf7f; border-radius:999px; position:relative;">
+          <span style="position:absolute; width:12px; height:12px; border-radius:50%; background:#fff; right:3px; top:3px;"></span>
+        </div>
+      </div>
+
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:12.5px; font-weight:700; color:#fff;">Réserve minimale de Chakra protégée</div>
+          <div style="font-size:10.5px; color:#8e8a98;">Solde sanctuarisé intouchable pour les achats</div>
+        </div>
+        <span style="font-family:'JetBrains Mono'; font-weight:800; color:#f5c518; font-size:13px;">500 ◆</span>
+      </div>
+
+      <div style="background:#121118; border:1px solid #23202c; border-radius:10px; padding:10px 12px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:12.5px; font-weight:700; color:#fff;">Exemplaires toujours conservés</div>
+          <div style="font-size:10.5px; color:#8e8a98;">Protection stricte de votre collection</div>
+        </div>
+        <span style="font-family:'JetBrains Mono'; font-weight:800; color:#3fbf7f; font-size:13px;">≥ 1 copie</span>
+      </div>
+    </div>
+
+    <div style="background:#111016; border:1px solid #23202c; border-radius:12px; padding:12px 14px; font-size:11.5px; color:#9d98a5; display:flex; align-items:center; gap:10px;">
+      <span style="color:#3fbf7f; font-size:15px;">✓</span>
+      <span><strong>Confidentialité garantie :</strong> aucune donnée personnelle n'est collectée, analysée ou transmise.</span>
+    </div>`
+});
+
+// -------------------------------------------------------------------------
+// 6. MARQUEE HERO BANNER (1400 x 560)
 // -------------------------------------------------------------------------
 const HTML_MARQUEE = `<!DOCTYPE html>
 <html lang="fr">
@@ -240,7 +833,7 @@ const HTML_MARQUEE = `<!DOCTYPE html>
 </html>`;
 
 // -------------------------------------------------------------------------
-// 2. SMALL PROMO TILE (440 x 280)
+// 7. SMALL PROMO TILE (440 x 280)
 // -------------------------------------------------------------------------
 const HTML_SMALL = `<!DOCTYPE html>
 <html lang="fr">
@@ -382,345 +975,20 @@ const HTML_SMALL = `<!DOCTYPE html>
 </body>
 </html>`;
 
-// -------------------------------------------------------------------------
-// 3. 5 SHOWCASE SLIDES (1280 x 800) FOR CHROME WEB STORE CAROUSEL
-// -------------------------------------------------------------------------
-// Formats each real screenshot with a clear, high-impact header showcase banner:
-// - Badge, H1 title, subtitle, and 3 feature pills
-// - 100% genuine Kyara app interface below, seamlessly anonymized as Invité-DA66E2
-function buildShowcaseHtml(config) {
-  const rawBase64 = fs.readFileSync(path.join(rawDir, config.raw)).toString('base64');
-  return `<!DOCTYPE html>
-<html lang="fr">
-<head>
-<meta charset="utf-8">
-<style>
-  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800&family=Unbounded:wght@800;900&family=Zen+Kaku+Gothic+New:wght@600;700;900&display=swap');
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body {
-    width: 1280px;
-    height: 800px;
-    background: #0b0a0f;
-    overflow: hidden;
-    font-family: 'Zen Kaku Gothic New', -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
-    color: #edeae4;
-    position: relative;
-  }
-
-  /* Header banner (y: 0 to 95px) */
-  .header-bar {
-    width: 1280px;
-    height: 95px;
-    background: linear-gradient(180deg, #171522 0%, #0d0c12 100%);
-    border-bottom: 2px solid #282434;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 32px;
-    position: relative;
-    z-index: 10;
-  }
-
-  .header-bar::after {
-    content: '';
-    position: absolute;
-    bottom: -2px;
-    left: 0;
-    width: 360px;
-    height: 2px;
-    background: linear-gradient(90deg, #ff4d2e, #f5c518, transparent);
-  }
-
-  .title-group {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    max-width: 820px;
-  }
-
-  .tag-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .badge-tag {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(255, 77, 46, 0.16);
-    border: 1px solid rgba(255, 77, 46, 0.45);
-    border-radius: 999px;
-    padding: 2px 10px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 10.5px;
-    font-weight: 800;
-    color: #ff4d2e;
-    letter-spacing: 0.5px;
-  }
-
-  .subline {
-    font-size: 12.5px;
-    color: #9d98a5;
-    font-weight: 500;
-  }
-
-  .headline {
-    font-family: 'Unbounded', sans-serif;
-    font-size: 20px;
-    font-weight: 900;
-    color: #ffffff;
-    letter-spacing: -0.3px;
-  }
-
-  .headline span {
-    color: #f5c518;
-  }
-
-  .features-strip {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-  }
-
-  .feature-pill {
-    background: #171620;
-    border: 1px solid #282534;
-    border-radius: 8px;
-    padding: 7px 12px;
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 11px;
-    font-weight: 700;
-    color: #d8d4dc;
-    display: flex;
-    align-items: center;
-    gap: 6px;
-  }
-
-  .canvas-wrapper {
-    width: 1280px;
-    height: 705px;
-    position: relative;
-    background: #0e0d12;
-  }
-
-  canvas {
-    display: block;
-    width: 1280px;
-    height: 705px;
-  }
-</style>
-</head>
-<body>
-  <div class="header-bar">
-    <div class="title-group">
-      <div class="tag-row">
-        <span class="badge-tag">${config.badge}</span>
-        <span class="subline">${config.subtitle}</span>
-      </div>
-      <h1 class="headline">${config.titleHtml}</h1>
-    </div>
-
-    <div class="features-strip">
-      ${config.pills.map(p => `<div class="feature-pill">${p}</div>`).join('\n      ')}
-    </div>
-  </div>
-
-  <div class="canvas-wrapper">
-    <canvas id="cv" width="1280" height="705"></canvas>
-  </div>
-
-  <script>
-  async function run() {
-    const img = new Image();
-    await new Promise((res, rej) => {
-      img.onload = res;
-      img.onerror = rej;
-      img.src = "data:image/png;base64,${rawBase64}";
-    });
-
-    const cv = document.getElementById("cv");
-    const ctx = cv.getContext("2d");
-
-    // 1. Fill base background with page dark color #0e0d12
-    ctx.fillStyle = "#0e0d12";
-    ctx.fillRect(0, 0, 1280, 705);
-
-    // 2. Right sidepanel background extends full height (from x=960 to 1280)
-    ctx.fillStyle = "#111015";
-    ctx.fillRect(960, 0, 320, 705);
-
-    // 3. Draw raw screenshot scaled 1.25x (1024 * 1.25 = 1280, 560 * 1.25 = 700)
-    // Placed at y = 2px
-    const scale = 1.25;
-    const offX = 0;
-    const offY = 2;
-    ctx.drawImage(img, offX, offY, 1024 * scale, 560 * scale);
-
-    ${config.isGuest ? `
-    // Screenshot 1 is already natively taken with guest account Invité-DA66E2
-    // Top & bottom blend
-    ctx.fillStyle = "#0e0d12";
-    ctx.fillRect(0, 0, 960, 2);
-    ctx.fillStyle = "#111015";
-    ctx.fillRect(960, 702, 320, 3);
-    ` : `
-    // Navbar Avatar patch (match guest avatar / neutral seal 操)
-    const avX = 713.5 * scale + offX;
-    const avY = 22.5 * scale + offY;
-    const avR = 14 * scale;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.arc(avX, avY, avR, 0, Math.PI * 2);
-    ctx.fillStyle = "#1e1d28";
-    ctx.fill();
-
-    ctx.lineWidth = 1.5;
-    ctx.strokeStyle = "#e6a23c";
-    ctx.stroke();
-
-    ctx.fillStyle = "#f5d485";
-    ctx.font = "bold 15px -apple-system, sans-serif";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-    ctx.fillText("操", avX, avY);
-    ctx.restore();
-
-    // Sidepanel Header username patch: replace HIB0-2 with Invité-DA66E2
-    const pX = 790 * scale + offX;
-    const pY = 79 * scale + offY;
-    const pW = 85 * scale;
-    const pH = 15 * scale;
-
-    ctx.save();
-    ctx.fillStyle = "#15141b";
-    ctx.fillRect(pX, pY, pW, pH);
-
-    ctx.fillStyle = "#9d98a5";
-    ctx.font = "600 11.5px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Invité-DA66E2 · 0/6736 cartes", pX, pY + pH / 2);
-    ctx.restore();
-
-    // Floating HUD username patch: replace HIB0-2 with Invité-DA66E2
-    const hX = 48 * scale + offX;
-    const hY = 527 * scale + offY;
-    const hW = 60 * scale;
-    const hH = 14 * scale;
-
-    ctx.save();
-    ctx.fillStyle = "#17161e";
-    ctx.fillRect(hX, hY, hW, hH);
-
-    ctx.fillStyle = "#edeae4";
-    ctx.font = "500 10px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif";
-    ctx.textAlign = "left";
-    ctx.textBaseline = "middle";
-    ctx.fillText("Invité-DA66E2", hX, hY + hH / 2);
-    ctx.restore();
-
-    // Clean browser link hover tooltip if present at bottom-left
-    ctx.fillStyle = "#0e0d12";
-    ctx.fillRect(0, 546 * scale + offY, 200 * scale, 14 * scale);
-    `}
-  }
-  run();
-  </script>
-</body>
-</html>`;
-}
-
-const screensConfig = [
-  {
-    id: 'screenshot-1-autopilot',
-    raw: 'screen-1-pilote.png',
-    isGuest: true,
-    badge: '⚡ MODULE 01 · PILOTE AUTOMATIQUE',
-    titleHtml: 'Pilote Automatique Global &amp; <span>Tableau de Bord ROI</span>',
-    subtitle: 'Orchestration en continu sans brader vos cartes sur Kyara.games',
-    pills: [
-      '<span style="color:#f5c518;">売</span> Auto-Vente',
-      '<span style="color:#3fbf7f;">転</span> Auto-Recyclage',
-      '<span style="color:#ff4d2e;">操</span> HUD en jeu'
-    ],
-    label: 'Capture 1 : Pilote Automatique Global & HUD'
-  },
-  {
-    id: 'screenshot-2-doublons',
-    raw: 'screen-2-doublons.png',
-    isGuest: false,
-    badge: '💎 MODULE 02 · GESTION DES DOUBLONS',
-    titleHtml: 'Arbitrage Doublons : <span>Vendre au Meilleur Prix ou Recycler</span>',
-    subtitle: 'Calcul en direct des prix nets après taxes (5% + 2%) avec garde-fou anti-bradage',
-    pills: [
-      '<span style="color:#f5c518;">📊</span> Médianes 7j',
-      '<span style="color:#ff4d2e;">🛡️</span> Garde-fou 70%',
-      '<span style="color:#3fbf7f;">🔒</span> Protection cartes'
-    ],
-    label: 'Capture 2 : Gestion des Doublons & Vente'
-  },
-  {
-    id: 'screenshot-3-marche',
-    raw: 'screen-3-marche.png',
-    isGuest: false,
-    badge: '🎯 MODULE 03 · SCANNER DE FLIPS MARCHÉ',
-    titleHtml: 'Radar d\'Opportunités &amp; <span>Achat-Revente (Flips Directs)</span>',
-    subtitle: 'Détection instantanée des annonces sous-cotées avec calcul automatique du bénéfice net',
-    pills: [
-      '<span style="color:#4dd6ff;">📈</span> Marge nette +◆',
-      '<span style="color:#f5c518;">⚡</span> Achat 1-clic',
-      '<span style="color:#ff4d2e;">🏷️</span> Filtres raretés'
-    ],
-    label: 'Capture 3 : Scanner de Flips Marché'
-  },
-  {
-    id: 'screenshot-4-boosters',
-    raw: 'screen-4-boosters.png',
-    isGuest: false,
-    badge: '📦 MODULE 04 · ESPÉRANCE CHAKRA (EV)',
-    titleHtml: 'Rentabilité des Boosters (EV) &amp; <span>Pity Sniper Mythique</span>',
-    subtitle: 'Classement probabiliste des packs selon l\'EV en Chakra et Pity Sniper dès 240/250',
-    pills: [
-      '<span style="color:#3fbf7f;">🎲</span> P(≥1 nouvelle)',
-      '<span style="color:#f5c518;">🎯</span> Pity (240/250)',
-      '<span style="color:#ff4d2e;">⚡</span> Tirage Live'
-    ],
-    label: 'Capture 4 : Rentabilité Boosters (EV)'
-  },
-  {
-    id: 'screenshot-5-securite',
-    raw: 'screen-5-reglages.png',
-    isGuest: false,
-    badge: '🛡️ MODULE 05 · CONTRÔLE & SÉCURITÉ',
-    titleHtml: 'Sanctuaire de Chakra Protégé &amp; <span>Confidentialité 100% Locale</span>',
-    subtitle: 'Sécurité stricte 0 Chakra sur les boosters, réserve minimale et zéro télémétrie',
-    pills: [
-      '<span style="color:#3fbf7f;">✓</span> 0 Chakra garanti',
-      '<span style="color:#f5c518;">🔒</span> Réserve protégée',
-      '<span style="color:#4dd6ff;">🛡️</span> 100% Local MV3'
-    ],
-    label: 'Capture 5 : Réglages & Sécurité'
-  }
-];
-
-const targets = [
+const promoTargets = [
+  { id: 'screenshot-1-autopilot', width: 1280, height: 800, html: HTML_PROMO_1, label: 'Image Promo 1 : Pilote Automatique & ROI' },
+  { id: 'screenshot-2-doublons', width: 1280, height: 800, html: HTML_PROMO_2, label: 'Image Promo 2 : Vente des Doublons & Cote' },
+  { id: 'screenshot-3-marche', width: 1280, height: 800, html: HTML_PROMO_3, label: 'Image Promo 3 : Scanner de Flips Marché' },
+  { id: 'screenshot-4-boosters', width: 1280, height: 800, html: HTML_PROMO_4, label: 'Image Promo 4 : Rentabilité Boosters & EV' },
+  { id: 'screenshot-5-securite', width: 1280, height: 800, html: HTML_PROMO_5, label: 'Image Promo 5 : Sanctuaire & Sécurité' },
   { id: 'promo-marquee-1400x560', width: 1400, height: 560, html: HTML_MARQUEE, label: 'Bannière Marquee Hero (1400x560)' },
   { id: 'promo-small-440x280', width: 440, height: 280, html: HTML_SMALL, label: 'Petite tuile promo (440x280)' },
-  ...screensConfig.map(s => ({
-    id: s.id,
-    width: 1280,
-    height: 800,
-    html: buildShowcaseHtml(s),
-    label: s.label
-  }))
 ];
 
-console.log('--- GÉNÉRATION DES 5 SHOWCASES + BANNIÈRES CHROME WEB STORE ---');
-console.log(`Cible : ${targets.length} fichiers (7 PNG + 7 JPEG 24-bits sans alpha)\n`);
+console.log('--- GÉNÉRATION DES 5 IMAGES PROMOTIONNELLES DU STORE (1280x800) ---');
+console.log(`Cible : ${promoTargets.length} fichiers (PNG 24-bits + JPEG 95% sans alpha)\n`);
 
-for (const t of targets) {
+for (const t of promoTargets) {
   const tplPath = path.join(templatesDir, `${t.id}.html`);
   const pngPath = path.join(promoDir, `${t.id}.png`);
   const jpgPath = path.join(promoDir, `${t.id}.jpg`);
@@ -758,4 +1026,4 @@ const checkFiles = fs.readdirSync(promoDir)
 const sipsOutput = execFileSync('sips', ['-g', 'pixelWidth', '-g', 'pixelHeight', '-g', 'hasAlpha', ...checkFiles], { encoding: 'utf8' });
 console.log(sipsOutput);
 
-console.log('✅ Tous les 5 visuels de présentation ont été générés avec succès !');
+console.log('✅ Les 5 images promotionnelles officielles ont été générées avec succès !');
