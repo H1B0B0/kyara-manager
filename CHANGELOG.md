@@ -4,7 +4,22 @@ Toutes les modifications notables de **Kyara Manager** sont documentées dans ce
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.1.0] - 2026-11-04
+## [1.4.0] - 2026-11-06
+
+### Added
+- **Refonte intégrale React 19 + TypeScript** : Remplacement complet du frontend HTML/JS par une application React 19 typée, fluide et modulaire avec Vite.
+- **Nouvel onglet « Mes Envies » (Wishlist)** : Liste personnalisée des cartes ciblées pour compléter ses collections avec budget maximum et option d'auto-achat automatique sous réserve de Chakra disponible.
+- **Filtres de vente avancés « Médiane / Moyenne des 20 dernières ventes »** : Nouvelle stratégie de fixation des prix basée sur la profondeur réelle du marché en direct, permettant d'éviter les offres hors marché en période de forte baisse ou de krach (ex: Fairy Tail).
+- **Tableau de chasse « Butin Autopilot — Meilleurs Tirages »** : Galerie visuelle récapitulant instantanément les personnages les plus rares (Mythiques, Légendaires, Épiques) tirés lors des sessions en pilote automatique.
+- **Architecture modulaire stricte** : Décomposition complète du content script et des feuilles de style en micro-modules indépendants et maintenables (< 500 lignes).
+
+### Changed
+- Amélioration de la vélocité de rotation des 10 créneaux du marché et gestion des annonces stagnantes (> 2h).
+- Pédagogie décisionnelle enrichie avec explications claires des calculs de rentabilité et probabilités de vente.
+- Suppression de tous les fichiers legacy et optimisation de la taille du package Chrome Web Store.
+
+## [1.3.0] - 2026-11-05
+- Améliorations de performance, gestion du Turbo Recyclage et garde-fou Pitié Mythique.
 
 ### Added
 - **Pilote UI Live d'ouverture de boosters (`/ouvrir/:id`)** : Navigation automatique de l'onglet actif `kyara.games` vers `/ouvrir/:id`, déclenchement visuel du bouton d'ouverture (« Ouvrir le booster »), clic automatique sur « Tout révéler » pendant la révélation des cartes et synchronisation des tirages réels dans le journal.

@@ -35,7 +35,7 @@ export const Header: React.FC<HeaderProps> = ({ dashboard, loading, onRefresh })
         <div className="brand__text">
           <div className="brand__title-row">
             <h1 className="brand__title">KYARA MANAGER</h1>
-            <span className="brand__version">v1.3</span>
+            <span className="brand__version">v1.4</span>
           </div>
           <p className="brand__subtitle">{statusText}</p>
         </div>
