@@ -27,6 +27,8 @@
     "check": "tsc --noEmit",
     "package:cws": "node scripts/package-cws.mjs",
     "token:cws": "node scripts/get-cws-refresh-token.mjs",
+    "release": "npm version patch && git push origin main --tags",
+    "release:minor": "npm version minor && git push origin main --tags",
     "promo": "node scripts/generate-promo.mjs",
     "format-screens": "node scripts/format-screenshots.mjs",
     "icons": "python3 scripts/generate-icons.py"

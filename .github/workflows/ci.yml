@@ -4,9 +4,18 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      publish_cws:
+        description: 'Publier directement sur le Chrome Web Store ?'
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -52,20 +61,20 @@ jobs:
           path: dist/kyara-manager-cws.zip
           if-no-files-found: error
 
-      - name: Extract version from package.json
+      - name: Extract version from package.json or tag
         id: pkg
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         run: |
           VERSION=$(node -p "require('./package.json').version")
           echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Create or Update GitHub Release with CWS Package
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: startsWith(github.ref, 'refs/tags/v') || github.event_name == 'workflow_dispatch'
         uses: softprops/action-gh-release@v2
         continue-on-error: true
         with:
-          tag_name: v${{ steps.pkg.outputs.version }}
-          name: Kyara Manager v${{ steps.pkg.outputs.version }}
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.pkg.outputs.version) }}
+          name: Kyara Manager ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || format('v{0}', steps.pkg.outputs.version) }}
           draft: false
           prerelease: false
           generate_release_notes: true
@@ -74,7 +83,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: 🚀 Auto-Upload & Submit to Chrome Web Store
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push' && env.CHROME_CLIENT_ID != '' && env.CHROME_REFRESH_TOKEN != ''
+        if: (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_cws)) && env.CHROME_CLIENT_ID != '' && env.CHROME_REFRESH_TOKEN != ''
         continue-on-error: true
         uses: mnao305/chrome-extension-upload@v5.0.0
         with:
