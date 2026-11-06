@@ -75,6 +75,7 @@ jobs:
 
       - name: 🚀 Auto-Upload & Submit to Chrome Web Store
         if: github.ref == 'refs/heads/main' && github.event_name == 'push' && env.CHROME_CLIENT_ID != '' && env.CHROME_REFRESH_TOKEN != ''
+        continue-on-error: true
         uses: mnao305/chrome-extension-upload@v5.0.0
         with:
           file-path: dist/kyara-manager-cws.zip
