@@ -15,6 +15,9 @@ jobs:
   build-and-test:
     name: Verify, Test & Package Extension
     runs-on: ubuntu-latest
+    env:
+      CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+      CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
 
     steps:
       - name: Checkout repository
@@ -79,6 +82,3 @@ jobs:
           client-secret: ${{ secrets.CHROME_CLIENT_SECRET }}
           refresh-token: ${{ secrets.CHROME_REFRESH_TOKEN }}
           publish: true
-        env:
-          CHROME_CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
-          CHROME_REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
