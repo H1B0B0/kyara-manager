@@ -126,6 +126,11 @@ chrome.runtime.onStartup.addListener(async () => {
   await updateBadgeFromState();
 });
 
+chrome.runtime.onUpdateAvailable.addListener((details) => {
+  console.log('[Kyara Manager] Mise à jour disponible vers v' + details.version + ' - Rechargement immédiat');
+  chrome.runtime.reload();
+});
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
   await updateBadgeFromState();
