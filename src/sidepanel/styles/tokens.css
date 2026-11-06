@@ -1,0 +1,117 @@
+/* Kyara Manager — Side Panel Stylesheet (Native Kyara.games Design System) */
+:root {
+  color-scheme: dark;
+  --bg: #0e0d12;
+  --bg2: #121117;
+  --panel: #15141a;
+  --panel2: #17161d;
+  --raise: #1e1c26;
+  --line: #25232c;
+  --line2: #2e2b36;
+  --line3: #3a3742;
+  --fg: #edeae4;
+  --fg2: #b7b2bd;
+  --fg3: #c9c5ce;
+  --mut: #9d98a5;
+  --dim: #5a5662;
+  --acc: #ff4d2e;
+  --acc2: #ff6a4d;
+  --acc-soft: rgba(255, 77, 46, 0.12);
+  --cyan: #4dd6ff;
+  --gold: #f5c518;
+  --gold-soft: rgba(245, 197, 24, 0.12);
+  --ok: #3fbf7f;
+  --warn: #ffb347;
+  --danger: #ff5c5c;
+  --purple: #b072ff;
+
+  /* Official Kyara rarity palette */
+  --rarity-C: #b5b1bb;
+  --rarity-U: #3fbf7f;
+  --rarity-R: #4d9bff;
+  --rarity-E: #b072ff;
+  --rarity-L: #f5c518;
+  --rarity-M: #ff4d2e;
+
+  --disp: "Unbounded", system-ui, -apple-system, sans-serif;
+  --body: "Zen Kaku Gothic New", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --scrollbar-thumb: #2e2b36;
+  --scrollbar-track: transparent;
+
+  /* Responsive table column labels (modern-web-guidance: responsive-table) */
+  --label-col-1: "Carte";
+  --label-col-2: "Valeur 1";
+  --label-col-3: "Valeur 2";
+  --label-col-4: "Valeur 3";
+  --label-col-5: "Valeur 4";
+  --label-col-6: "Action";
+
+  /* Baseline scrollbar styling (modern-web-guidance: customize-scrollbar-color-and-thickness) */
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--bg);
+  color: var(--fg);
+  font-family: var(--body);
+  font-size: 13px;
+  line-height: 1.42;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  -webkit-font-smoothing: antialiased;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Custom Scrollbars (modern-web-guidance: customize-scrollbar-color-and-thickness) */
+.app-main,
+.table-wrapper,
+.journal-list {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+@supports not (scrollbar-color: auto) {
+  .app-main::-webkit-scrollbar,
+  .table-wrapper::-webkit-scrollbar,
+  .journal-list::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  .app-main::-webkit-scrollbar-track,
+  .table-wrapper::-webkit-scrollbar-track,
+  .journal-list::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  .app-main::-webkit-scrollbar-thumb,
+  .table-wrapper::-webkit-scrollbar-thumb,
+  .journal-list::-webkit-scrollbar-thumb {
+    background-color: var(--scrollbar-thumb);
+    border-radius: 9999px;
+    border: 2px solid transparent;
+    background-clip: content-box;
+  }
+}

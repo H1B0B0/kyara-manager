@@ -19,9 +19,12 @@
     "tcg",
     "automation"
   ],
+  "type": "module",
   "scripts": {
-    "test": "node tests/analytics.test.js",
-    "check": "node --check lib/analytics.js && node --check lib/i18n.js && node --check background/service-worker.js && node --check content/content.js && node --check sidepanel/sidepanel.js",
+    "dev": "vite",
+    "build": "node scripts/build.mjs",
+    "test": "vitest run",
+    "check": "tsc --noEmit",
     "package:cws": "node scripts/package-cws.mjs",
     "promo": "node scripts/generate-promo.mjs",
     "format-screens": "node scripts/format-screenshots.mjs",
@@ -29,5 +32,21 @@
   },
   "engines": {
     "node": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  },
+  "dependencies": {
+    "lucide-react": "^1.69.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   }
 }

@@ -1,0 +1,44 @@
+/* ==========================================================================
+   Full-Screen Cockpit Mode (?mode=full)
+   ========================================================================== */
+html.km-mode-full body {
+  max-width: 1380px;
+  margin: 0 auto;
+  padding: 16px 28px;
+  font-size: 13px;
+  background-color: #0c0b10;
+}
+
+html.km-mode-full .kpi-bar {
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+
+html.km-mode-full .card {
+  padding: 14px 18px;
+}
+
+html.km-mode-full .data-table {
+  font-size: 13px;
+}
+
+html.km-mode-full .data-table th,
+html.km-mode-full .data-table td {
+  padding: 10px 12px;
+}
+
+html.km-mode-full .tab-nav {
+  grid-template-columns: repeat(6, 1fr);
+  gap: 8px;
+  margin: 12px 0 16px;
+}
+
+html.km-mode-full .tab-btn {
+  padding: 8px 18px;
+  font-size: 13px;
+}
+
+html.km-mode-full .best-pulls-grid {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  max-height: none;
+}

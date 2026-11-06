@@ -1,0 +1,176 @@
+/* Responsive Data Tables & Content-Visibility (modern-web-guidance: responsive-table + defer-rendering-heavy-content) */
+.table-wrapper {
+  container-type: inline-size;
+  overflow-x: auto;
+  max-height: 410px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: var(--panel);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  font-size: 11.5px;
+}
+
+.data-table--duplicates {
+  --label-col-1: "Personnage";
+  --label-col-2: "Surplus";
+  --label-col-3: "Médiane 7j";
+  --label-col-4: "Prix (Net)";
+  --label-col-5: "Recyclage";
+  --label-col-6: "Décision";
+}
+
+.data-table--market {
+  --label-col-1: "Carte";
+  --label-col-2: "Achat";
+  --label-col-3: "Médiane 7j";
+  --label-col-4: "Revente";
+  --label-col-5: "Marge nette";
+  --label-col-6: "Action";
+}
+
+.data-table--boosters {
+  --label-col-1: "Booster";
+  --label-col-2: "Manquants";
+  --label-col-3: "P(≥1 nouv.)";
+  --label-col-4: "E[Nouv.]";
+  --label-col-5: "EV ◆";
+  --label-col-6: "Live";
+}
+
+.data-table th,
+.data-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.data-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--raise);
+  color: var(--mut);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.data-table tbody tr {
+  /* Defer off-screen row rendering (modern-web-guidance: defer-rendering-heavy-content) */
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 48px;
+}
+
+.data-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.data-table .num {
+  text-align: right;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.empty-cell,
+.data-table td.empty-cell {
+  text-align: center !important;
+  padding: 24px 12px !important;
+  color: var(--mut) !important;
+  font-size: 11.5px !important;
+  border: none !important;
+  display: table-cell !important;
+}
+
+.empty-cell::before,
+.data-table td.empty-cell::before {
+  content: none !important;
+  display: none !important;
+}
+
+.empty-state-box {
+  padding: 24px 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  color: var(--mut);
+}
+
+.empty-state-box__icon {
+  font-size: 22px;
+  opacity: 0.6;
+}
+
+.empty-state-box__text {
+  margin: 0;
+  font-size: 11.5px;
+  color: var(--mut);
+  line-height: 1.4;
+}
+
+@container (width < 340px) {
+  .data-table tr:has(.empty-cell),
+  .data-table tbody tr:has(.empty-cell) {
+    display: table-row !important;
+    border: none !important;
+  }
+
+  .data-table td.empty-cell {
+    display: table-cell !important;
+    text-align: center !important;
+    justify-content: center !important;
+  }
+
+  .data-table td.empty-cell::before {
+    content: none !important;
+    display: none !important;
+  }
+
+  .data-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    border: 0;
+  }
+
+  .data-table tbody tr {
+    display: block;
+    border-bottom: 2px solid var(--line2);
+    padding: 6px;
+  }
+
+  .data-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 8px;
+    text-align: right;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .data-table td::before {
+    font-weight: 600;
+    color: var(--mut);
+    text-align: left;
+  }
+
+  .data-table td:nth-child(1)::before { content: var(--label-col-1); }
+  .data-table td:nth-child(2)::before { content: var(--label-col-2); }
+  .data-table td:nth-child(3)::before { content: var(--label-col-3); }
+  .data-table td:nth-child(4)::before { content: var(--label-col-4); }
+  .data-table td:nth-child(5)::before { content: var(--label-col-5); }
+  .data-table td:nth-child(6)::before { content: var(--label-col-6); }
+}

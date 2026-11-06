@@ -1,0 +1,62 @@
+/* Journal List */
+.journal-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  max-height: 210px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.journal-item {
+  content-visibility: auto;
+  contain-intrinsic-size: auto none auto 34px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--bg2);
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--dim);
+  font-size: 11.5px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.journal-item--sell { border-left-color: var(--acc); }
+.journal-item--sold { border-left-color: var(--ok); }
+.journal-item--recycle { border-left-color: var(--cyan); }
+.journal-item--buy { border-left-color: var(--gold); }
+.journal-item--open { border-left-color: var(--rarity-E); }
+.journal-item--error { border-left-color: var(--danger); }
+
+.journal-time {
+  color: var(--mut);
+  font-family: var(--mono);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.journal-empty {
+  color: var(--mut);
+  font-size: 11.5px;
+  text-align: center;
+  padding: 12px;
+}
+
+
+/* Journal Item Icon & Msg */
+.journal-item__icon {
+  font-size: 12px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-right: 4px;
+}
+
+.journal-item__msg {
+  flex: 1;
+  min-width: 0;
+}

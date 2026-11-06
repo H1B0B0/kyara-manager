@@ -19,7 +19,7 @@
     }
   },
   "side_panel": {
-    "default_path": "sidepanel/sidepanel.html"
+    "default_path": "dist/sidepanel/index.html"
   },
   "permissions": [
     "storage",
@@ -33,7 +33,8 @@
     "https://*.kyara.games/*"
   ],
   "background": {
-    "service_worker": "background/service-worker.js"
+    "service_worker": "dist/background/service-worker.js",
+    "type": "module"
   },
   "content_scripts": [
     {
@@ -42,12 +43,10 @@
         "https://*.kyara.games/*"
       ],
       "js": [
-        "lib/analytics.js",
-        "lib/i18n.js",
-        "content/content.js"
+        "dist/content/content.js"
       ],
       "css": [
-        "content/content.css"
+        "dist/content/content.css"
       ],
       "run_at": "document_idle"
     }

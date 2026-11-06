@@ -1,0 +1,70 @@
+/* ==========================================================================
+   Pédagogie Décisionnelle (Explorateur interactif)
+   ========================================================================== */
+.pedagogy-toggle {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.btn-pedagogy-toggle {
+  background: transparent;
+  border: 1px solid var(--line2);
+  color: var(--fg2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  line-height: 1.2;
+}
+
+.btn-pedagogy-toggle:hover,
+.btn-pedagogy-toggle.is-active {
+  background: var(--bg3);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+
+.badge-crash {
+  background: rgba(239, 68, 68, 0.18);
+  color: #ff6b6b;
+  border: 1px solid rgba(239, 68, 68, 0.35);
+  border-radius: 4px;
+  padding: 1px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+}
+
+.pedagogy-card {
+  background: rgba(20, 18, 28, 0.95);
+  border: 1px solid var(--line2);
+  border-radius: 8px;
+  padding: 9px 12px;
+  margin-top: 6px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--fg2);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+}
+
+.pedagogy-card__title {
+  font-weight: 700;
+  font-size: 11.5px;
+  color: var(--gold);
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.pedagogy-card__row {
+  margin: 3px 0;
+}
+
+.pedagogy-card__row strong {
+  color: var(--fg);
+}

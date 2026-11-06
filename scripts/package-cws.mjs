@@ -6,11 +6,12 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
-const manifestPath = path.join(rootDir, 'manifest.json');
+const distDir = path.join(rootDir, 'dist');
+const manifestPath = path.join(distDir, 'manifest.json');
 
 if (!fs.existsSync(manifestPath)) {
-  console.error('Error: manifest.json not found');
-  process.exit(1);
+  console.log('Building dist/ first...');
+  execFileSync('node', [path.join(__dirname, 'build.mjs')], { cwd: rootDir, stdio: 'inherit' });
 }
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
@@ -25,28 +26,6 @@ if (!manifest.description || manifest.description.length > 132) {
   process.exit(1);
 }
 
-const requiredFiles = [
-  'manifest.json',
-  'LICENSE',
-  manifest.background?.service_worker,
-  manifest.side_panel?.default_path,
-  ...Object.values(manifest.icons || {}),
-  ...Object.values(manifest.action?.default_icon || {}),
-  ...(manifest.content_scripts || []).flatMap((cs) => [...(cs.js || []), ...(cs.css || [])]),
-  'lib/analytics.js'
-].filter(Boolean);
-
-const uniqueFiles = [...new Set(requiredFiles)];
-for (const rel of uniqueFiles) {
-  const abs = path.join(rootDir, rel);
-  if (!fs.existsSync(abs)) {
-    console.error(`Error: Referenced file missing: ${rel}`);
-    process.exit(1);
-  }
-}
-
-const distDir = path.join(rootDir, 'dist');
-fs.mkdirSync(distDir, { recursive: true });
 const zipPath = path.join(distDir, 'kyara-manager-cws.zip');
 if (fs.existsSync(zipPath)) {
   fs.unlinkSync(zipPath);
@@ -56,16 +35,15 @@ const includeTargets = [
   'manifest.json',
   'LICENSE',
   'icons',
-  'lib',
   'background',
   'content',
   'sidepanel'
 ];
 
-execFileSync('zip', ['-r', '-q', zipPath, ...includeTargets, '-x', '*.DS_Store'], {
-  cwd: rootDir,
+execFileSync('zip', ['-r', '-q', 'kyara-manager-cws.zip', ...includeTargets, '-x', '*.DS_Store'], {
+  cwd: distDir,
   stdio: 'inherit'
 });
 
 const stats = fs.statSync(zipPath);
-console.log(`Created ${path.relative(rootDir, zipPath)} (${stats.size} bytes) — Manifest v${manifest.version}`);
+console.log(`Created dist/kyara-manager-cws.zip (${stats.size} bytes) — Manifest v${manifest.version}`);
