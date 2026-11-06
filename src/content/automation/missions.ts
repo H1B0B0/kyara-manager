@@ -3,7 +3,8 @@ import { state } from '../state';
 import { appendJournal } from '../journal';
 
 export async function executeAutoClaimMissions(dashboard: any): Promise<{ claimed: boolean }> {
-  if (!state.currentSettings.autoClaimMissions || (dashboard?.claimableMissions ?? 0) <= 0) {
+  const isEnabled = state.currentSettings.autoClaimMissions ?? state.currentSettings.autoClaimMissionsEnabled;
+  if (!isEnabled || (dashboard?.claimableMissions ?? 0) <= 0) {
     return { claimed: false };
   }
   if (state.currentSettings.dryRun) {

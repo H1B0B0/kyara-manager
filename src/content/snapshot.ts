@@ -120,11 +120,11 @@ export async function refreshDashboardSnapshot({ forcePrices = false, scanMarket
     if (!Number.isFinite(cid) || entry.qty <= 0) continue;
     ownedSet.add(cid);
     if (entry.qty >= 2) {
-      duplicateEntries.push(entry);
+      duplicateEntries.push(entry.characterId !== undefined ? entry : { ...entry, characterId: cid });
     }
   }
 
-  const dupeIds = duplicateEntries.map((e) => Number(e.characterId));
+  const dupeIds = duplicateEntries.map((e) => Number(e.characterId ?? e.id));
   const [, packPools] = await Promise.all([
     ensureCollectionPrices(dupeIds, forcePrices),
     ensurePackPools(packs, false)
@@ -152,7 +152,7 @@ export async function refreshDashboardSnapshot({ forcePrices = false, scanMarket
   let deadline = performance.now() + 50;
   const evaluatedDuplicates: any[] = [];
   for (const entry of duplicateEntries) {
-    const cid = Number(entry.characterId);
+    const cid = Number(entry.characterId ?? entry.id);
     const card = catalogById.get(cid) || { id: cid, name: `Carte #${cid}`, rarity: 'C', series: '' };
     const stats = runtimeCache.collectionPrices.get(cid) || {};
     const activeQty = activeQtyByChar.get(cid) || 0;

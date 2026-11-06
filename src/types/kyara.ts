@@ -227,6 +227,7 @@ export interface WishlistSuggestion {
   series: string;
   rarity: Rarity;
   completionPct: number;
+  seriesCompletionPct?: number;
   refMedian: number;
   priorityScore: number;
 }

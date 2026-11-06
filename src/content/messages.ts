@@ -233,6 +233,16 @@ export function setupMessageListener(): void {
           return;
         }
 
+        if (message.type === 'km:save-settings') {
+          const { settings: newSettings } = message;
+          if (newSettings && typeof newSettings === 'object') {
+            state.currentSettings = { ...state.currentSettings, ...newSettings };
+            await chrome.storage.local.set({ settings: state.currentSettings });
+          }
+          sendResponse({ ok: true });
+          return;
+        }
+
         sendResponse({ ok: false, error: 'Commande inconnue' });
       } catch (err: any) {
         sendResponse({ ok: false, error: String(err?.message || err) });

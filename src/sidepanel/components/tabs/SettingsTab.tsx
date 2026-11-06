@@ -12,6 +12,10 @@ export interface SettingsTabProps {
 export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSettings, onToast }) => {
   const [form, setForm] = useState<KyaraSettings>(settings);
 
+  React.useEffect(() => {
+    setForm(settings);
+  }, [settings]);
+
   const handleChange = <K extends keyof KyaraSettings>(key: K, value: KyaraSettings[K]) => {
     setForm((prev) => ({ ...prev, [key]: value }));
   };

@@ -47,6 +47,7 @@ export function generateDailyWishlist(
       series: s,
       rarity,
       completionPct: Math.round(completionPct),
+      seriesCompletionPct: Math.round(completionPct),
       refMedian: median7d,
       priorityScore: score
     });

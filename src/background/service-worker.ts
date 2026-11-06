@@ -189,7 +189,7 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
         return;
       }
 
-      if (message.type.startsWith('km:cmd:')) {
+      if (message.type.startsWith('km:cmd:') || message.type === 'km:save-settings') {
         const shouldFocus =
           message.type === 'km:cmd:open-pack' || message.type === 'km:cmd:open-recommended';
         const res = await sendToKyaraTab(message, { focusTab: shouldFocus });
