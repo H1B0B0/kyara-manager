@@ -1,6 +1,6 @@
 {
   "name": "kyara-manager",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Pilote automatique et tableau de bord analytique pour Kyara.games (Manifest V3) : auto-vente des doublons, auto-recyclage, flip marché et ouverture live de boosters.",
   "license": "MIT",
   "repository": {
@@ -31,10 +31,11 @@
     "release:minor": "npm version minor && git push origin main --tags",
     "promo": "node scripts/generate-promo.mjs",
     "format-screens": "node scripts/format-screenshots.mjs",
-    "icons": "python3 scripts/generate-icons.py"
+    "icons": "python3 scripts/generate-icons.py",
+    "version": "node scripts/sync-version.mjs && git add manifest.json"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": "^22.12.0 || ^24.0.0 || >=26.0.0"
   },
   "devDependencies": {
     "@types/chrome": "^0.3.7",

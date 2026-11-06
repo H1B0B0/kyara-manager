@@ -1,4 +1,5 @@
-import type { KyaraSettings } from '../types/settings';
+import { mergeSettings, type KyaraSettings } from '../types/settings';
+import { checkForUpdate, updateAvailable, applyPendingUpdate } from './updates';
 
 const ALARM_NAME = 'kyara-manager-tick';
 const KYARA_URL_PATTERNS = ['https://kyara.games/*', 'https://*.kyara.games/*'];
@@ -27,30 +28,37 @@ async function updateBadgeFromState(): Promise<void> {
   }
 }
 
+const injections = new Map<number, Promise<boolean>>();
 async function injectContentScriptIfNeeded(tabId: number): Promise<boolean> {
-  try {
-    const manifest = chrome.runtime.getManifest();
-    const jsFiles = manifest.content_scripts?.[0]?.js || ['content/content.js'];
-    const cssFiles = manifest.content_scripts?.[0]?.css || ['content/content.css'];
-
-    if (cssFiles.length) {
-      await chrome.scripting.insertCSS({
+  if (injections.has(tabId)) return injections.get(tabId)!;
+  const injection = (async () => {
+    try {
+      const version = chrome.runtime.getManifest().version;
+      const pong = await chrome.tabs.sendMessage(tabId, { type: 'km:ping' }).catch(() => null);
+      if (pong?.version === version) return true;
+      const [legacy] = await chrome.scripting.executeScript({
         target: { tabId },
-        files: cssFiles
-      }).catch(() => {});
-    }
-
-    if (jsFiles.length) {
-      await chrome.scripting.executeScript({
-        target: { tabId },
-        files: jsFiles
+        func: () => Boolean((globalThis as any).__kyaraManagerInjected) && !(globalThis as any).__kyaraManagerRuntime
       });
+      if (legacy?.result) {
+        // Versions <=1.4.1 cannot dispose their old timers and listeners.
+        await chrome.tabs.reload(tabId);
+        return false;
+      }
+      for (const script of chrome.runtime.getManifest().content_scripts || []) {
+        if (script.css?.length) await chrome.scripting.insertCSS({ target: { tabId }, files: script.css });
+        if (script.js?.length) await chrome.scripting.executeScript({
+          target: { tabId }, files: script.js, world: (script as typeof script & { world?: chrome.scripting.ExecutionWorld }).world || 'ISOLATED'
+        });
+      }
+      return true;
+    } catch (err) {
+      console.warn('[Kyara Manager] Auto-inject failed on tab', tabId, err);
+      return false;
     }
-    return true;
-  } catch (err) {
-    console.warn('[Kyara Manager] Auto-inject failed on tab', tabId, err);
-    return false;
-  }
+  })().finally(() => injections.delete(tabId));
+  injections.set(tabId, injection);
+  return injection;
 }
 
 async function findKyaraTabs(): Promise<chrome.tabs.Tab[]> {
@@ -67,32 +75,18 @@ async function sendToKyaraTab(payload: any, { focusTab = false }: { focusTab?: b
     };
   }
 
-  for (const tab of tabs) {
-    if (tab.id === undefined) continue;
-    if (focusTab && !tab.active) {
-      await chrome.tabs.update(tab.id, { active: true }).catch(() => {});
-    }
-    try {
-      const response = await chrome.tabs.sendMessage(tab.id, payload);
-      if (response) return response;
-    } catch {
-      const injected = await injectContentScriptIfNeeded(tab.id);
-      if (injected) {
-        await new Promise((r) => setTimeout(r, 180));
-        try {
-          const retryResponse = await chrome.tabs.sendMessage(tab.id, payload);
-          if (retryResponse) return retryResponse;
-        } catch {
-          // Continue to next tab if any
-        }
-      }
-    }
+  const tab = tabs.find((item) => item.id !== undefined);
+  if (!tab) return { ok: false, error: 'Aucun onglet Kyara disponible.' };
+  if (focusTab && !tab.active) await chrome.tabs.update(tab.id!, { active: true });
+  if (!await injectContentScriptIfNeeded(tab.id!)) {
+    return { ok: false, error: "L'onglet Kyara est en cours de rechargement. Réessaie une fois la page prête." };
   }
-
-  return {
-    ok: false,
-    error: "Impossible de joindre l'onglet kyara.games. Vérifie que la page a fini de charger."
-  };
+  try {
+    // Deliver once. A lost response may follow a successful purchase or recycle.
+    return await chrome.tabs.sendMessage(tab.id!, payload) || { ok: false, error: 'Réponse vide de Kyara.' };
+  } catch {
+    return { ok: false, error: 'Connexion interrompue. Vérifie le résultat dans Kyara avant de relancer cette action.' };
+  }
 }
 
 async function showDesktopNotification(title: string, message: string, idPrefix = 'km-notif'): Promise<void> {
@@ -110,7 +104,11 @@ async function showDesktopNotification(title: string, message: string, idPrefix 
   }
 }
 
-chrome.runtime.onInstalled.addListener(async () => {
+chrome.runtime.onInstalled.addListener(async (details) => {
+  await chrome.storage.local.set({ kmUpdate: {
+    status: details.reason === 'update' ? 'updated' : 'idle',
+    currentVersion: chrome.runtime.getManifest().version
+  } });
   await ensureAlarm();
   await updateBadgeFromState();
   const tabs = await findKyaraTabs();
@@ -127,13 +125,13 @@ chrome.runtime.onStartup.addListener(async () => {
 });
 
 chrome.runtime.onUpdateAvailable.addListener((details) => {
-  console.log('[Kyara Manager] Mise à jour disponible vers v' + details.version + ' - Rechargement immédiat');
-  chrome.runtime.reload();
+  void updateAvailable(details.version).catch(console.warn);
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
   await updateBadgeFromState();
+  await applyPendingUpdate();
   const { settings } = (await chrome.storage.local.get('settings')) as { settings?: KyaraSettings };
   if (!settings?.masterEnabled) return;
   await sendToKyaraTab({ type: 'km:alarm-tick' });
@@ -145,6 +143,8 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
   }
 });
 
+let settingsQueue = Promise.resolve();
+
 chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.MessageSender, sendResponse: (res: any) => void) => {
   (async () => {
     try {
@@ -153,6 +153,21 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
         return;
       }
 
+      if (message.type === 'km:update-check') {
+        await checkForUpdate();
+        sendResponse({ ok: true });
+        return;
+      }
+      if (message.type === 'km:save-settings') {
+        const turn = settingsQueue.then(async () => {
+          const stored = await chrome.storage.local.get('settings');
+          await chrome.storage.local.set({ settings: mergeSettings(stored.settings, message.settings || {}) });
+        });
+        settingsQueue = turn.catch(() => {});
+        await turn;
+        sendResponse({ ok: true });
+        return;
+      }
       if (message.type === 'km:open-sidepanel') {
         const windowId = sender?.tab?.windowId;
         if (windowId !== undefined) {
@@ -189,7 +204,7 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
         return;
       }
 
-      if (message.type.startsWith('km:cmd:') || message.type === 'km:save-settings') {
+      if (message.type.startsWith('km:cmd:')) {
         const shouldFocus =
           message.type === 'km:cmd:open-pack' || message.type === 'km:cmd:open-recommended';
         const res = await sendToKyaraTab(message, { focusTab: shouldFocus });

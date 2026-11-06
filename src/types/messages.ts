@@ -16,10 +16,11 @@ export type ExtensionCommand =
   | { type: 'km:cmd:cancel-listing'; listingId: string; name?: string }
   | { type: 'km:cmd:buy-listing'; listingId: string; price: number; name?: string }
   | { type: 'km:cmd:toggle-pin'; characterId: number }
-  | { type: 'km:cmd:wishlist-add'; characterId: number; name: string; series?: string; rarity?: string; budgetChakra?: number }
+  | { type: 'km:cmd:wishlist-add'; characterId: number; name: string; series?: string; rarity?: string; budgetChakra?: number; autoBuy?: boolean }
   | { type: 'km:cmd:wishlist-remove'; characterId: number }
   | { type: 'km:save-settings'; settings: Partial<KyaraSettings> }
   | { type: 'km:open-kyara-tab' }
+  | { type: 'km:update-check' }
   | { type: 'km:log'; level?: string; message: string };
 
 export interface CommandResponse {

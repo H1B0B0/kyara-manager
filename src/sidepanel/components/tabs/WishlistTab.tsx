@@ -9,7 +9,7 @@ export interface WishlistTabProps {
   suggestions: WishlistSuggestion[];
   duplicates: DuplicateCard[];
   deals: MarketDeal[];
-  onAddWish: (item: { characterId: number; name: string; series?: string; rarity?: string; budgetChakra?: number }) => Promise<any>;
+  onAddWish: (item: { characterId: number; name: string; series?: string; rarity?: string; budgetChakra?: number; autoBuy?: boolean }) => Promise<any>;
   onRemoveWish: (characterId: number) => Promise<any>;
   onToast: (msg: string) => void;
   onRefresh: () => void;
@@ -27,6 +27,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [budget, setBudget] = useState<string>('');
+  const [autoBuy, setAutoBuy] = useState(false);
   const [selectedChar, setSelectedChar] = useState<any>(null);
   const [showAuto, setShowAuto] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -40,6 +41,14 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
         setCatalogList(stored.kmCatalogCache.list);
       }
     });
+    const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+      if (area === 'local' && changes.kmCatalogCache) {
+        const cached = changes.kmCatalogCache.newValue as { list?: any[] };
+        setCatalogList(Array.isArray(cached?.list) ? cached.list : []);
+      }
+    };
+    chrome.storage.onChanged.addListener(listener);
+    return () => chrome.storage.onChanged.removeListener(listener);
   }, []);
 
   // Search candidate pool
@@ -84,14 +93,18 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
   };
 
   const handleAdd = async () => {
-    const name = search.trim();
-    if (!name) {
-      onToast('Veuillez saisir un nom de personnage');
+    const name = selectedChar?.name;
+    if (!selectedChar) {
+      onToast('Sélectionne une carte dans les résultats de recherche');
+      return;
+    }
+    const budgetNum = Number(budget);
+    if (!Number.isSafeInteger(budgetNum) || budgetNum <= 0) {
+      onToast('Indique un budget entier supérieur à zéro');
       return;
     }
     setSubmitting(true);
-    const budgetNum = Number(budget) || 0;
-    const characterId = selectedChar?.characterId || Math.abs(hashCode(name));
+    const characterId = selectedChar.characterId;
     const series = selectedChar?.series || '';
     const rarity = selectedChar?.rarity || 'C';
 
@@ -100,7 +113,8 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
       name,
       series,
       rarity,
-      budgetChakra: budgetNum
+      budgetChakra: budgetNum,
+      autoBuy
     });
     setSubmitting(false);
 
@@ -108,6 +122,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
       onToast(`${name} ajouté aux envies !`);
       setSearch('');
       setBudget('');
+      setAutoBuy(false);
       setSelectedChar(null);
       onRefresh();
     } else {
@@ -189,18 +204,24 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
           <button
             type="button"
             onClick={handleAdd}
-            disabled={submitting}
+            disabled={submitting || !selectedChar}
             className="btn btn--primary btn--sm"
           >
             <span>+ {t('wishlistBtnAdd')}</span>
           </button>
         </div>
 
+        <label className="check-row" style={{ marginTop: 8 }}>
+          <input type="checkbox" checked={autoBuy} onChange={(event) => setAutoBuy(event.target.checked)} />
+          <span>Autoriser l'achat automatique de cette carte dans le budget, si le module Envies est activé.</span>
+        </label>
+
         {/* Autocomplete dropdown */}
         {showAuto && autocompleteList.length > 0 && (
           <div className="wishlist-autocomplete">
             {autocompleteList.map((item) => (
-              <div
+              <button
+                type="button"
                 key={item.characterId}
                 className="wishlist-autocomplete__item"
                 onClick={() => handleSelectAutocomplete(item)}
@@ -210,7 +231,7 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
                 <span style={{ color: 'var(--mut)', fontSize: '11px' }}>
                   ({item.series || '—'}) · ~{item.refMedian} ◆
                 </span>
-              </div>
+              </button>
             ))}
           </div>
         )}
@@ -416,12 +437,3 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
     </section>
   );
 };
-
-function hashCode(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    hash = (hash << 5) - hash + str.charCodeAt(i);
-    hash |= 0;
-  }
-  return hash;
-}

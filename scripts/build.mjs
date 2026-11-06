@@ -8,6 +8,11 @@ import * as esbuild from 'esbuild';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
+const packageJson = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8'));
+const sourceManifest = JSON.parse(fs.readFileSync(path.join(rootDir, 'manifest.json'), 'utf8'));
+if (packageJson.version !== sourceManifest.version) {
+  throw new Error('Versions package.json/manifest.json différentes. Exécute node scripts/sync-version.mjs.');
+}
 
 console.log('⚡ Building Kyara Manager (TypeScript + React 19 + Vite)...');
 
@@ -50,6 +55,14 @@ await esbuild.build({
   sourcemap: false
 });
 
+await esbuild.build({
+  entryPoints: [path.join(rootDir, 'src/content/page-hook.ts')],
+  outfile: path.join(contentOutDir, 'page-hook.js'),
+  bundle: true,
+  format: 'iife',
+  minify: true
+});
+
 // Copy content CSS to dist
 fs.copyFileSync(
   path.join(rootDir, 'src/content/content.css'),
@@ -77,13 +90,11 @@ manifestSrc.background = {
   service_worker: 'background/service-worker.js',
   type: 'module'
 };
-manifestSrc.content_scripts = [
-  {
-    matches: ['https://kyara.games/*', 'https://*.kyara.games/*'],
-    js: ['content/content.js'],
-    css: ['content/content.css']
-  }
-];
+manifestSrc.content_scripts = manifestSrc.content_scripts.map((script) => ({
+  ...script,
+  js: script.js?.map((file) => file.replace(/^dist\//, '')),
+  css: script.css?.map((file) => file.replace(/^dist\//, ''))
+}));
 
 fs.writeFileSync(path.join(distDir, 'manifest.json'), JSON.stringify(manifestSrc, null, 2));
 

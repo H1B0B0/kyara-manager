@@ -4,6 +4,28 @@ Toutes les modifications notables de **Kyara Manager** sont documentées dans ce
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.2] - 2026-11-06
+
+### Corrigé
+- Version du manifeste synchronisée lors de `npm version`, version réelle affichée dans le panneau, reconstruction systématique avant packaging.
+- Mise à jour affichée dans le panneau, vérification manuelle et application automatique après la fin des opérations en cours.
+- Réinjection avec nettoyage des anciens écouteurs et timers ; rechargement des onglets provenant des versions anciennes sans nettoyage disponible.
+- Verrouillage des opérations entre onglets d'une même origine ; aucune répétition d'une transaction après perte de sa réponse ou réponse HTTP 503.
+- Mode simulation bloquant toutes les écritures API, y compris les anciens chemins de recyclage Turbo et le booster quotidien.
+- Synchronisation des réglages historiques et de ceux du panneau ; les interrupteurs boosters, missions, marché et envies sont effectivement pris en compte.
+- Vente et recyclage vérifiés sur la collection et les annonces réelles, protections et nombre d'exemplaires conservés compris.
+- Retrait des recyclages aveugles d'annonces stagnantes ; les cartes libérées sont réévaluées.
+- Comptabilisation des ventes uniquement sur confirmation serveur, sans double comptage entre onglets ; journal et compteurs sérialisés.
+- Ouvertures non confirmées exclues des statistiques, suppression des doublons de tirages et du script inline incompatible avec certaines CSP.
+- Conservation de l'état des onglets, réglages enregistrés avant confirmation, erreurs de connexion visibles et navigation au clavier.
+- Envies limitées aux cartes sélectionnées dans le catalogue, budget validé et autorisation d'achat automatique transmise par carte.
+- CI sur Node 24, compatible avec les dépendances installées ; les erreurs de publication ne sont plus masquées.
+
+### Validation
+- 62 tests automatisés couvrant calculs, API, opérations concurrentes, réglages, routage, mises à jour et sécurité des automatismes.
+- Vérification TypeScript avec détection des imports et paramètres inutilisés ; build et archive Chrome Web Store vérifiés.
+- Voir [la note de fiabilisation](docs/RELIABILITY.md) pour les limites et les scénarios de recette Chrome.
+
 ## [1.4.0] - 2026-11-06
 
 ### Added

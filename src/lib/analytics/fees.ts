@@ -44,6 +44,7 @@ export function isResaleBlocked(entry: any, now = Date.now()): boolean {
 
 export function computeSpareCopies(entry: any, activeListedQty = 0): number {
   if (!entry || entry.pinned || isResaleBlocked(entry)) return 0;
+  if (!Number.isFinite(Number(entry.qty))) return 0;
   const qty = Math.max(0, Math.floor(Number(entry.qty) || 0));
   if (qty < 2) return 0;
   const locked = Math.max(0, Math.floor(Number(entry.locked) || 0));
@@ -52,7 +53,7 @@ export function computeSpareCopies(entry: any, activeListedQty = 0): number {
   const byFormula = Math.max(0, qty - locked - resaleLocked - 1);
   const serverListable =
     entry.listable !== undefined && entry.listable !== null
-      ? Math.max(0, Math.min(qty - 1, Math.floor(Number(entry.listable))))
+      ? Math.max(0, Math.min(qty - 1, Math.floor(Number(entry.listable) || 0)))
       : byFormula;
   const available = Math.min(byFormula, serverListable);
   return Math.max(0, available - Math.max(0, Math.floor(Number(activeListedQty) || 0)));

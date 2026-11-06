@@ -108,3 +108,31 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   dryRun: false,
   language: 'fr'
 };
+
+// Public UI keys are canonical; legacy keys remain synchronized for compatibility.
+export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettings {
+  const settings = { ...DEFAULT_SETTINGS, ...raw };
+  settings.autoBoosterEnabled = raw.autoBoosterEnabled ?? raw.autoOpenEnabled ?? DEFAULT_SETTINGS.autoBoosterEnabled;
+  settings.autoOpenEnabled = settings.autoBoosterEnabled;
+  settings.autoClaimMissionsEnabled = raw.autoClaimMissionsEnabled ?? raw.autoClaimMissions ?? DEFAULT_SETTINGS.autoClaimMissionsEnabled;
+  settings.autoClaimMissions = settings.autoClaimMissionsEnabled;
+  settings.autoMarketEnabled = raw.autoMarketEnabled ?? raw.autoBuyFlipEnabled ?? DEFAULT_SETTINGS.autoMarketEnabled;
+  settings.autoBuyFlipEnabled = settings.autoMarketEnabled;
+  settings.autoBuyMinChakraReserve = raw.autoMarketReserveChakra ?? raw.autoBuyMinChakraReserve ?? DEFAULT_SETTINGS.autoMarketReserveChakra;
+  settings.autoMarketReserveChakra = settings.autoBuyMinChakraReserve;
+  return settings;
+}
+
+export function mergeSettings(current: Partial<KyaraSettings>, patch: Partial<KyaraSettings>): KyaraSettings {
+  const synced = { ...patch };
+  for (const [canonical, legacy] of [
+    ['autoBoosterEnabled', 'autoOpenEnabled'],
+    ['autoClaimMissionsEnabled', 'autoClaimMissions'],
+    ['autoMarketEnabled', 'autoBuyFlipEnabled'],
+    ['autoMarketReserveChakra', 'autoBuyMinChakraReserve']
+  ] as const) {
+    if (patch[canonical] !== undefined) (synced as any)[legacy] = patch[canonical];
+    else if (patch[legacy] !== undefined) (synced as any)[canonical] = patch[legacy];
+  }
+  return normalizeSettings({ ...current, ...synced });
+}

@@ -54,7 +54,7 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
     const res = await sendCommand({ type: 'km:cmd:bulk-recycle' });
     setDraining(false);
     if (res?.ok) {
-      onToast(t('toastBulkRecycleDone', { count: res.recycledCount || turboCopies, chakra: res.chakraGained || turboChakra }));
+      onToast(t('toastBulkRecycleDone', { count: res.recycledCount ?? 0, chakra: res.chakraGained ?? 0 }));
       onRefresh();
     } else {
       onToast(res?.error || 'Erreur');

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import type { AutopilotPullRecord, Rarity } from '../../../types/kyara';
+import type { AutopilotPullRecord } from '../../../types/kyara';
 import { RarityPill } from '../common/RarityPill';
 import { t } from '../../../lib/i18n';
 

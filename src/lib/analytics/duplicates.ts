@@ -44,7 +44,7 @@ export function evaluateDuplicate(
   const crashDiscountPct = liveDepth?.crashDiscountPct || 0;
   const bestBuyOrder = Number.isFinite(marketStats.bestBuyOrder) && marketStats.bestBuyOrder > 0 ? marketStats.bestBuyOrder : null;
 
-  const surgeThresholdPct = Number(settings?.speculateHoldSurging ?? 20);
+  const surgeThresholdPct = 20;
   const trendPct = median7d && median30d ? Math.round(((median7d - median30d) / median30d) * 100) : 0;
   const isSurging = Boolean(
     median7d &&

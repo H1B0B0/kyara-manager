@@ -1,7 +1,7 @@
 import { kyaraApi } from './api';
 import { ensureCatalog, ensurePackPools, ensureCollectionPrices, runtimeCache } from './cache';
 import { state, loadSettings } from './state';
-import { recordCumulativeMetric, appendJournal } from './journal';
+import { recordConfirmedSale } from './journal';
 import { notifyDesktop } from './utils';
 import { updateFloatingHud } from './hud';
 import { scanMarketDealsInternal, scanProfitableTrades } from './scanner';
@@ -25,7 +25,23 @@ function RARITY_BucketsHas(buckets: Record<string, any>, r: string): boolean {
   return Object.prototype.hasOwnProperty.call(buckets, r);
 }
 
-export async function refreshDashboardSnapshot({ forcePrices = false, scanMarketDeals = false } = {}): Promise<any> {
+let inFlight: Promise<any> | null = null;
+let inFlightOptions = { forcePrices: false, scanMarketDeals: false };
+let accountId: string | null = null;
+
+export function refreshDashboardSnapshot(options: { forcePrices?: boolean; scanMarketDeals?: boolean } = {}): Promise<any> {
+  if (inFlight) {
+    if ((options.forcePrices && !inFlightOptions.forcePrices) || (options.scanMarketDeals && !inFlightOptions.scanMarketDeals)) {
+      return inFlight.then(() => refreshDashboardSnapshot(options));
+    }
+    return inFlight;
+  }
+  inFlightOptions = { forcePrices: !!options.forcePrices, scanMarketDeals: !!options.scanMarketDeals };
+  inFlight = buildDashboardSnapshot(inFlightOptions).finally(() => { inFlight = null; });
+  return inFlight;
+}
+
+async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = false } = {}): Promise<any> {
   await loadSettings();
 
   let bootstrap: any = null;
@@ -59,11 +75,18 @@ export async function refreshDashboardSnapshot({ forcePrices = false, scanMarket
 
   const [config, collection, myMarket, packs, catalogById] = await Promise.all([
     kyaraApi('/config', { auth: false }).catch(() => ({ recycle: DEFAULT_RECYCLE_VALUES })),
-    kyaraApi('/me/collection?lean=1').catch(() => []),
-    kyaraApi('/me/market').catch(() => ({ listings: [], bids: [], buyOrders: [] })),
+    kyaraApi('/me/collection?lean=1'),
+    kyaraApi('/me/market'),
     kyaraApi('/packs', { auth: false }).catch(() => []),
     ensureCatalog(false)
   ]);
+  if (!Array.isArray(collection) || !Array.isArray(myMarket?.listings)) {
+    throw new Error('Synchronisation incomplète : collection ou annonces indisponibles.');
+  }
+  if (accountId !== String(me.id)) {
+    accountId = String(me.id);
+    state.previousActiveListings.clear();
+  }
 
   const packState = bootstrap?.packs || null;
   const progress = bootstrap?.progress || null;
@@ -78,11 +101,10 @@ export async function refreshDashboardSnapshot({ forcePrices = false, scanMarket
     for (const [oldId, oldInfo] of state.previousActiveListings.entries()) {
       if (!currentIds.has(oldId)) {
         const expired = oldInfo.endsAt && Date.parse(oldInfo.endsAt) <= now;
-        if (!expired) {
+        const listing = !expired ? await kyaraApi(`/market/listings/${encodeURIComponent(oldId)}`).catch(() => null) : null;
+        if (listing?.status === 'sold') {
           const net = computeNetProceeds(oldInfo.price);
-          await recordCumulativeMetric({ chakraFromSales: net, cardsSold: 1 });
-          await appendJournal('sold', `Carte vendue : ${oldInfo.name} pour ${oldInfo.price} ◆ (net +${net} ◆)`);
-          notifyDesktop(
+          if (await recordConfirmedSale(oldId, oldInfo)) notifyDesktop(
             'Carte vendue sur Kyara !',
             `${oldInfo.name} vendue pour ${oldInfo.price} ◆ (+${net} ◆ net)`,
             'km-sold'
@@ -200,8 +222,9 @@ export async function refreshDashboardSnapshot({ forcePrices = false, scanMarket
     trades = tradesRes;
   } else {
     const stored = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
-    deals = stored?.kmDashboard?.deals || [];
-    trades = stored?.kmDashboard?.trades || [];
+    const sameAccount = String(stored?.kmDashboard?.me?.id) === String(me.id);
+    deals = sameAccount ? stored?.kmDashboard?.deals || [] : [];
+    trades = sameAccount ? stored?.kmDashboard?.trades || [] : [];
   }
 
   const sellCandidates = evaluatedDuplicates.filter((d) => d.verdict === 'VENDRE' && d.spare > 0);

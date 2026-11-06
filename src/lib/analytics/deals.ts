@@ -68,13 +68,15 @@ export function evaluateDeal(
   const roiPct = Math.round((flipProfit / buyPrice) * 100);
 
   const minDiscount = Number(settings.autoBuyMinDiscountPct ?? 28);
-  const minProfit = Number(settings.autoBuyMinFlipProfit ?? 15);
+  const minProfit = Number(settings.autoMarketMinProfit ?? settings.autoBuyMinFlipProfit ?? 15);
+  const minMargin = Number(settings.autoMarketMinMarginPct ?? 0);
   const minSales = Number(settings.autoBuyMinSales7d ?? 4);
   const maxUnit = Number(settings.autoBuyMaxUnitPrice ?? 400);
 
   const isGoodFlip =
     discountPct >= minDiscount &&
     flipProfit >= minProfit &&
+    roiPct >= minMargin &&
     sales7d >= minSales &&
     buyPrice <= maxUnit;
 

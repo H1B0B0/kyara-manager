@@ -34,10 +34,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Set up Node.js 20
+      - name: Set up Node.js 24
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
 
       - name: Install dependencies
         run: npm ci
@@ -47,9 +47,6 @@ jobs:
 
       - name: Run unit tests
         run: npm test
-
-      - name: Build extension
-        run: npm run build
 
       - name: Build Chrome Web Store package
         run: npm run package:cws
@@ -84,7 +81,6 @@ jobs:
 
       - name: 🚀 Auto-Upload & Submit to Chrome Web Store
         if: (startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_cws)) && env.CHROME_CLIENT_ID != '' && env.CHROME_REFRESH_TOKEN != ''
-        continue-on-error: true
         uses: mnao305/chrome-extension-upload@v5.0.0
         with:
           file-path: dist/kyara-manager-cws.zip

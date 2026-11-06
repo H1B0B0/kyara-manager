@@ -1,5 +1,6 @@
 import { KyaraApiOptions } from './types';
 import { sleep, randomJitter, readSiteAuth } from './utils';
+import { state } from './state';
 
 let writeQueue = Promise.resolve();
 let lastWriteAt = 0;
@@ -28,6 +29,10 @@ export async function kyaraApi<T = any>(
   { method = 'GET', body, withPass = false, extraHeaders = {}, auth = true }: KyaraApiOptions = {}
 ): Promise<T> {
   const isWrite = method !== 'GET';
+  if (state.disposed || !chrome.runtime?.id) throw new Error('Extension rechargée. Actualise cet onglet Kyara.');
+  if (isWrite && state.currentSettings.dryRun) {
+    throw new Error('Mode simulation actif : aucune modification envoyée à Kyara.');
+  }
   const maxAttempts = 3;
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
@@ -37,6 +42,8 @@ export async function kyaraApi<T = any>(
       await sleep(cooldownUntil - Date.now());
     }
 
+    if (state.disposed || !chrome.runtime?.id) throw new Error('Extension rechargée. Actualise cet onglet Kyara.');
+    if (isWrite && state.currentSettings.dryRun) throw new Error('Mode simulation actif : action annulée.');
     const siteAuth = readSiteAuth();
     const headers: Record<string, string> = {
       Accept: 'application/json',
@@ -60,7 +67,8 @@ export async function kyaraApi<T = any>(
       headers,
       credentials: 'same-origin',
       body: body !== undefined ? JSON.stringify(body) : undefined,
-      cache: 'no-store'
+      cache: 'no-store',
+      signal: AbortSignal.timeout(20000)
     });
 
     const rushHeader = Number(response.headers.get('x-kyara-rush'));
@@ -80,7 +88,8 @@ export async function kyaraApi<T = any>(
           ? retryAfter * 1000
           : 1500 * Math.pow(2, attempt) + randomJitter(400);
       cooldownUntil = Math.max(cooldownUntil, Date.now() + backoff);
-      if (attempt + 1 < maxAttempts) {
+      // A 503 can arrive after a write committed. Never replay an ambiguous mutation.
+      if (attempt + 1 < maxAttempts && (!isWrite || response.status === 429)) {
         continue;
       }
     }

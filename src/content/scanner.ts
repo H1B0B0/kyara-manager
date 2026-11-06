@@ -33,7 +33,7 @@ export async function scanMarketDealsInternal(
     seen.add(item.id);
 
     const charId = Number(item.character?.id ?? item.characterId);
-    const deal: any = evaluateDeal(item, ownedSet, state.currentSettings);
+    const deal: any = evaluateDeal(item, runtimeCache.collectionPrices.get(charId) || {}, ownedSet, state.currentSettings);
     if (!deal) continue;
 
     // Croisement Wishlist (Mes envies)
@@ -111,11 +111,11 @@ export async function scanProfitableTrades(
 
       if (isWish || profit >= 3 || (isMissing && profit >= -5)) {
         profitable.push({
-          id: item.id,
+          listingId: String(item.id),
           seller: item.seller?.pseudo || '?',
           isWish: Boolean(isWish),
           offered: {
-            id: offeredId,
+            characterId: offeredId,
             name: offeredChar.name || `Carte #${offeredId}`,
             rarity: offeredChar.rarity || 'C',
             median7d: offeredPrice,
@@ -123,12 +123,13 @@ export async function scanProfitableTrades(
             isWish: Boolean(isWish)
           },
           wanted: {
-            id: wantedId,
+            characterId: wantedId,
             name: myCard.name,
             rarity: myCard.rarity,
             median7d: myPrice
           },
           profit,
+          roiPct: myPrice > 0 ? Math.round((profit / myPrice) * 100) : 0,
           createdAt: item.createdAt || null
         });
       }

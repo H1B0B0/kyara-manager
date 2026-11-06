@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React from 'react';
 import { t } from '../../lib/i18n';
 
 export type TabId = 'autopilot' | 'duplicates' | 'market' | 'wishlist' | 'boosters' | 'settings';
@@ -18,8 +18,6 @@ export const Navigation: React.FC<NavigationProps> = ({
   dealsCount,
   wishlistCount
 }) => {
-  const navRef = useRef<HTMLElement>(null);
-
   const tabs: Array<{ id: TabId; glyph: string; labelKey: string; badge?: number }> = [
     { id: 'autopilot', glyph: '操', labelKey: 'tabAutopilot' },
     { id: 'duplicates', glyph: '集', labelKey: 'tabDuplicates', badge: duplicatesCount },
@@ -29,14 +27,19 @@ export const Navigation: React.FC<NavigationProps> = ({
     { id: 'settings', glyph: '設', labelKey: 'tabSettings' }
   ];
 
-  const handleWheel = (e: React.WheelEvent) => {
-    if (navRef.current && e.deltaY !== 0) {
-      navRef.current.scrollLeft += e.deltaY;
-    }
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    const index = tabs.findIndex((tab) => tab.id === activeTab);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? tabs.length - 1
+      : event.key === 'ArrowRight' ? (index + 1) % tabs.length
+      : event.key === 'ArrowLeft' ? (index - 1 + tabs.length) % tabs.length : null;
+    if (next === null) return;
+    event.preventDefault();
+    onTabChange(tabs[next].id);
+    document.getElementById(`km-tab-${tabs[next].id}`)?.focus();
   };
 
   return (
-    <nav ref={navRef} onWheel={handleWheel} className="tab-nav" role="tablist" aria-label="Sections de Kyara Manager">
+    <nav onKeyDown={handleKeyDown} className="tab-nav" role="tablist" aria-label="Sections de Kyara Manager">
       {tabs.map((tab) => {
         const isActive = activeTab === tab.id;
         return (
@@ -44,6 +47,9 @@ export const Navigation: React.FC<NavigationProps> = ({
             key={tab.id}
             type="button"
             role="tab"
+            id={`km-tab-${tab.id}`}
+            aria-controls={`km-panel-${tab.id}`}
+            tabIndex={isActive ? 0 : -1}
             aria-selected={isActive}
             className={`tab-btn ${isActive ? 'is-active' : ''}`}
             onClick={() => onTabChange(tab.id)}

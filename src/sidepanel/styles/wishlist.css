@@ -118,3 +118,11 @@
   color: #3fbf7f;
   font-weight: 700;
 }
+.wishlist-autocomplete__item {
+  width: 100%;
+  text-align: left;
+  background: var(--panel);
+  color: var(--fg);
+  border: 0;
+  font: inherit;
+}

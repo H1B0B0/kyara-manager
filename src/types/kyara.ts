@@ -216,6 +216,7 @@ export interface WishlistItem {
   series: string;
   rarity: Rarity;
   budgetChakra: number;
+  autoBuy?: boolean;
   lowestMarketPrice: number | null;
   bestListingId: string | null;
   addedAt: number;

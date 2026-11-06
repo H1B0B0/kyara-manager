@@ -14,6 +14,7 @@ if (!fs.existsSync(indexHtmlPath)) {
 }
 
 const originalHtml = fs.readFileSync(indexHtmlPath, 'utf8');
+const version = JSON.parse(fs.readFileSync(path.join(rootDir, 'package.json'), 'utf8')).version;
 
 const mockScript = `
 <script>
@@ -356,17 +357,26 @@ window.mockWishlist = [
 ];
 
 // Mock Chrome Extension API
+const storageListeners = new Set();
 window.chrome = {
   runtime: {
     lastError: null,
     getManifest: function() {
-      return { side_panel: { default_path: 'sidepanel/index.html' } };
+      return { version: '${version}', side_panel: { default_path: 'sidepanel/index.html' } };
     },
     getURL: function(path) {
       return path;
     },
     sendMessage: function(cmd, callback) {
+      callback ||= () => {};
       console.log('[Mock chrome.runtime.sendMessage]', cmd);
+      if (cmd.type === 'km:save-settings') {
+        Object.assign(window.mockSettings, cmd.settings);
+        storageListeners.forEach(fn => fn({ settings: { newValue: window.mockSettings } }, 'local'));
+      }
+      if (cmd.type === 'km:update-check') {
+        storageListeners.forEach(fn => fn({ kmUpdate: { newValue: { status: 'no_update', currentVersion: '${version}' } } }, 'local'));
+      }
       if (cmd.type === 'km:cmd:refresh') {
         callback({ ok: true, dashboard: window.mockDashboard });
       } else if (cmd.type === 'km:cmd:run-cycle') {
@@ -384,6 +394,7 @@ window.chrome = {
       }
     }
   },
+  tabs: { create: async function() {} },
   storage: {
     local: {
       get: function(keys, callback) {
@@ -419,8 +430,8 @@ window.chrome = {
       }
     },
     onChanged: {
-      addListener: function() {},
-      removeListener: function() {}
+      addListener: function(fn) { storageListeners.add(fn); },
+      removeListener: function(fn) { storageListeners.delete(fn); }
     }
   }
 };
@@ -429,4 +440,10 @@ window.chrome = {
 
 const previewHtml = originalHtml.replace('<head>', '<head>\n' + mockScript);
 fs.writeFileSync(path.join(distSidepanel, 'preview.html'), previewHtml, 'utf8');
+const standalone = previewHtml
+  .replace(/<script type="module"[^>]*src="([^"]+)"[^>]*><\/script>/, (_tag, src) =>
+    `<script type="module">${fs.readFileSync(path.join(distSidepanel, src), 'utf8').replace(/<\/script/gi, '<\\/script')}</script>`)
+  .replace(/<link[^>]*href="([^"]+\.css)"[^>]*>/, (_tag, src) =>
+    `<style>${fs.readFileSync(path.join(distSidepanel, src), 'utf8')}</style>`);
+fs.writeFileSync(path.join(distSidepanel, 'preview-standalone.html'), standalone, 'utf8');
 console.log('✅ Generated dist/sidepanel/preview.html with full mock data');

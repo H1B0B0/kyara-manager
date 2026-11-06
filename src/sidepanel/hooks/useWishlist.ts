@@ -22,7 +22,7 @@ export function useWishlist() {
   }, []);
 
   const addWish = useCallback(
-    async (item: { characterId: number; name: string; series?: string; rarity?: string; budgetChakra?: number }) => {
+    async (item: { characterId: number; name: string; series?: string; rarity?: string; budgetChakra?: number; autoBuy?: boolean }) => {
       const res = await sendCommand({
         type: 'km:cmd:wishlist-add',
         ...item

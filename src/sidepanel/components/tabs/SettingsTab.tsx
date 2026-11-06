@@ -1,35 +1,43 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import type { KyaraSettings, Language, PricingStrategy } from '../../../types/settings';
 import { DEFAULT_SETTINGS } from '../../../types/settings';
 import { t } from '../../../lib/i18n';
 
 export interface SettingsTabProps {
   settings: KyaraSettings;
-  onUpdateSettings: (partial: Partial<KyaraSettings>) => void;
+  onUpdateSettings: (partial: Partial<KyaraSettings>) => Promise<void>;
   onToast: (msg: string) => void;
 }
 
 export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSettings, onToast }) => {
   const [form, setForm] = useState<KyaraSettings>(settings);
+  const edits = useRef<Partial<KyaraSettings>>({});
 
   React.useEffect(() => {
-    setForm(settings);
+    setForm({ ...settings, ...edits.current });
   }, [settings]);
 
   const handleChange = <K extends keyof KyaraSettings>(key: K, value: KyaraSettings[K]) => {
+    edits.current[key] = value;
     setForm((prev) => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = (e: React.FormEvent) => {
+  const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    onUpdateSettings(form);
-    onToast(t('toastSettingsSaved'));
+    try {
+      await onUpdateSettings(edits.current);
+      edits.current = {};
+      onToast(t('toastSettingsSaved'));
+    } catch (err: any) { onToast(err.message); }
   };
 
-  const handleResetDefaults = () => {
+  const handleResetDefaults = async () => {
     setForm(DEFAULT_SETTINGS);
-    onUpdateSettings(DEFAULT_SETTINGS);
-    onToast(t('toastSettingsReset'));
+    edits.current = {};
+    try {
+      await onUpdateSettings(DEFAULT_SETTINGS);
+      onToast(t('toastSettingsReset'));
+    } catch (err: any) { onToast(err.message); }
   };
 
   return (

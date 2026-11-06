@@ -8,6 +8,10 @@ import { refreshDashboardSnapshot } from '../snapshot';
 import { RARITIES } from '../../lib/analytics/constants';
 
 export async function fallbackApiOpenBooster(packId: string, packName: string, countToOpen = 1): Promise<{ openedCount: number; newCardsCount: number }> {
+  if (state.currentSettings.dryRun) {
+    await appendJournal('open', `[SIMULATION] Ouvrirait ${countToOpen}× « ${packName} »`);
+    return { openedCount: 0, newCardsCount: 0 };
+  }
   const reqId = newRequestId();
   let results: any[] = [];
   if (countToOpen <= 1) {
@@ -19,7 +23,7 @@ export async function fallbackApiOpenBooster(packId: string, packName: string, c
     });
     if (single) {
       results = [single];
-      window.dispatchEvent(new CustomEvent('kyara:pull', { detail: single }));
+
     }
   } else {
     const many = await kyaraApi(`/packs/${encodeURIComponent(packId)}/open-many`, {
@@ -29,10 +33,7 @@ export async function fallbackApiOpenBooster(packId: string, packName: string, c
       body: { count: Math.min(10, countToOpen), maxChakra: 0 }
     });
     results = Array.isArray(many?.results) ? many.results : [];
-    const last = results[results.length - 1];
-    if (last) {
-      window.dispatchEvent(new CustomEvent('kyara:pull', { detail: last }));
-    }
+
   }
 
   const pulledCards = results.flatMap((r: any) => r.cards || []);
@@ -75,6 +76,10 @@ export async function pilotLiveBoosterOpening(
   packName: string,
   requestedCount = 1
 ): Promise<{ openedCount: number; newCardsCount: number; busy?: boolean; blockedForChakra?: boolean }> {
+  if (state.currentSettings.dryRun) {
+    await appendJournal('open', `[SIMULATION] Ouvrirait ${requestedCount}× « ${packName} »`);
+    return { openedCount: 0, newCardsCount: 0 };
+  }
   if (state.isLiveOpening) {
     return { openedCount: 0, newCardsCount: 0, busy: true };
   }
@@ -83,7 +88,7 @@ export async function pilotLiveBoosterOpening(
 
   try {
     const targetPath = `/ouvrir/${encodeURIComponent(packId)}`;
-    await navigateSpaTo(targetPath);
+    if (!await navigateSpaTo(targetPath)) throw new Error('Navigation vers le booster impossible');
 
     const openModalCloseBtn = document.querySelector(
       ".modal .close, button.close, [class*='modal'] [class*='close'], button[aria-label='Close'], .overlay [class*='close']"
@@ -96,8 +101,8 @@ export async function pilotLiveBoosterOpening(
 
     const summaryAgainBtn = document.querySelector('.summary button, button.again, button.btn-again') as HTMLElement | null;
     if (summaryAgainBtn && !(summaryAgainBtn as any).disabled) {
-      summaryAgainBtn.click();
-      await sleep(350);
+      // "Again" can initiate another opening immediately. Use the capped API instead.
+      return await fallbackApiOpenBooster(packId, packName, requestedCount);
     }
 
     await waitForElement('.multi, button.btn.btn-open, button.btn-open, button.btn', {
@@ -117,8 +122,9 @@ export async function pilotLiveBoosterOpening(
         multButtons.find((b) => {
           const txt = (b.textContent || '').trim();
           return txt === '×1' || txt === 'x1';
-        }) ||
-        multButtons[0];
+        });
+
+      if (!matchBtn) return await fallbackApiOpenBooster(packId, packName, requestedCount);
 
       if (matchBtn && !matchBtn.classList.contains('on') && !matchBtn.classList.contains('active')) {
         matchBtn.click();
@@ -166,15 +172,6 @@ export async function pilotLiveBoosterOpening(
           return isFree && !hasChakra;
         });
       }
-    }
-
-    if (!openBtn) {
-      openBtn =
-        candidateButtons.find(
-          (btn) =>
-            btn.classList.contains('btn-open') ||
-            /Ouvrir|Open|Abrir/i.test((btn.innerText || '').trim())
-        ) || candidateButtons[0];
     }
 
     if (!openBtn) {
@@ -258,7 +255,7 @@ export async function pilotLiveBoosterOpening(
 
       const activeModal = document.querySelector(".modal, .card-preview, .card-zoom, dialog[open], .wo, [class*='overlay']") as HTMLElement | null;
       if (activeModal && (activeModal.offsetWidth > 0 || activeModal.offsetHeight > 0)) {
-        const dismissBtn = activeModal.querySelector("button.close, [class*='close'], button.skip, button") as HTMLElement | null;
+        const dismissBtn = activeModal.querySelector("button.close, button[aria-label='Close'], [class*='close'], button.skip") as HTMLElement | null;
         if (dismissBtn) {
           try { dismissBtn.click(); } catch {}
         }
@@ -302,10 +299,15 @@ export async function pilotLiveBoosterOpening(
     }
 
     const recentPull = state.lastPullEvents.find((e) => e.at >= pullTimestampBefore)?.detail || null;
-    const pulledCards = Array.isArray(recentPull?.cards) ? recentPull.cards : [];
+    const results = Array.isArray(recentPull?.results) ? recentPull.results : recentPull?.cards ? [recentPull] : [];
+    const pulledCards = results.flatMap((result: any) => Array.isArray(result.cards) ? result.cards : []);
     const newCards = pulledCards.filter((c: any) => c.isNew);
     const highRarity = pulledCards.filter((c: any) => c.rarity === 'L' || c.rarity === 'M');
-    const openedCount = pulledCards.length > 0 ? Math.max(1, Math.round(pulledCards.length / 5)) : 1;
+    const openedCount = results.length;
+    if (!openedCount) {
+      await appendJournal('warn', 'Ouverture non confirmée par Kyara. Aucun tirage ajouté aux statistiques.');
+      return { openedCount: 0, newCardsCount: 0 };
+    }
 
     const raritySummary = RARITIES.map((r) => {
       const n = pulledCards.filter((c: any) => c.rarity === r).length;
@@ -346,57 +348,38 @@ export async function pilotLiveBoosterOpening(
 }
 
 export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedCount: number; newCardsCount: number; targetPack?: any }> {
-  const boosters = dashboard?.boosters;
-  if (!boosters) return { openedCount: 0, newCardsCount: 0 };
+  let boosters = dashboard?.boosters;
+  let openedCount = 0;
+  let newCardsCount = 0;
+  if (!boosters) return { openedCount, newCardsCount };
 
   if (state.currentSettings.autoOpenDailyPack !== false) {
     const dailyPack = (boosters.all || []).find((p: any) => p.packId === 'daily');
-    if (dailyPack && dailyPack.canOpenNow) {
-      await appendJournal('open', `Pack du Jour gratuit disponible (${dailyPack.name || 'Pack du Jour'}) ! Lancement…`);
+    if (dailyPack?.canOpenNow) {
       const dailyRes = await pilotLiveBoosterOpening('daily', dailyPack.name || 'Pack du Jour', 1);
+      openedCount += dailyRes.openedCount;
+      newCardsCount += dailyRes.newCardsCount;
       if (dailyRes.openedCount > 0) {
         dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+        boosters = dashboard.boosters;
       }
     }
   }
 
-  let targetPack: any = null;
-  if (state.currentSettings.autoOpenMode === 'recommended_ev') {
-    targetPack = boosters.recommendedEv;
-  } else if (state.currentSettings.autoOpenMode === 'custom' && state.currentSettings.autoOpenCustomPackId) {
-    targetPack =
-      (boosters.all || []).find((p: any) => p.packId === state.currentSettings.autoOpenCustomPackId) || boosters.recommendedNew;
-  } else {
-    targetPack = boosters.recommendedNew;
+  let targetPack = state.currentSettings.autoBoosterStrategy === 'ev' || state.currentSettings.autoOpenMode === 'recommended_ev'
+    ? boosters.recommendedEv : boosters.recommendedNew;
+  if (state.currentSettings.autoOpenMode === 'custom' && state.currentSettings.autoOpenCustomPackId) {
+    targetPack = boosters.all.find((p: any) => p.packId === state.currentSettings.autoOpenCustomPackId);
   }
+  if (!targetPack?.canOpenNow || (targetPack.packId === 'daily' && openedCount > 0)) return { openedCount, newCardsCount };
 
-  if (!targetPack || !targetPack.canOpenNow) {
-    return { openedCount: 0, newCardsCount: 0 };
-  }
+  const reserve = targetPack.usesFreePacks
+    ? Math.min(Number(dashboard?.me?.freePacks) || 0, Math.max(0, Number(state.currentSettings.autoBoosterReserveFree) || 0)) : 0;
+  const freeAvailable = Math.max(0, (Number(targetPack.openableFreeCount) || 0) - reserve);
+  const minBatch = Math.max(1, Math.min(10, Number(state.currentSettings.autoOpenMinBatch) || 1));
+  const isGaugeFull = Number(dashboard?.me?.freePacks) >= Number(dashboard?.me?.freePacksMax ?? 10);
+  if (!freeAvailable || (freeAvailable < minBatch && !isGaugeFull)) return { openedCount, newCardsCount, targetPack };
 
-  const freeAvailable = Number(targetPack.openableFreeCount || 0);
-  const minBatch = Math.max(1, Math.min(10, Number(state.currentSettings.autoOpenMinBatch ?? 1)));
-  const isGaugeFull =
-    Number(dashboard?.me?.freePacks ?? 0) >= Number(dashboard?.me?.freePacksMax ?? 10) &&
-    Number(dashboard?.me?.freePacksMax ?? 10) > 0;
-
-  if (freeAvailable < minBatch && !isGaugeFull) {
-    return { openedCount: 0, newCardsCount: 0, targetPack };
-  }
-
-  const countToOpen = Math.min(10, freeAvailable);
-  if (countToOpen <= 0) {
-    return { openedCount: 0, newCardsCount: 0, targetPack };
-  }
-
-  if (state.currentSettings.dryRun) {
-    await appendJournal(
-      'open',
-      `[SIMULATION] Ouvrirait en live ${countToOpen}× « ${targetPack.name} » (${targetPack.probAtLeastOneNewPct}% chance de nouveau perso)`
-    );
-    return { openedCount: countToOpen, newCardsCount: 0, targetPack };
-  }
-
-  const liveRes = await pilotLiveBoosterOpening(targetPack.packId, targetPack.name, countToOpen);
-  return { ...liveRes, targetPack };
+  const liveRes = await pilotLiveBoosterOpening(targetPack.packId, targetPack.name, Math.min(10, freeAvailable));
+  return { openedCount: openedCount + liveRes.openedCount, newCardsCount: newCardsCount + liveRes.newCardsCount, targetPack };
 }

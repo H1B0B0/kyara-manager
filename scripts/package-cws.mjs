@@ -9,12 +9,22 @@ const rootDir = path.resolve(__dirname, '..');
 const distDir = path.join(rootDir, 'dist');
 const manifestPath = path.join(distDir, 'manifest.json');
 
-if (!fs.existsSync(manifestPath)) {
-  console.log('Building dist/ first...');
-  execFileSync('node', [path.join(__dirname, 'build.mjs')], { cwd: rootDir, stdio: 'inherit' });
-}
+// Always package current sources, never an old dist/ from a previous release.
+execFileSync('node', [path.join(__dirname, 'build.mjs')], { cwd: rootDir, stdio: 'inherit' });
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+const referencedFiles = [
+  manifest.background?.service_worker,
+  manifest.side_panel?.default_path,
+  ...Object.values(manifest.icons || {}),
+  ...(manifest.content_scripts || []).flatMap((script) => [...(script.js || []), ...(script.css || [])])
+].filter(Boolean);
+for (const file of referencedFiles) {
+  const resolved = path.resolve(distDir, file);
+  if (path.relative(distDir, resolved).startsWith('..') || !fs.existsSync(resolved)) {
+    throw new Error(`Manifest references a missing or invalid file: ${file}`);
+  }
+}
 
 if (manifest.manifest_version !== 3) {
   console.error('Error: manifest_version must be 3');

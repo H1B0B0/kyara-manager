@@ -53,7 +53,13 @@ export function mountFloatingHud(): void {
     await loadSettings();
     const next = !state.currentSettings.masterEnabled;
     state.currentSettings.masterEnabled = next;
-    await chrome.storage.local.set({ settings: state.currentSettings });
+    const saved = await chrome.runtime.sendMessage({ type: 'km:save-settings', settings: { masterEnabled: next } });
+    if (!saved?.ok) {
+      await loadSettings();
+      updateFloatingHud();
+      setHudStatusText(saved?.error || 'Enregistrement impossible');
+      return;
+    }
     updateFloatingHud();
     if (next) {
       await appendJournal('info', 'Pilote automatique activé');

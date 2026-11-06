@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { KyaraSettings } from '../../types/settings';
-import { DEFAULT_SETTINGS } from '../../types/settings';
+import { DEFAULT_SETTINGS, normalizeSettings } from '../../types/settings';
 import { setLanguage } from '../../lib/i18n';
 import { sendCommand } from './useDashboard';
 
@@ -10,7 +10,8 @@ export function useSettings() {
   useEffect(() => {
     chrome.storage.local.get('settings').then((stored: any) => {
       if (stored.settings) {
-        const merged = { ...DEFAULT_SETTINGS, ...(stored.settings as KyaraSettings) };
+        const merged = normalizeSettings(stored.settings);
+        if (hydrated) return;
         setSettings(merged);
         if (merged.language) {
           setLanguage(merged.language);
@@ -18,9 +19,11 @@ export function useSettings() {
       }
     });
 
+    let hydrated = false;
     const listener = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
       if (area !== 'local' || !changes.settings?.newValue) return;
-      const updated = { ...DEFAULT_SETTINGS, ...(changes.settings.newValue as KyaraSettings) };
+      hydrated = true;
+      const updated = normalizeSettings(changes.settings.newValue);
       setSettings(updated);
       if (updated.language) {
         setLanguage(updated.language);
@@ -32,14 +35,12 @@ export function useSettings() {
   }, []);
 
   const updateSettings = useCallback(async (partial: Partial<KyaraSettings>) => {
-    const updated = { ...settings, ...partial };
-    setSettings(updated);
-    await chrome.storage.local.set({ settings: updated });
-    await sendCommand({ type: 'km:save-settings', settings: partial });
+    const result = await sendCommand({ type: 'km:save-settings', settings: partial });
+    if (!result.ok) throw new Error(result.error || 'Enregistrement impossible');
     if (partial.language) {
       setLanguage(partial.language);
     }
-  }, [settings]);
+  }, []);
 
   return { settings, updateSettings };
 }

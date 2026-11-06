@@ -14,7 +14,8 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
   }
 
   const ownedSet = new Set<number>();
-  const rawColl = await kyaraApi('/me/collection?lean=1').catch(() => []);
+  const rawColl = await kyaraApi('/me/collection?lean=1');
+  if (!Array.isArray(rawColl)) throw new Error('Collection indisponible. Achats suspendus.');
   for (const e of Array.isArray(rawColl) ? rawColl : []) {
     if (e.qty > 0) ownedSet.add(Number(e.characterId));
   }
@@ -31,7 +32,7 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
     const shouldBuyFlip = state.currentSettings.autoBuyFlipEnabled && deal.isGoodFlip;
     const shouldBuyMissing =
       state.currentSettings.autoBuyMissingEnabled && deal.isGoodMissingBuy && !ownedSet.has(deal.characterId);
-    const shouldBuyWish = state.currentSettings.wishlistAutoBuyEnabled && deal.autoBuyWish;
+    const shouldBuyWish = state.currentSettings.wishlistAutoBuyEnabled && deal.autoBuyWish && !ownedSet.has(deal.characterId);
     if (!shouldBuyFlip && !shouldBuyMissing && !shouldBuyWish) continue;
 
     if (currentChakra - deal.buyPrice < minReserve) {
@@ -42,11 +43,17 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
       const freshListing = await kyaraApi(`/market/listings/${encodeURIComponent(deal.listingId)}`, { auth: true });
       if (!freshListing || freshListing.status !== 'active' || freshListing.isMine) continue;
       const freshPrice = freshListing.type === 'fixed' ? freshListing.price : freshListing.buyoutPrice;
-      if (!Number.isFinite(freshPrice) || freshPrice > deal.buyPrice) continue;
+      if (!Number.isFinite(freshPrice) || freshPrice <= 0 || freshPrice > deal.buyPrice) continue;
+      const bootstrap = await kyaraApi('/me/bootstrap');
+      const balance = Number((bootstrap?.me || bootstrap)?.chakra);
+      if (!Number.isFinite(balance)) continue;
+      currentChakra = Math.min(currentChakra, balance);
+      if (currentChakra - freshPrice < minReserve) continue;
 
       if (state.currentSettings.dryRun) {
         boughtCount += 1;
         currentChakra -= freshPrice;
+        ownedSet.add(deal.characterId);
         await appendJournal(
           'buy',
           `[SIMULATION] Achèterait ${deal.name} [${deal.rarity}] à ${freshPrice} ◆ (${
