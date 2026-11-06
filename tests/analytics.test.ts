@@ -34,6 +34,8 @@ describe('Kyara Manager Analytics (TypeScript)', () => {
     );
     expect(res.spare).toBe(4);
     expect(res.verdict).toBe('RECYCLER');
+    expect(res.canAutoRecycle).toBe(true);
+    expect(res.canAutoSell).toBe(false);
   });
 
   it('Duplicate evaluation advises VENDRE when market price yields net profit above recycle + threshold', () => {
@@ -44,6 +46,7 @@ describe('Kyara Manager Analytics (TypeScript)', () => {
     );
     expect(res.spare).toBe(2);
     expect(res.verdict).toBe('VENDRE');
+    expect(res.canAutoSell).toBe(true);
     expect(res.prices?.recommended).toBe(23);
     expect(res.fees?.netGainOverRecycle).toBeGreaterThanOrEqual(2);
   });
@@ -90,6 +93,34 @@ describe('Kyara Manager Analytics (TypeScript)', () => {
     const rec = Analytics.rankBoostersForCollection(packs, new Set([1, 2]));
     expect(rec.recommendedNew?.packId).toBe('p2');
     expect(rec.recommendedNew?.totalMissing).toBe(4);
+  });
+
+  it('Booster evaluation with full catalog and pools accurately computes slots probabilities', () => {
+    const catalog = new Map<number, any>([
+      [1, { id: 1, name: 'C1', rarity: 'C' }],
+      [2, { id: 2, name: 'C2', rarity: 'C' }],
+      [3, { id: 3, name: 'R1', rarity: 'R' }]
+    ]);
+    const pack = {
+      id: 'pack-full',
+      name: 'Full Pack',
+      usesFreePacks: true,
+      rates: {
+        slots: [{ pct: { C: 100 } }]
+      }
+    };
+    const ev = Analytics.evaluateBoosterPack(
+      pack,
+      [1, 2],
+      catalog,
+      new Set([1]),
+      {},
+      {},
+      { freePacks: 2 }
+    );
+    expect(ev.canOpenNow).toBe(true);
+    expect(ev.totalMissing).toBe(1);
+    expect(ev.expectedNewCards).toBeGreaterThan(0);
   });
 
   it('canOpenNow is strictly false when free packs are 0 (Zero-Chakra guardrail)', () => {

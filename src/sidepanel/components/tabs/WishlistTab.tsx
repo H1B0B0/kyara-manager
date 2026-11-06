@@ -32,6 +32,15 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [catalogList, setCatalogList] = useState<any[]>([]);
+
+  React.useEffect(() => {
+    chrome.storage.local.get('kmCatalogCache').then((stored: any) => {
+      if (Array.isArray(stored?.kmCatalogCache?.list)) {
+        setCatalogList(stored.kmCatalogCache.list);
+      }
+    });
+  }, []);
 
   // Search candidate pool
   const autocompleteList = useMemo(() => {
@@ -58,11 +67,12 @@ export const WishlistTab: React.FC<WishlistTabProps> = ({
     addList(suggestions);
     addList(duplicates);
     addList(deals);
+    addList(catalogList);
 
     return Array.from(map.values())
       .filter((c) => c.name.toLowerCase().includes(q) || c.series.toLowerCase().includes(q))
       .slice(0, 8);
-  }, [search, suggestions, duplicates, deals]);
+  }, [search, suggestions, duplicates, deals, catalogList]);
 
   const handleSelectAutocomplete = (item: any) => {
     setSelectedChar(item);

@@ -28,11 +28,26 @@ export interface DuplicateCard {
   verdict: 'VENDRE' | 'RECYCLER' | 'CONSERVER' | 'PROTÉGÉ';
   verdictReason: string;
   pinned?: boolean;
+  canAutoSell?: boolean;
+  canAutoRecycle?: boolean;
+  score?: number;
+  isSlowMover?: boolean;
+  hourlyExpectedChakra?: number;
+  isCrash?: boolean;
+  crashDiscountPct?: number;
+  liveMedian20?: number | null;
+  liveAvg20?: number | null;
   prices?: {
     recommended: number;
     undercut: number;
     median: number;
     minSafe: number;
+    quick?: number;
+    recent20Median?: number;
+    recent20Avg?: number;
+    flash?: number;
+    balanced?: number;
+    max?: number;
   };
   fees?: {
     sellerTax: number;
@@ -81,14 +96,20 @@ export interface MarketDeal {
   rarity: Rarity;
   series: string;
   buyPrice: number;
-  refMedian: number;
-  targetResalePrice: number;
-  flipProfit: number;
-  roiPct: number;
+  refMedian: number | null;
+  targetResalePrice: number | null;
+  flipProfit: number | null;
+  roiPct: number | null;
   isGoodFlip: boolean;
   isMissing: boolean;
   discountPct: number;
   sales7d: number;
+  isGoodMissingBuy?: boolean;
+  isWishlistMatch?: boolean;
+  wishlistMatch?: any;
+  autoBuyWish?: boolean;
+  type?: string;
+  netResale?: number | null;
 }
 
 export interface ProfitableTrade {

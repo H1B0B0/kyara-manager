@@ -9,12 +9,21 @@ export interface MarketTabProps {
   trades: ProfitableTrade[];
   onToast: (msg: string) => void;
   onRefresh: () => void;
+  onScanDeals?: () => Promise<any>;
 }
 
-export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, onRefresh }) => {
+export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, onRefresh, onScanDeals }) => {
   const [filter, setFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [buyingId, setBuyingId] = useState<string | null>(null);
+  const [scanning, setScanning] = useState(false);
+
+  // Auto-scan on mount if deals empty
+  React.useEffect(() => {
+    if (deals.length === 0 && onScanDeals) {
+      void onScanDeals();
+    }
+  }, [deals.length, onScanDeals]);
 
   const filteredDeals = useMemo(() => {
     return deals.filter((d) => {
@@ -55,10 +64,25 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
           </div>
           <button
             type="button"
-            onClick={onRefresh}
+            disabled={scanning}
+            onClick={async () => {
+              setScanning(true);
+              onToast("Scan des annonces du marché en cours…");
+              try {
+                if (onScanDeals) {
+                  const res = await onScanDeals();
+                  const count = (res?.dashboard?.deals || []).length;
+                  onToast(`${count} opportunité(s) trouvée(s)`);
+                } else {
+                  onRefresh();
+                }
+              } finally {
+                setScanning(false);
+              }
+            }}
             className="btn btn--primary btn--sm"
           >
-            <span>{t('btnScanDeals')}</span>
+            <span>{scanning ? 'Scan en cours…' : t('btnScanDeals')}</span>
           </button>
         </div>
 

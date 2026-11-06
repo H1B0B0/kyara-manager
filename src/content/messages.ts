@@ -194,7 +194,9 @@ export function setupMessageListener(): void {
         }
 
         if (message.type === 'km:cmd:wishlist-add') {
-          const { characterId, name, series, rarity, maxBudget, autoBuy } = message;
+          const { characterId, name, series, rarity, autoBuy } = message;
+          const budgetValue = Number(message.maxBudget ?? message.budgetChakra ?? 30);
+          const finalBudget = budgetValue > 0 ? budgetValue : 30;
           const { kmWishlist } = (await chrome.storage.local.get('kmWishlist')) as { kmWishlist?: any[] };
           const list = Array.isArray(kmWishlist) ? [...kmWishlist] : [];
           const idx = list.findIndex((w: any) => Number(w.characterId) === Number(characterId));
@@ -203,7 +205,8 @@ export function setupMessageListener(): void {
             name: name || `Carte #${characterId}`,
             series: series || '',
             rarity: rarity || 'C',
-            maxBudget: Number(maxBudget) || 30,
+            maxBudget: finalBudget,
+            budgetChakra: finalBudget,
             autoBuy: Boolean(autoBuy),
             addedAt: Date.now()
           };

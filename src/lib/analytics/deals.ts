@@ -4,51 +4,102 @@ import { computeNetProceeds } from './fees';
 
 export function evaluateDeal(
   listing: any,
-  marketStats: any = {},
-  ownedCardIds: Set<number> | number[] | null = null,
-  settings: Partial<KyaraSettings> = DEFAULT_SETTINGS
+  arg2: any = null,
+  arg3: any = null,
+  arg4: any = null
 ): MarketDeal | null {
-  if (!listing) return null;
-  const buyPrice = Number(listing.price || 0);
-  if (buyPrice <= 0) return null;
+  if (!listing || listing.status !== 'active' || listing.isMine) return null;
+  const endsAtMs = listing.endsAt ? Date.parse(listing.endsAt) : Infinity;
+  if (Number.isFinite(endsAtMs) && endsAtMs <= Date.now()) return null;
 
-  const charId = Number(listing.character?.id ?? listing.characterId);
-  const name = listing.character?.name || listing.name || `Carte #${charId}`;
-  const rarity: Rarity = listing.character?.rarity || listing.rarity || 'C';
-  const series = listing.character?.series || listing.series || '';
+  const buyPrice =
+    listing.type === 'fixed'
+      ? Number(listing.price)
+      : Number.isFinite(listing.buyoutPrice) && Number(listing.buyoutPrice) > 0
+        ? Number(listing.buyoutPrice)
+        : null;
+  if (!Number.isFinite(buyPrice) || buyPrice === null || buyPrice <= 0) return null;
 
-  const refMedian = Number(marketStats.median7d ?? marketStats.refMedian ?? 0);
-  const sales7d = Number(marketStats.sales7d ?? 0);
+  // Determine parameters: evaluateDeal(listing, ownedSet, settings) vs evaluateDeal(listing, marketStats, ownedSet, settings)
+  const isDirectCall = arg2 instanceof Set || Array.isArray(arg2) || arg2 === null;
+  const ownedSet = isDirectCall ? arg2 : arg3;
+  const marketStats = isDirectCall ? {} : (arg2 || {});
+  const settings: Partial<KyaraSettings> = (isDirectCall ? arg3 : arg4) || DEFAULT_SETTINGS;
 
+  const char = listing.character || {};
+  const characterId = Number(char.id ?? listing.characterId);
   const isMissing = Boolean(
-    ownedCardIds &&
-    (ownedCardIds instanceof Set ? !ownedCardIds.has(charId) : Array.isArray(ownedCardIds) && !ownedCardIds.includes(charId))
+    ownedSet &&
+    (ownedSet instanceof Set ? !ownedSet.has(characterId) : Array.isArray(ownedSet) && !ownedSet.includes(characterId))
   );
 
-  const targetResalePrice = refMedian > 0 ? refMedian : Math.round(buyPrice * 1.3);
-  const netProceeds = computeNetProceeds(targetResalePrice);
-  const flipProfit = netProceeds - buyPrice;
-  const roiPct = Math.round((flipProfit / buyPrice) * 100);
-  const discountPct = refMedian > buyPrice ? Math.round(((refMedian - buyPrice) / refMedian) * 100) : 0;
+  const prices = { ...(listing.prices || {}), ...marketStats };
+  const median7d = Number.isFinite(prices.median7d) && prices.median7d > 0 ? Number(prices.median7d) : null;
+  const median30d = Number.isFinite(prices.median30d) && prices.median30d > 0 ? Number(prices.median30d) : null;
+  const refMedian = median7d ?? median30d ?? null;
+  const sales7d = Number.isFinite(prices.sales7d) && prices.sales7d >= 0 ? Number(prices.sales7d) : 0;
 
-  const minProfit = Number(settings.autoMarketMinProfit ?? 5);
-  const minMarginPct = Number(settings.autoMarketMinMarginPct ?? 20);
-  const isGoodFlip = flipProfit >= minProfit && roiPct >= minMarginPct && sales7d >= 2;
+  if (!refMedian || refMedian <= 0) {
+    return {
+      listingId: String(listing.id),
+      characterId,
+      name: char.name || `Carte #${characterId}`,
+      series: char.series || '',
+      rarity: (char.rarity || 'C') as Rarity,
+      type: listing.type,
+      buyPrice,
+      refMedian: null,
+      sales7d,
+      discountPct: 0,
+      targetResalePrice: null,
+      netResale: null,
+      flipProfit: null,
+      roiPct: null,
+      isMissing,
+      isGoodFlip: false,
+      isGoodMissingBuy: Boolean(isMissing && buyPrice <= Number(settings.autoBuyMissingMaxPrice ?? 25))
+    };
+  }
+
+  const discountPct = Math.round(((refMedian - buyPrice) / refMedian) * 100);
+  const targetResalePrice = Math.max(buyPrice + 1, Math.round(refMedian * 0.98));
+  const netResale = computeNetProceeds(targetResalePrice);
+  const flipProfit = netResale - buyPrice;
+  const roiPct = Math.round((flipProfit / buyPrice) * 100);
+
+  const minDiscount = Number(settings.autoBuyMinDiscountPct ?? 28);
+  const minProfit = Number(settings.autoBuyMinFlipProfit ?? 15);
+  const minSales = Number(settings.autoBuyMinSales7d ?? 4);
+  const maxUnit = Number(settings.autoBuyMaxUnitPrice ?? 400);
+
+  const isGoodFlip =
+    discountPct >= minDiscount &&
+    flipProfit >= minProfit &&
+    sales7d >= minSales &&
+    buyPrice <= maxUnit;
+
+  const isGoodMissingBuy =
+    isMissing &&
+    buyPrice <= Number(settings.autoBuyMissingMaxPrice ?? 25) &&
+    discountPct >= 0;
 
   return {
     listingId: String(listing.id),
-    characterId: charId,
-    name,
-    rarity,
-    series,
+    characterId,
+    name: char.name || `Carte #${characterId}`,
+    series: char.series || '',
+    rarity: (char.rarity || 'C') as Rarity,
+    type: listing.type,
     buyPrice,
     refMedian,
+    sales7d,
+    discountPct,
     targetResalePrice,
+    netResale,
     flipProfit,
     roiPct,
-    isGoodFlip,
     isMissing,
-    discountPct,
-    sales7d
+    isGoodFlip,
+    isGoodMissingBuy
   };
 }

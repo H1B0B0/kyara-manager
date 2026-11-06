@@ -33,7 +33,7 @@ export async function scanMarketDealsInternal(
     seen.add(item.id);
 
     const charId = Number(item.character?.id ?? item.characterId);
-    const deal: any = evaluateDeal(item, {}, ownedSet, state.currentSettings);
+    const deal: any = evaluateDeal(item, ownedSet, state.currentSettings);
     if (!deal) continue;
 
     // Croisement Wishlist (Mes envies)

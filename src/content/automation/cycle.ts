@@ -34,7 +34,7 @@ export async function runAutomationCycle({ manual = false } = {}): Promise<any> 
       bought: 0
     };
 
-    if (state.currentSettings.autoOpenEnabled) {
+    if (state.currentSettings.autoOpenEnabled || state.currentSettings.autoBoosterEnabled) {
       const openRes = await executeAutoOpenBoosters(dashboard);
       summary.opened = openRes.openedCount;
       if (openRes.openedCount > 0) {
@@ -42,7 +42,7 @@ export async function runAutomationCycle({ manual = false } = {}): Promise<any> 
       }
     }
 
-    if (state.currentSettings.autoClaimMissions) {
+    if (state.currentSettings.autoClaimMissions || state.currentSettings.autoClaimMissionsEnabled) {
       await executeAutoClaimMissions(dashboard);
     }
 
@@ -56,7 +56,7 @@ export async function runAutomationCycle({ manual = false } = {}): Promise<any> 
       summary.listed = sellRes.listedCount;
     }
 
-    if (state.currentSettings.autoBuyFlipEnabled || state.currentSettings.autoBuyMissingEnabled) {
+    if (state.currentSettings.autoBuyFlipEnabled || state.currentSettings.autoBuyMissingEnabled || state.currentSettings.autoMarketEnabled) {
       const buyRes = await executeAutoBuy(dashboard);
       summary.bought = buyRes.boughtCount;
     }

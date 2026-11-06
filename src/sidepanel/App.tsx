@@ -20,7 +20,7 @@ export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('autopilot');
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
-  const { dashboard, pinnedCards, loading, refresh, togglePin } = useDashboard();
+  const { dashboard, pinnedCards, loading, refresh, scanDeals, togglePin } = useDashboard();
   const { settings, updateSettings } = useSettings();
   const { journal, clearJournal } = useJournal();
   const { stats, resetRoi } = useCumulativeStats();
@@ -104,6 +104,7 @@ export const App: React.FC = () => {
             trades={trades}
             onToast={showToast}
             onRefresh={() => refresh(true)}
+            onScanDeals={scanDeals}
           />
         )}
 

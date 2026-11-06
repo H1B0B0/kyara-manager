@@ -19,9 +19,19 @@ export function useDashboard() {
   const [pinnedCards, setPinnedCards] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(false);
 
-  const refresh = useCallback(async (forcePrices = false) => {
+  const refresh = useCallback(async (forcePrices = false, scanMarketDeals = false) => {
     setLoading(true);
-    const res = await sendCommand({ type: 'km:cmd:refresh', forcePrices });
+    const res = await sendCommand({ type: 'km:cmd:refresh', forcePrices, scanMarketDeals });
+    setLoading(false);
+    if (res?.dashboard) {
+      setDashboard(res.dashboard);
+    }
+    return res;
+  }, []);
+
+  const scanDeals = useCallback(async () => {
+    setLoading(true);
+    const res = await sendCommand({ type: 'km:cmd:scan-deals' });
     setLoading(false);
     if (res?.dashboard) {
       setDashboard(res.dashboard);
@@ -77,6 +87,7 @@ export function useDashboard() {
     pinnedCards,
     loading,
     refresh,
+    scanDeals,
     togglePin,
     sendCommand
   };

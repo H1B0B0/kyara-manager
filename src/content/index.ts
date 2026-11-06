@@ -73,7 +73,10 @@ function initKyaraManager(): void {
     mountFloatingHud();
     setupAntiAfkObserver();
     restartLoopTimer(() => runAutomationCycle({ manual: false }));
-    const dashboard = await refreshDashboardSnapshot({ forcePrices: false, scanMarketDeals: false }).catch(() => null);
+    const dashboard = await refreshDashboardSnapshot({
+      forcePrices: false,
+      scanMarketDeals: Boolean(state.currentSettings.autoBuyFlipEnabled || state.currentSettings.autoBuyMissingEnabled || state.currentSettings.wishlistAutoBuyEnabled)
+    }).catch(() => null);
     if (state.currentSettings.masterEnabled && dashboard?.authenticated) {
       void runAutomationCycle({ manual: false });
     }

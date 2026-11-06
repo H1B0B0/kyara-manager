@@ -2,7 +2,7 @@ import type { DashboardState, WishlistItem } from './kyara';
 import type { KyaraSettings } from './settings';
 
 export type ExtensionCommand =
-  | { type: 'km:cmd:refresh'; forcePrices?: boolean }
+  | { type: 'km:cmd:refresh'; forcePrices?: boolean; scanMarketDeals?: boolean }
   | { type: 'km:cmd:run-cycle' }
   | { type: 'km:cmd:sell-now' }
   | { type: 'km:cmd:recycle-now' }

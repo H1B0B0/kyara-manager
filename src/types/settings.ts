@@ -44,6 +44,13 @@ export interface KyaraSettings {
   autoBuyFlipEnabled?: boolean;
   autoBuyMissingEnabled?: boolean;
   autoBuyMinChakraReserve?: number;
+  autoBuyMissingMaxPrice?: number;
+  autoBuyMinDiscountPct?: number;
+  autoBuyMinFlipProfit?: number;
+  autoBuyMinSales7d?: number;
+  autoBuyMaxUnitPrice?: number;
+  autoSellIncludeL?: boolean;
+  autoSellIncludeM?: boolean;
   autoClaimMissionsEnabled: boolean;
   autoClaimMissions?: boolean;
   antiAfkEnabled: boolean;

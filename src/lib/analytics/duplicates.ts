@@ -188,6 +188,30 @@ export function evaluateDuplicate(
     verdictReason = `Marché saturé au prix plancher (${lowestFixed} ◆) · recyclage ${recycleValue} ◆ conseillé`;
   }
 
+  const allowedRecycleRarities = Array.isArray(settings?.autoRecycleRarities)
+    ? settings.autoRecycleRarities
+    : ['C', 'U'];
+
+  const canAutoRecycle =
+    verdict === 'RECYCLER' &&
+    !isPinned &&
+    spare > 0 &&
+    allowedRecycleRarities.includes(rarity);
+
+  const canAutoSell =
+    verdict === 'VENDRE' &&
+    !isPinned &&
+    spare > 0 &&
+    (rarity !== 'L' || settings?.autoSellIncludeL !== false) &&
+    (rarity !== 'M' || Boolean(settings?.autoSellIncludeM));
+
+  const score = Math.round(
+    netProceeds * 2 +
+    (saleProb.p12h || 0) * 0.5 +
+    (sales7d || 0) * 1.5 +
+    (verdict === 'VENDRE' ? 50 : verdict === 'RECYCLER' ? 20 : 0)
+  );
+
   const hourlyExpectedChakra = Math.round(((netProceeds * (saleProb.p12h / 100)) / 12) * 100) / 100;
 
   const pedagogy: DecisionPedagogy = {
@@ -214,14 +238,29 @@ export function evaluateDuplicate(
     referenceMedian,
     lowestFixed,
     highestFixed,
+    liveMedian20,
+    liveAvg20,
+    isCrash,
+    crashDiscountPct,
     sales7d: sales7d || 0,
     sales12h: estimatedSales48h ? Math.round(estimatedSales48h / 4) : 0,
+    isSlowMover,
     isSurging,
     trendPct,
     verdict,
     verdictReason,
     pinned: isPinned,
+    canAutoSell,
+    canAutoRecycle,
+    score,
+    hourlyExpectedChakra,
     prices: {
+      quick: quickPrice,
+      recent20Median: recent20MedianPrice,
+      recent20Avg: recent20AvgPrice,
+      flash: flashPrice,
+      balanced: balancedPrice,
+      max: maxPrice,
       recommended: recommendedPrice,
       undercut: quickPrice,
       median: referenceMedian || recommendedPrice,
