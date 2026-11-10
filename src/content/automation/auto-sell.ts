@@ -1,7 +1,9 @@
 import { kyaraApi } from '../api';
 import { state } from '../state';
+import { runtimeCache } from '../cache';
 import { appendJournal } from '../journal';
 import { evaluateDuplicate } from '../../lib/analytics/duplicates';
+import { DEFAULT_RECYCLE_VALUES } from '../../lib/analytics/constants';
 import { createLimiter } from '../../lib/concurrency';
 import type { SellMode } from '../../types/settings';
 import { isInterrupted, loadCardLedger, type CardLedger } from '../safety';
@@ -31,12 +33,40 @@ function sellPriority(d: any): number {
 export async function executeAutoSell(dashboard: any, ledger?: CardLedger, options: SellOptions = {}): Promise<SellResult> {
   const settings = options.mode ? { ...state.currentSettings, autoSellMode: options.mode } : state.currentSettings;
   const result: SellResult = { listedCount: 0, slotsAvailable: 0, repriced: 0, recycledCopies: 0 };
-  const duplicates: any[] = dashboard?.duplicates || [];
+  const duplicates: any[] = dashboard?.duplicates ? [...dashboard.duplicates] : [];
   const book = ledger ?? (await loadCardLedger());
   const hints = await loadRepriceHints();
 
   const stale = await retireStaleListings({ book, duplicates, hints, settings });
   result.repriced = stale.cancelled;
+
+  // Ensure cards in stale.chars that are NOT in duplicates are added to duplicates
+  // using book.get(charId) and runtimeCache.catalogById?.get(charId) so they are never orphaned after cancellation
+  const knownDupIds = new Set<number>(duplicates.map((d: any) => Number(d.characterId)));
+  const recycleMap = runtimeCache.recycleMap || { ...DEFAULT_RECYCLE_VALUES };
+  for (const charId of stale.chars) {
+    if (!knownDupIds.has(charId)) {
+      const avail = book.get(charId);
+      const catalogCard = runtimeCache.catalogById?.get(charId) || {
+        id: charId,
+        name: avail.entry?.name || `Carte #${charId}`,
+        rarity: avail.entry?.rarity || 'C',
+        series: avail.entry?.series || ''
+      };
+      const stats = runtimeCache.collectionPrices.get(charId) || {};
+      const ev = evaluateDuplicate(
+        catalogCard,
+        avail.entry || { characterId: charId, qty: 2 },
+        stats,
+        recycleMap,
+        settings,
+        avail.listed,
+        avail.pinned
+      );
+      duplicates.push(ev);
+      knownDupIds.add(charId);
+    }
+  }
 
   const maxSlots = Math.max(1, Math.min(10, Number(settings.autoSellMaxListings ?? 10)));
   let slots = Math.max(0, maxSlots - book.listings.length);
@@ -47,9 +77,19 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
   const eligible = (d: any) =>
     !d.pinned && d.spare > 0 && (options.mode ? d.verdict !== 'PROTÉGÉ' : Boolean(d.canAutoSell));
   const listedChars = new Set<number>(book.listings.map((l: any) => Number(l.character?.id ?? l.characterId)));
-  const pool = duplicates
+  const rawPool = duplicates
     .filter((d) => !listedChars.has(d.characterId) && (stale.chars.has(d.characterId) || eligible(d)))
     .sort((a, b) => sellPriority(b) - sellPriority(a));
+
+  // Skip candidates where hints evictedUntil > Date.now() unless there are free slots left after non-evicted candidates
+  const now = Date.now();
+  const isEvicted = (d: any) => {
+    const hint = hints.get(d.characterId);
+    return Boolean(hint?.evictedUntil && hint.evictedUntil > now);
+  };
+  const normalPool = rawPool.filter((d) => !isEvicted(d));
+  const evictedPool = rawPool.filter((d) => isEvicted(d));
+  const pool = [...normalPool, ...evictedPool];
 
   // Market reads for upcoming cards run ahead while the current card is being listed.
   const lookahead = Math.max(4, Math.min(10, slots * 2));

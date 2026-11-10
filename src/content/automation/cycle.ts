@@ -72,12 +72,11 @@ async function executeCycle(manual: boolean): Promise<any> {
     const canContinue = () => manual || state.currentSettings.masterEnabled;
     const settings = state.currentSettings;
 
-    // Independent tasks run together: opening boosters and claiming missions never wait for the market.
-    // Each task is isolated, so one failure no longer cancels the others.
+    // Stage 1: Boosters & Missions run in parallel FIRST
     let dirty = false;
-    const tasks: Array<{ label: string; run: Promise<void> }> = [];
+    const openingTasks: Array<{ label: string; run: Promise<void> }> = [];
     if (canContinue() && settings.autoBoosterEnabled) {
-      tasks.push({
+      openingTasks.push({
         label: 'Ouverture des boosters',
         run: executeAutoOpenBoosters(dashboard).then((res) => {
           summary.opened = res.openedCount;
@@ -86,28 +85,40 @@ async function executeCycle(manual: boolean): Promise<any> {
       });
     }
     if (canContinue() && settings.autoClaimMissionsEnabled) {
-      tasks.push({
+      openingTasks.push({
         label: 'Récompenses de missions',
         run: executeAutoClaimMissions(dashboard).then((res) => {
           dirty ||= res.claimed;
         })
       });
     }
-    if (canContinue() && (settings.autoRecycleEnabled || settings.autoSellEnabled)) {
-      tasks.push({
-        label: 'Recyclage et vente',
-        run: runMarketStage(dashboard, summary).then((changed) => {
-          dirty ||= changed;
-        })
-      });
-    }
-    const outcomes = await Promise.allSettled(tasks.map((task) => task.run));
-    for (const [index, outcome] of outcomes.entries()) {
-      if (outcome.status === 'rejected') {
-        await appendJournal('error', `${tasks[index].label} : ${outcome.reason?.message || outcome.reason}`);
+    if (openingTasks.length > 0) {
+      const outcomes = await Promise.allSettled(openingTasks.map((task) => task.run));
+      for (const [index, outcome] of outcomes.entries()) {
+        if (outcome.status === 'rejected') {
+          await appendJournal('error', `${openingTasks[index].label} : ${outcome.reason?.message || outcome.reason}`);
+        }
       }
     }
 
+    // If boosters were opened, refresh dashboard snapshot so newly pulled duplicates
+    // are immediately available for recycling or selling in the same cycle!
+    if (summary.opened > 0) {
+      dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+      dirty = false;
+    }
+
+    // Stage 2: Market stage (Recycle & Sell)
+    if (canContinue() && (settings.autoRecycleEnabled || settings.autoSellEnabled)) {
+      try {
+        const changed = await runMarketStage(dashboard, summary);
+        dirty ||= changed;
+      } catch (err: any) {
+        await appendJournal('error', `Recyclage et vente : ${err?.message || err}`);
+      }
+    }
+
+    // Stage 3: Buying stage
     const buyEnabled = settings.autoBuyFlipEnabled || settings.autoBuyMissingEnabled || settings.wishlistAutoBuyEnabled;
     if (canContinue() && buyEnabled) {
       // Buying spends Chakra, so it starts from the balance left by the previous tasks.

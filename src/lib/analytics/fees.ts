@@ -42,18 +42,29 @@ export function isResaleBlocked(entry: any, now = Date.now()): boolean {
   return false;
 }
 
-export function computeSpareCopies(entry: any, activeListedQty = 0): number {
+export function computeRecyclableCopies(entry: any, activeListedQty = 0, keepCopies = 1): number {
+  if (!entry || entry.pinned) return 0;
+  const qty = Math.max(0, Math.floor(Number(entry.qty) || 0));
+  const keep = Math.max(1, Math.floor(Number(keepCopies) || 1));
+  if (qty <= keep) return 0;
+  const locked = Math.max(0, Math.floor(Number(entry.locked) || 0));
+  const listed = Math.max(0, Math.floor(Number(activeListedQty) || 0));
+  return Math.max(0, qty - locked - listed - keep);
+}
+
+export function computeSpareCopies(entry: any, activeListedQty = 0, keepCopies = 1): number {
   if (!entry || entry.pinned || isResaleBlocked(entry)) return 0;
   if (!Number.isFinite(Number(entry.qty))) return 0;
   const qty = Math.max(0, Math.floor(Number(entry.qty) || 0));
-  if (qty < 2) return 0;
+  const keep = Math.max(1, Math.floor(Number(keepCopies) || 1));
+  if (qty <= keep) return 0;
   const locked = Math.max(0, Math.floor(Number(entry.locked) || 0));
   const resaleLocked =
     typeof entry.resaleLocked === 'number' ? Math.max(0, Math.floor(entry.resaleLocked)) : 0;
-  const byFormula = Math.max(0, qty - locked - resaleLocked - 1);
+  const byFormula = Math.max(0, qty - locked - resaleLocked - keep);
   const serverListable =
     entry.listable !== undefined && entry.listable !== null
-      ? Math.max(0, Math.min(qty - 1, Math.floor(Number(entry.listable) || 0)))
+      ? Math.max(0, Math.min(qty - keep, Math.floor(Number(entry.listable) || 0)))
       : byFormula;
   const available = Math.min(byFormula, serverListable);
   return Math.max(0, available - Math.max(0, Math.floor(Number(activeListedQty) || 0)));

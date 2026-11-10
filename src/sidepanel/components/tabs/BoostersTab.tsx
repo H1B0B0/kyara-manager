@@ -40,7 +40,9 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, onToast, onR
       {/* Pity Sniper Alert */}
       {isPityNear && (
         <div className="pity-banner">
-          <div className="pity-banner__icon">🎯</div>
+          <div className="pity-banner__icon">
+            <span className="kanji-box kanji-box--gold" aria-hidden="true">神</span>
+          </div>
           <div className="pity-banner__content">
             <strong className="pity-banner__title">Pitié Mythique imminente !</strong>
             <p className="pity-banner__desc">
@@ -63,6 +65,11 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, onToast, onR
                 P(≥1 nouv.) : {recNew.probAtLeastOneNewPct}% · Espérance : ~{recNew.expectedNewCards} nouv./booster
               </p>
             </div>
+          </div>
+
+          {/* 3px Booster Completion Progress Bar */}
+          <div className="booster-progress-track">
+            <div className="booster-progress-bar" style={{ width: `${Math.min(100, recNew.completionPct)}%` }} />
           </div>
 
           <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
@@ -91,13 +98,20 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, onToast, onR
       {/* Recommended EV Card */}
       {recEv && (
         <div className="card card--sub" style={{ marginTop: '12px' }}>
-          <span className="badge">💎 RECOMMANDÉ CHAKRA</span>
-          <h3 className="card__title" style={{ marginTop: '4px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span className="kanji-box kanji-box--sm kanji-box--gold" aria-hidden="true">金</span>
+            <span className="badge">RECOMMANDÉ CHAKRA</span>
+          </div>
+          <h3 className="card__title" style={{ marginTop: '6px' }}>
             {recEv.name} · EV ~{recEv.expectedChakraValue} ◆ / booster
           </h3>
           <p className="card__desc">
             Manquants : {recEv.totalMissing} · P(≥1 nouv.) : {recEv.probAtLeastOneNewPct}%
           </p>
+          {/* 3px Booster Completion Progress Bar */}
+          <div className="booster-progress-track">
+            <div className="booster-progress-bar" style={{ width: `${Math.min(100, recEv.completionPct)}%` }} />
+          </div>
         </div>
       )}
 
@@ -132,9 +146,15 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, onToast, onR
                     <tr key={p.packId}>
                       <td>
                         <strong>{isTop ? '★ ' : ''}{p.name}</strong>
-                        <span className="sub-meta">Complété {p.completionPct}% · Prêts: {p.openableFreeCount}</span>
+                        <span className="sub-meta">Prêts: {p.openableFreeCount}</span>
+                        <div className="booster-progress-track">
+                          <div className="booster-progress-bar" style={{ width: `${Math.min(100, p.completionPct)}%` }} />
+                        </div>
                       </td>
-                      <td className="num"><strong>{p.totalMissing}</strong> / {p.totalPool}</td>
+                      <td className="num">
+                        <strong>{p.completionPct}%</strong>
+                        <span className="sub-meta">{p.totalMissing} / {p.totalPool}</span>
+                      </td>
                       <td className="num"><strong>{p.probAtLeastOneNewPct}%</strong></td>
                       <td className="num">{p.expectedNewCards}</td>
                       <td className="num">{p.expectedChakraValue} ◆</td>

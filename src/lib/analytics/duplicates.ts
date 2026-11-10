@@ -1,7 +1,7 @@
 import { Rarity, DuplicateCard, DecisionPedagogy } from '../../types/kyara';
 import { KyaraSettings, DEFAULT_SETTINGS, PricingStrategy } from '../../types/settings';
 import { DEFAULT_RECYCLE_VALUES, RARITY_PRICE_FLOORS, RARITY_LABELS } from './constants';
-import { computeSpareCopies, computeNetProceeds, computeListingFee, computeSaleTax } from './fees';
+import { computeSpareCopies, computeRecyclableCopies, computeNetProceeds, computeListingFee, computeSaleTax } from './fees';
 import { LiveMarketDepth, computeLiveMarketDepth, estimateSaleProbability } from './market-depth';
 import { resolveSellProfile } from './sell-profile';
 
@@ -18,7 +18,9 @@ export function evaluateDuplicate(
   const rarity: Rarity = card?.rarity || collectionEntry?.rarity || 'C';
   const recycleValue = Number(recycleMap[rarity] ?? DEFAULT_RECYCLE_VALUES[rarity] ?? 1);
   const rarityFloor = Number(RARITY_PRICE_FLOORS[rarity] ?? 3);
-  const spare = computeSpareCopies(collectionEntry, activeListedQty);
+  const keepCopies = Math.max(1, Math.floor(Number(settings?.autoRecycleKeepCopies ?? 1)));
+  const spare = computeSpareCopies(collectionEntry, activeListedQty, keepCopies);
+  const recyclableSpare = computeRecyclableCopies(collectionEntry, activeListedQty, keepCopies);
 
   const median7d = Number.isFinite(marketStats.median7d) && marketStats.median7d > 0 ? marketStats.median7d : null;
   const median30d = Number.isFinite(marketStats.median30d) && marketStats.median30d > 0 ? marketStats.median30d : null;
@@ -150,6 +152,10 @@ export function evaluateDuplicate(
   let verdict: 'VENDRE' | 'RECYCLER' | 'CONSERVER' | 'PROTÉGÉ' = 'VENDRE';
   let verdictReason = `Net ${netProceeds} ◆ (+${netGainOverRecycle} ◆ vs recyclage ${recycleValue} ◆)`;
 
+  const allowedRecycleRarities = Array.isArray(settings?.autoRecycleRarities)
+    ? settings.autoRecycleRarities
+    : ['C', 'U', 'R'];
+
   if (isPinned) {
     verdict = 'PROTÉGÉ';
     verdictReason = "Carte favorite protégée (exclue de l'auto-vente et de l'auto-recyclage)";
@@ -157,8 +163,13 @@ export function evaluateDuplicate(
     verdict = 'CONSERVER';
     verdictReason = `📈 En forte hausse (+${trendPct}% sur 7j vs 30j) · Conservation conseillée`;
   } else if (referenceMedian === null && lowestFixed === null) {
-    verdict = 'CONSERVER';
-    verdictReason = 'Prix de marché inconnu';
+    if (allowedRecycleRarities.includes(rarity) && rarity !== 'E' && rarity !== 'L' && rarity !== 'M') {
+      verdict = 'RECYCLER';
+      verdictReason = `Aucune demande marché (0 vente 30j) · Recyclage immédiat (+${recycleValue} ◆)`;
+    } else {
+      verdict = 'CONSERVER';
+      verdictReason = 'Prix de marché inconnu';
+    }
   } else if (rarity === 'L') {
     verdict = 'VENDRE';
     verdictReason = `Légendaire en surplus : mise en vente conseillée à ${recommendedPrice} ◆ (net ${netProceeds} ◆)`;
@@ -198,16 +209,16 @@ export function evaluateDuplicate(
     verdictReason = `Marché saturé au prix plancher (${lowestFixed} ◆) · recyclage ${recycleValue} ◆ conseillé`;
   }
 
-  const allowedRecycleRarities = Array.isArray(settings?.autoRecycleRarities)
-    ? settings.autoRecycleRarities
-    : ['C', 'U'];
-
   // A recycle verdict on a rarity that auto-recycle ignores would strand the card forever:
-  // sell it instead whenever the sale beats the recycle value (except in patient mode).
-  if (verdict === 'RECYCLER' && !isPinned && !allowedRecycleRarities.includes(rarity) &&
-      profile.tier !== 'patient' && netProceeds > recycleValue) {
-    verdict = 'VENDRE';
-    verdictReason = `Recyclage désactivé pour ${RARITY_LABELS[rarity] || rarity} : mise en vente à ${recommendedPrice} ◆ (net ${netProceeds} ◆)`;
+  // sell it instead whenever the sale beats the recycle value, otherwise conserve.
+  if (verdict === 'RECYCLER' && !isPinned && !allowedRecycleRarities.includes(rarity)) {
+    if (netProceeds > recycleValue && spare > 0) {
+      verdict = 'VENDRE';
+      verdictReason = `Recyclage désactivé pour ${RARITY_LABELS[rarity] || rarity} : mise en vente à ${recommendedPrice} ◆ (net ${netProceeds} ◆)`;
+    } else {
+      verdict = 'CONSERVER';
+      verdictReason = `Recyclage désactivé pour ${RARITY_LABELS[rarity] || rarity} · Conservation conseillée`;
+    }
   }
   if (verdict === 'VENDRE') {
     if (profile.tier === 'fast') verdictReason += ' · ⚡ vente rapide';
@@ -217,7 +228,7 @@ export function evaluateDuplicate(
   const canAutoRecycle =
     verdict === 'RECYCLER' &&
     !isPinned &&
-    spare > 0 &&
+    recyclableSpare > 0 &&
     allowedRecycleRarities.includes(rarity);
 
   const canAutoSell =
@@ -227,14 +238,14 @@ export function evaluateDuplicate(
     (rarity !== 'L' || settings?.autoSellIncludeL !== false) &&
     (rarity !== 'M' || Boolean(settings?.autoSellIncludeM));
 
-  const score = Math.round(
-    netProceeds * 2 +
-    (saleProb.p12h || 0) * 0.5 +
-    (sales7d || 0) * 1.5 +
-    (verdict === 'VENDRE' ? 50 : verdict === 'RECYCLER' ? 20 : 0)
-  );
+  const hourlyExpectedChakra = Math.round(((netProceeds * ((saleProb.p12h || 0) / 100)) / 12) * 100) / 100;
 
-  const hourlyExpectedChakra = Math.round(((netProceeds * (saleProb.p12h / 100)) / 12) * 100) / 100;
+  const score = Math.round(
+    (verdict === 'VENDRE'
+      ? hourlyExpectedChakra * 10 + netGainOverRecycle * 2 + (saleProb.p12h || 0) * 0.6
+      : netProceeds * 2 + (saleProb.p12h || 0) * 0.5 + (sales7d || 0) * 1.5) +
+      (verdict === 'VENDRE' ? 50 : verdict === 'RECYCLER' ? 20 : 0)
+  );
 
   const pedagogy: DecisionPedagogy = {
     decision: verdict,
@@ -256,6 +267,7 @@ export function evaluateDuplicate(
     rarity,
     owned: Math.max(0, Number(collectionEntry?.qty) || 1),
     spare,
+    recyclableSpare,
     recycleValue,
     referenceMedian,
     lowestFixed,

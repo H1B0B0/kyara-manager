@@ -93,6 +93,9 @@ export async function kyaraApi<T = any>(
 
     const data = await response.json().catch(() => null);
     if (response.ok) {
+      if (!response.headers.get('x-kyara-rush')) {
+        rushMultiplier = Math.max(1, rushMultiplier - 0.25);
+      }
       return data as T;
     }
 

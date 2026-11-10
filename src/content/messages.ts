@@ -203,14 +203,18 @@ export function setupMessageListener(): () => void {
           const { maxNetGain = 4, excludeRarities = ['L', 'M'] } = message;
           const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
           const candidates = (dashboard.duplicates || []).filter((d: any) => {
-            if (d.pinned || d.spare <= 0 || !state.currentSettings.autoRecycleRarities.includes(d.rarity)) return false;
+            const candQty = d.recyclableSpare ?? d.spare;
+            if (d.pinned || candQty <= 0 || !state.currentSettings.autoRecycleRarities.includes(d.rarity)) return false;
             if (excludeRarities.includes(d.rarity)) return false;
             return d.verdict === 'RECYCLER' || (d.fees?.netGainOverRecycle <= maxNetGain && (d.rarity === 'C' || d.rarity === 'U'));
           });
           const book = await loadCardLedger();
-          const results = await mapLimit(candidates, 3, async (item: any) => {
+          const results = await mapLimit(candidates, 4, async (item: any) => {
             if (isInterrupted()) return null;
-            const qty = Math.min(book.get(item.characterId).spare, item.spare);
+            const avail = book.get(item.characterId);
+            const availQty = (avail as any).recyclable ?? avail.spare;
+            const candQty = item.recyclableSpare ?? item.spare;
+            const qty = Math.min(candQty, availQty);
             return qty > 0 && book.reserve(item.characterId, qty, 'recycle') ? recycleCopies(book, item, qty) : null;
           });
           // Simulation reports nothing as recycled: no copy actually left the collection.

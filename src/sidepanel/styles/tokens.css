@@ -24,6 +24,9 @@
   --warn: #ffb347;
   --danger: #ff5c5c;
   --purple: #b072ff;
+  --tier-fast: #22d3ee;
+  --tier-normal: #a78bfa;
+  --tier-patient: #fbbf24;
 
   /* Official Kyara rarity palette */
   --rarity-C: #b5b1bb;

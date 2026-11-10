@@ -181,13 +181,26 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
     const stats = runtimeCache.collectionPrices.get(cid) || {};
     const activeQty = activeQtyByChar.get(cid) || 0;
     const ev = evaluateDuplicate(card, entry, stats, recycleMap, state.currentSettings, activeQty, pinnedSet);
-    if (ev.spare > 0 || activeQty > 0 || ev.pinned) {
+    const locked = Math.max(0, Math.floor(Number(entry.locked) || 0));
+    const recyclableQty = entry.recyclable !== undefined
+      ? Math.max(0, Number(entry.recyclable))
+      : Math.max(0, Math.floor(Number(entry.qty) || 0) - locked - 1);
+    const candRecyclable = Math.max(ev.spare, recyclableQty);
+    (ev as any).recyclableSpare = candRecyclable;
+    if (ev.verdict === 'RECYCLER' && !ev.pinned && candRecyclable > 0 && (state.currentSettings.autoRecycleRarities || ['C', 'U']).includes(ev.rarity)) {
+      ev.canAutoRecycle = true;
+    }
+    if (ev.spare > 0 || candRecyclable > 0 || activeQty > 0 || ev.pinned) {
       evaluatedDuplicates.push(ev);
     }
     deadline = await yieldIfNeeded(deadline);
   }
 
+  // Prioritize actionable cards so they are never truncated
   evaluatedDuplicates.sort((a, b) => {
+    const aAction = a.canAutoSell || a.canAutoRecycle || a.pinned ? 1 : 0;
+    const bAction = b.canAutoSell || b.canAutoRecycle || b.pinned ? 1 : 0;
+    if (bAction !== aAction) return bAction - aAction;
     if (b.score !== a.score) return b.score - a.score;
     return b.fees.netProceeds - a.fees.netProceeds;
   });
@@ -230,7 +243,7 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
   }
 
   const sellCandidates = evaluatedDuplicates.filter((d) => d.verdict === 'VENDRE' && d.spare > 0);
-  const recycleCandidates = evaluatedDuplicates.filter((d) => d.verdict === 'RECYCLER' && d.spare > 0);
+  const recycleCandidates = evaluatedDuplicates.filter((d) => d.canAutoRecycle && (d.recyclableSpare ?? d.spare) > 0);
 
   const dashboard = {
     updatedAt: Date.now(),
@@ -255,8 +268,8 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
       completionPct: catalogById.size ? Math.round((ownedSet.size / catalogById.size) * 1000) / 10 : 0,
       sellableDuplicatesCount: sellCandidates.reduce((s, d) => s + d.spare, 0),
       sellableNetTotal: sellCandidates.reduce((s, d) => s + d.spare * d.fees.netProceeds, 0),
-      recyclableDuplicatesCount: recycleCandidates.reduce((s, d) => s + d.spare, 0),
-      recyclableChakraTotal: recycleCandidates.reduce((s, d) => s + d.spare * d.recycleValue, 0)
+      recyclableDuplicatesCount: recycleCandidates.reduce((s, d) => s + (d.recyclableSpare ?? d.spare), 0),
+      recyclableChakraTotal: recycleCandidates.reduce((s, d) => s + (d.recyclableSpare ?? d.spare) * d.recycleValue, 0)
     },
     activeListings: activeListings.map((l: any) => ({
       id: l.id,
@@ -269,7 +282,7 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
       createdAt: l.createdAt,
       endsAt: l.endsAt
     })),
-    duplicates: evaluatedDuplicates.slice(0, 250),
+    duplicates: evaluatedDuplicates.slice(0, 1000),
     boosters: boosterRankings,
     deals: deals.slice(0, 50),
     trades: trades.slice(0, 30),

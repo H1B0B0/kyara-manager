@@ -49,7 +49,7 @@ export function resolveSellProfile(settings: Partial<KyaraSettings>, referencePr
       velocityFirst: false,
       turbo: settings.autoSellTurboLiquidity !== false,
       medianFloorPct: Math.min(55, Number(settings.autoSellMedianFloorPct ?? 70)),
-      staleMinutes: 30,
+      staleMinutes: 20,
       repriceDiscountPct: 8,
       durationHours: 12,
       recycleStale
@@ -62,8 +62,8 @@ export function resolveSellProfile(settings: Partial<KyaraSettings>, referencePr
       velocityFirst: false,
       turbo: false,
       medianFloorPct: Math.max(85, Number(settings.autoSellMedianFloorPct ?? 70)),
-      staleMinutes: 720,
-      repriceDiscountPct: 3,
+      staleMinutes: 90,
+      repriceDiscountPct: 4,
       durationHours: pickDuration(Math.max(24, userDuration), 24),
       recycleStale: false
     };
@@ -74,8 +74,8 @@ export function resolveSellProfile(settings: Partial<KyaraSettings>, referencePr
     velocityFirst: settings.autoSellVelocityFirst !== false,
     turbo: settings.autoSellTurboLiquidity !== false,
     medianFloorPct: Number(settings.autoSellMedianFloorPct ?? 70),
-    staleMinutes: 180,
-    repriceDiscountPct: Number(settings.autoSellRepriceDiscountPct ?? 5),
+    staleMinutes: 45,
+    repriceDiscountPct: Number(settings.autoSellRepriceDiscountPct ?? 6),
     durationHours: userDuration,
     recycleStale
   };

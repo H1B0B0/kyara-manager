@@ -2,11 +2,38 @@
 .app-header {
   position: sticky;
   top: 0;
-  z-index: 20;
+  z-index: 40;
+  container-type: scroll-state;
+  container-name: app-header;
   background: rgba(14, 13, 18, 0.96);
   backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
   padding: 10px 12px 0;
+  transition: all 0.25s ease;
+}
+
+.app-header__inner {
+  transition: all 0.25s ease;
+}
+
+@container app-header scroll-state(stuck: top) {
+  .app-header {
+    background: rgba(14, 13, 18, 0.98);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-bottom: 1px solid rgba(255, 77, 46, 0.3);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.6);
+  }
+}
+
+@supports not (container-type: scroll-state) {
+  .app-header {
+    background: rgba(14, 13, 18, 0.96);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--line);
+  }
 }
 
 .brand-row {
@@ -52,10 +79,11 @@
 .brand__title {
   margin: 0;
   font-family: var(--disp);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 800;
   letter-spacing: 0.04em;
   color: var(--fg);
+  white-space: nowrap;
 }
 
 .brand__version {
@@ -77,7 +105,7 @@
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   flex-shrink: 0;
 }
 
@@ -87,15 +115,20 @@
   background: var(--panel);
   color: var(--fg2);
   font-family: var(--body);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
-  padding: 5px 9px;
+  padding: 5px 8px;
   border-radius: 7px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 4px;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.icon-btn--square {
+  padding: 6px 7px;
+  justify-content: center;
 }
 
 .icon-btn:hover {
@@ -171,6 +204,16 @@
   text-shadow: 0 0 10px rgba(245, 197, 24, 0.22);
 }
 
+.kpi-card__sub {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  color: var(--mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.2;
+}
+
 .kpi-progress {
   height: 3px;
   border-radius: 9999px;
@@ -184,6 +227,22 @@
   background: linear-gradient(90deg, #ff4d2e, #ff7a45);
   border-radius: 9999px;
   transition: width 0.3s ease;
+}
+
+.kpi-progress__bar--chakra {
+  background: linear-gradient(90deg, #f5c518, #f59e0b);
+}
+
+.kpi-progress__bar--packs {
+  background: linear-gradient(90deg, #3fbf7f, #34d399);
+}
+
+.kpi-progress__bar--listings {
+  background: linear-gradient(90deg, #4dd6ff, #ff6a4d);
+}
+
+.kpi-progress__bar--pity {
+  background: linear-gradient(90deg, #ff4d2e, #b072ff);
 }
 
 .alert-banner {

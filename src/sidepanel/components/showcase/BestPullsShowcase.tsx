@@ -8,6 +8,19 @@ export interface BestPullsShowcaseProps {
   onClear: () => void;
 }
 
+const StarIcon: React.FC = () => (
+  <svg
+    width="10"
+    height="10"
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    aria-hidden="true"
+    style={{ marginRight: 4, display: 'inline-block', verticalAlign: '-1px' }}
+  >
+    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+  </svg>
+);
+
 export const BestPullsShowcase: React.FC<BestPullsShowcaseProps> = ({ pulls, onClear }) => {
   const [filter, setFilter] = useState<'all' | 'M' | 'L' | 'E' | 'new'>('all');
 
@@ -29,7 +42,7 @@ export const BestPullsShowcase: React.FC<BestPullsShowcaseProps> = ({ pulls, onC
     <div className="card card--best-pulls">
       <div className="card__header">
         <div className="best-pulls-title-wrap">
-          <span className="trophy-badge" aria-hidden="true">🏆</span>
+          <span className="kanji-box kanji-box--gold" aria-hidden="true">神</span>
           <div>
             <h3 className="card__title">
               {t('bestPullsTitle')}
@@ -60,21 +73,24 @@ export const BestPullsShowcase: React.FC<BestPullsShowcaseProps> = ({ pulls, onC
             className={`chip-filter chip-filter--M ${filter === 'M' ? 'is-active' : ''}`}
             onClick={() => setFilter('M')}
           >
-            ★ {t('bestPullsFilterMythic')} ({pulls.filter((p) => p.rarity === 'M').length})
+            <StarIcon />
+            {t('bestPullsFilterMythic')} ({pulls.filter((p) => p.rarity === 'M').length})
           </button>
           <button
             type="button"
             className={`chip-filter chip-filter--L ${filter === 'L' ? 'is-active' : ''}`}
             onClick={() => setFilter('L')}
           >
-            ★ {t('bestPullsFilterLegendary')} ({pulls.filter((p) => p.rarity === 'L').length})
+            <StarIcon />
+            {t('bestPullsFilterLegendary')} ({pulls.filter((p) => p.rarity === 'L').length})
           </button>
           <button
             type="button"
             className={`chip-filter chip-filter--E ${filter === 'E' ? 'is-active' : ''}`}
             onClick={() => setFilter('E')}
           >
-            ★ {t('bestPullsFilterEpic')} ({pulls.filter((p) => p.rarity === 'E').length})
+            <StarIcon />
+            {t('bestPullsFilterEpic')} ({pulls.filter((p) => p.rarity === 'E').length})
           </button>
         </div>
       )}

@@ -16,7 +16,7 @@ export function mockChrome(initial: Record<string, any> = {}) {
   const chromeMock = {
     runtime: {
       id: 'test-extension',
-      getManifest: vi.fn(() => ({ version: '1.5.0', content_scripts: [] })),
+      getManifest: vi.fn(() => ({ version: '2.0.0', content_scripts: [] })),
       reload: vi.fn(),
       requestUpdateCheck: vi.fn(async () => ({ status: 'no_update' })),
       onMessage: eventMock(), onInstalled: eventMock(), onStartup: eventMock(), onUpdateAvailable: eventMock(),

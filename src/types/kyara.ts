@@ -17,6 +17,7 @@ export interface DuplicateCard {
   rarity: Rarity;
   owned: number;
   spare: number;
+  recyclableSpare?: number;
   recycleValue: number;
   referenceMedian: number | null;
   lowestFixed: number | null;

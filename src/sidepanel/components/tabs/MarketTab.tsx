@@ -12,13 +12,19 @@ export interface MarketTabProps {
   onScanDeals?: () => Promise<any>;
 }
 
+const SwapArrow: React.FC = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="5" y1="12" x2="19" y2="12" />
+    <polyline points="12 5 19 12 12 19" />
+  </svg>
+);
+
 export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, onRefresh, onScanDeals }) => {
   const [filter, setFilter] = useState('ALL');
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
 
-  // Auto-scan on mount if deals empty
   React.useEffect(() => {
     if (deals.length === 0 && onScanDeals) {
       void onScanDeals();
@@ -67,7 +73,7 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
             disabled={scanning}
             onClick={async () => {
               setScanning(true);
-              onToast("Scan des annonces du marché en cours…");
+              onToast('Scan des annonces du marché en cours…');
               try {
                 if (onScanDeals) {
                   const res = await onScanDeals();
@@ -135,7 +141,6 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
           </button>
         </div>
       ) : viewMode === 'cards' ? (
-        /* Opportunity Cards View */
         <div className="deal-card-list">
           {filteredDeals.map((d) => (
             <div key={d.listingId} className={`deal-card rarity-${d.rarity.toLowerCase()}`}>
@@ -153,7 +158,6 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
                 </div>
               </div>
 
-              {/* 3 Metrics Mini Grid */}
               <div className="deal-card__metrics">
                 <div className="metric-cell">
                   <span className="metric-cell__label">Prix Achat</span>
@@ -186,7 +190,6 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
           ))}
         </div>
       ) : (
-        /* Classic Table View */
         <div className="table-wrapper">
           <table className="data-table data-table--market">
             <thead>
@@ -207,18 +210,10 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
                     <strong>{d.name}</strong>
                     {d.isMissing && <span className="badge-missing">★</span>}
                   </td>
-                  <td data-label={t('thBuy')} className="num font-mono">
-                    {d.buyPrice} ◆
-                  </td>
-                  <td data-label={t('thMedian7d')} className="num font-mono">
-                    {d.refMedian} ◆
-                  </td>
-                  <td data-label={t('thResale')} className="num font-mono">
-                    {d.targetResalePrice} ◆
-                  </td>
-                  <td data-label={t('thNetMargin')} className="num font-mono text-gain">
-                    +{d.flipProfit} ◆ (+{d.roiPct}%)
-                  </td>
+                  <td data-label={t('thBuy')} className="num font-mono">{d.buyPrice} ◆</td>
+                  <td data-label={t('thMedian7d')} className="num font-mono">{d.refMedian} ◆</td>
+                  <td data-label={t('thResale')} className="num font-mono">{d.targetResalePrice} ◆</td>
+                  <td data-label={t('thNetMargin')} className="num font-mono text-gain">+{d.flipProfit} ◆ (+{d.roiPct}%)</td>
                   <td data-label={t('thAction')}>
                     <button
                       type="button"
@@ -239,16 +234,19 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
       {/* Trades Section */}
       <div className="card card--compact" style={{ marginTop: '14px' }}>
         <div className="card__header">
-          <div>
-            <h3 className="card__title">🤝 Échanges Rentables (Trades)</h3>
-            <p className="card__desc">Propositions d'échange du marché où vous gagnez de la valeur.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="kanji-box kanji-box--sm kanji-box--cyan" aria-hidden="true">換</span>
+            <div>
+              <h3 className="card__title">Échanges Rentables (Trades)</h3>
+              <p className="card__desc">Propositions d'échange du marché où vous gagnez de la valeur.</p>
+            </div>
           </div>
           <span className="badge font-mono">{trades.length}</span>
         </div>
 
         {trades.length === 0 ? (
           <div className="empty-state-box">
-            <span className="empty-state-box__icon">🤝</span>
+            <span className="empty-state-box__icon">換</span>
             <p className="empty-state-box__text">Aucun échange avantageux disponible sur le marché pour l'instant.</p>
           </div>
         ) : (
@@ -260,7 +258,9 @@ export const MarketTab: React.FC<MarketTabProps> = ({ deals, trades, onToast, on
                   <strong>{tr.offered.name}</strong>
                   <span className="trade-item__val font-mono">{tr.offered.median7d} ◆</span>
                 </div>
-                <div className="trade-item__arrow">➔</div>
+                <div className="trade-item__arrow">
+                  <SwapArrow />
+                </div>
                 <div className="trade-item__col">
                   <span className="trade-item__label">Demandé</span>
                   <strong>{tr.wanted.name}</strong>

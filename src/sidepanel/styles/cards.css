@@ -1,108 +1,5 @@
-/* Profitable Trades List */
-.trades-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 4px 0;
-}
-
-.trade-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  background: var(--raise);
-  border: 1px solid var(--line2);
-  border-radius: 8px;
-  padding: 8px 12px;
-}
-
-.trade-exchange {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11.5px;
-}
-
-.trade-gain {
-  font-family: var(--mono);
-  font-weight: 700;
-  color: var(--ok);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
-
-/* Booster Recommendation Cards */
-.booster-highlights {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.rec-header {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  margin-bottom: 6px;
-}
-
-.card--rec-new {
-  background: var(--panel2);
-  border-color: rgba(255, 77, 46, 0.4);
-}
-
-.card--rec-ev {
-  background: var(--panel);
-  border-color: var(--line2);
-}
-
-.rec-tag {
-  display: block;
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.rec-tag--new {
-  color: var(--acc);
-}
-
-.rec-tag--ev {
-  color: var(--gold);
-}
-
-.rec-title {
-  margin: 0;
-  font-size: 13.5px;
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.rec-metrics {
-  margin: 2px 0 8px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--fg2);
-}
-
-.rec-missing-bars {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 9px;
-}
-
-.rec-actions {
-  display: flex;
-  gap: 6px;
-}
-
-
 /* ==========================================================================
-   RPG Inventory Card System & Modern View Modes
+   RPG Inventory Card System & Modern View Modes (Native Kyara Design)
    ========================================================================== */
 .view-toggle {
   display: inline-flex;
@@ -114,7 +11,6 @@
   gap: 2px;
   margin-left: auto;
 }
-
 .view-toggle__btn {
   appearance: none;
   background: transparent;
@@ -128,29 +24,24 @@
   cursor: pointer;
   transition: all 0.15s ease;
 }
-
-.view-toggle__btn:hover {
-  color: var(--fg);
-}
-
+.view-toggle__btn:hover { color: var(--fg); }
 .view-toggle__btn.is-active {
   background: var(--panel);
   color: var(--fg);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
 }
 
-.inventory-card-list,
-.deal-card-list,
-.wishlist-card-list {
+/* Container Query Lists (modern-web-guidance: size-aware-styling) */
+.inventory-card-list, .deal-card-list, .wishlist-card-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   margin-top: 8px;
+  container-type: inline-size;
+  container-name: card-list;
 }
 
-.inventory-card,
-.deal-card,
-.wishlist-card {
+.inventory-card, .deal-card, .wishlist-card {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -162,84 +53,54 @@
   transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
 }
-
-.inventory-card:hover,
-.deal-card:hover,
-.wishlist-card:hover {
+.inventory-card:hover, .deal-card:hover, .wishlist-card:hover {
   border-color: var(--line2);
   background: var(--panel2);
   transform: translateY(-1px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
 }
 
+@container card-list (min-width: 390px) {
+  .inventory-card, .deal-card, .wishlist-card { padding: 12px 14px; gap: 10px; }
+  .inventory-card__name, .deal-card__name, .wishlist-card__name { font-size: 13.5px; }
+  .inventory-card__metrics, .deal-card__metrics, .wishlist-card__metrics { padding: 8px 10px; gap: 8px; }
+  .metric-cell__val { font-size: 12px; }
+}
+
 /* Rarity Accents & Border Glow */
-.rarity-m {
-  border-left: 3px solid #ff2a4b !important;
-}
-.rarity-m:hover {
-  box-shadow: 0 6px 20px rgba(255, 42, 75, 0.25) !important;
-}
-
-.rarity-l {
-  border-left: 3px solid #ffb300 !important;
-}
-.rarity-l:hover {
-  box-shadow: 0 6px 20px rgba(255, 179, 0, 0.25) !important;
-}
-
-.rarity-e {
-  border-left: 3px solid #9d4edd !important;
-}
-.rarity-e:hover {
-  box-shadow: 0 6px 20px rgba(157, 78, 221, 0.25) !important;
-}
-
-.rarity-r {
-  border-left: 3px solid #00b4d8 !important;
-}
-
-.rarity-u {
-  border-left: 3px solid #2ec4b6 !important;
-}
-
-.rarity-c {
-  border-left: 3px solid #6c757d !important;
-}
+.rarity-m { border-left: 3px solid #ff2a4b !important; }
+.rarity-m:hover { box-shadow: 0 6px 20px rgba(255, 42, 75, 0.25) !important; }
+.rarity-l { border-left: 3px solid #ffb300 !important; }
+.rarity-l:hover { box-shadow: 0 6px 20px rgba(255, 179, 0, 0.25) !important; }
+.rarity-e { border-left: 3px solid #9d4edd !important; }
+.rarity-e:hover { box-shadow: 0 6px 20px rgba(157, 78, 221, 0.25) !important; }
+.rarity-r { border-left: 3px solid #00b4d8 !important; }
+.rarity-u { border-left: 3px solid #2ec4b6 !important; }
+.rarity-c { border-left: 3px solid #6c757d !important; }
 
 .inventory-card.is-pinned {
-  border-color: rgba(255, 179, 0, 0.4);
-  background: rgba(255, 179, 0, 0.03);
+  border-color: rgba(245, 197, 24, 0.4);
+  background: rgba(245, 197, 24, 0.03);
 }
 
-.inventory-card__header,
-.deal-card__header,
-.wishlist-card__header {
+.inventory-card__header, .deal-card__header, .wishlist-card__header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
   gap: 8px;
 }
-
-.inventory-card__identity,
-.deal-card__identity,
-.wishlist-card__identity {
+.inventory-card__identity, .deal-card__identity, .wishlist-card__identity {
   display: flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
 }
-
-.inventory-card__names,
-.deal-card__names,
-.wishlist-card__names {
+.inventory-card__names, .deal-card__names, .wishlist-card__names {
   display: flex;
   flex-direction: column;
   min-width: 0;
 }
-
-.inventory-card__name,
-.deal-card__name,
-.wishlist-card__name {
+.inventory-card__name, .deal-card__name, .wishlist-card__name {
   font-size: 12.5px;
   font-weight: 700;
   color: var(--fg);
@@ -247,24 +108,36 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.inventory-card__series,
-.deal-card__series,
-.wishlist-card__series {
+.inventory-card__series, .deal-card__series, .wishlist-card__series {
   font-size: 10.5px;
   color: var(--mut);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-
-.inventory-card__badge-stack,
-.deal-card__badge-stack {
+.inventory-card__badge-stack, .deal-card__badge-stack {
   display: flex;
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
 }
+
+.btn-pin {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  cursor: pointer;
+  padding: 3px;
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s ease, transform 0.15s ease;
+}
+.btn-pin:hover { color: var(--fg); }
+.btn-pin.is-active { color: var(--gold); }
+.btn-pin svg { width: 13px; height: 13px; }
 
 .spare-badge {
   font-family: var(--mono);
@@ -278,9 +151,7 @@
 }
 
 /* 3 Metrics Micro Grid */
-.inventory-card__metrics,
-.deal-card__metrics,
-.wishlist-card__metrics {
+.inventory-card__metrics, .deal-card__metrics, .wishlist-card__metrics {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
@@ -289,10 +160,7 @@
   border-radius: 8px;
   border: 1px solid rgba(255, 255, 255, 0.03);
 }
-
-.wishlist-card__metrics {
-  grid-template-columns: repeat(2, 1fr);
-}
+.wishlist-card__metrics { grid-template-columns: repeat(2, 1fr); }
 
 .metric-cell {
   display: flex;
@@ -302,7 +170,6 @@
   text-align: center;
   gap: 2px;
 }
-
 .metric-cell__label {
   font-size: 8.5px;
   font-weight: 700;
@@ -310,7 +177,6 @@
   letter-spacing: 0.04em;
   color: var(--mut);
 }
-
 .metric-cell__val {
   font-family: var(--mono);
   font-size: 11px;
@@ -318,109 +184,100 @@
   color: var(--fg2);
   white-space: nowrap;
 }
+.metric-cell__val--gain { color: var(--ok); }
+.metric-cell__val--rec { color: var(--cyan); }
+.metric-cell__val--buy { color: var(--acc); }
 
-.metric-cell__val--gain {
-  color: #3fbf7f;
-}
-
-.metric-cell__val--rec {
-  color: #4dd6ff;
-}
-
-.metric-cell__val--buy {
-  color: #ff6b4a;
-}
-
-.inventory-card__footer,
-.deal-card__footer,
-.wishlist-card__footer {
+.inventory-card__footer, .deal-card__footer, .wishlist-card__footer {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
   margin-top: 2px;
 }
+.inventory-card__verdict { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
+.inventory-card__actions { display: flex; align-items: center; gap: 5px; }
+.inventory-card__pedagogy { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); animation: fadeIn 0.2s ease-out; }
 
-.inventory-card__actions {
-  display: flex;
+/* Sell Pace Tier Pills */
+.sell-tier-pill {
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1.5px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 3px;
 }
+.sell-tier-pill--fast { background: rgba(77, 214, 255, 0.12); color: var(--cyan); border: 1px solid rgba(77, 214, 255, 0.35); }
+.sell-tier-pill--normal { background: rgba(245, 197, 24, 0.12); color: var(--gold); border: 1px solid rgba(245, 197, 24, 0.35); }
+.sell-tier-pill--patient { background: rgba(176, 114, 255, 0.12); color: var(--purple); border: 1px solid rgba(176, 114, 255, 0.35); }
 
-.inventory-card__pedagogy {
-  margin-top: 6px;
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
-  animation: fadeIn 0.2s ease-out;
-}
-
-/* Strategy Selector inside Sell Module */
-.module-card__sub-config {
-  margin: 4px 0 2px;
-  padding: 5px 8px;
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 6px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.strategy-selector-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.strategy-selector-label {
-  font-size: 10px;
-  font-weight: 600;
+/* Capsule Filter Pills */
+.capsule-pills { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
+.capsule-pill {
+  appearance: none;
+  background: var(--raise);
+  border: 1px solid var(--line);
   color: var(--mut);
+  font-family: var(--body);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 9999px;
+  cursor: pointer;
+  transition: all 0.15s ease;
   white-space: nowrap;
 }
-
-.select--xs {
-  padding: 2px 6px;
-  font-size: 10.5px;
-  height: 24px;
-  flex: 1;
-  border-radius: 5px;
+.capsule-pill:hover { color: var(--fg); border-color: var(--line2); }
+.capsule-pill.is-active {
+  background: var(--panel2);
+  color: var(--gold);
+  border-color: rgba(245, 197, 24, 0.45);
+  box-shadow: 0 1px 6px rgba(245, 197, 24, 0.15);
 }
 
-/* Discount Pill & Missing Badge */
-.discount-pill {
-  font-family: var(--mono);
-  font-size: 10px;
-  font-weight: 800;
-  padding: 2px 6px;
-  border-radius: 6px;
-  background: rgba(63, 191, 127, 0.18);
-  color: #3fbf7f;
-  border: 1px solid rgba(63, 191, 127, 0.45);
-}
-
-.missing-badge {
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 2px 5px;
-  border-radius: 6px;
-  background: rgba(255, 179, 0, 0.18);
-  color: #ffd700;
-  border: 1px solid rgba(255, 179, 0, 0.45);
-}
-
-.deal-card__roi {
-  font-family: var(--mono);
-  font-size: 10px;
-  color: var(--fg2);
-}
-
-
-/* Active Listings List */
-.active-listings-list {
+/* Turbo Liquidity Banner */
+.turbo-banner {
   display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 77, 46, 0.08);
+  border: 1px solid rgba(255, 77, 46, 0.28);
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 8px;
+}
+.turbo-banner__main { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.turbo-banner__text { display: flex; flex-direction: column; min-width: 0; }
+.turbo-banner__title { font-size: 11.5px; color: var(--acc); }
+.turbo-banner__desc { font-size: 10px; color: var(--fg2); margin: 0; }
+
+/* 10-Segment Slot Rack & Active Listings Telemetry */
+.slot-rack { display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; margin: 8px 0 10px; }
+.slot-rack__seg {
+  height: 5px;
+  border-radius: 2px;
+  background: var(--raise);
+  border: 1px solid var(--line2);
+  transition: all 0.2s ease;
+}
+.slot-rack__seg.is-filled {
+  background: var(--acc);
+  border-color: rgba(255, 77, 46, 0.6);
+  box-shadow: 0 0 6px rgba(255, 77, 46, 0.35);
+}
+.slot-rack__seg.is-filled-ok {
+  background: var(--ok);
+  border-color: rgba(63, 191, 127, 0.6);
+  box-shadow: 0 0 6px rgba(63, 191, 127, 0.35);
 }
 
+.active-listings-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .active-listing-item {
   display: flex;
   align-items: center;
@@ -431,38 +288,44 @@
   border-radius: 8px;
   gap: 8px;
 }
-
-.active-listing-item__info {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
-
-.active-listing-item__name {
-  font-size: 11.5px;
-  font-weight: 600;
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.active-listing-item__price {
-  font-size: 11px;
-  color: var(--gold);
+.active-listing-item__info { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.active-listing-item__name { font-size: 11.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.active-listing-item__price { font-size: 11px; color: var(--gold); font-weight: 700; flex-shrink: 0; }
+.listing-age { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; color: var(--mut); }
+.listing-age__reprice-warn {
+  font-size: 9px;
   font-weight: 700;
-  flex-shrink: 0;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(255, 179, 71, 0.15);
+  color: var(--warn);
+  border: 1px solid rgba(255, 179, 71, 0.35);
 }
+
+/* Discount Pill & Missing Badge */
+.discount-pill {
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(63, 191, 127, 0.18);
+  color: var(--ok);
+  border: 1px solid rgba(63, 191, 127, 0.45);
+}
+.missing-badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 2px 5px;
+  border-radius: 6px;
+  background: rgba(245, 197, 24, 0.18);
+  color: var(--gold);
+  border: 1px solid rgba(245, 197, 24, 0.45);
+}
+.deal-card__roi { font-family: var(--mono); font-size: 10px; color: var(--fg2); }
 
 /* Trades List */
-.trades-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin-top: 6px;
-}
-
+.trades-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .trade-item {
   display: flex;
   align-items: center;
@@ -474,27 +337,37 @@
   gap: 6px;
   font-size: 11px;
 }
+.trade-item__col { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.trade-item__label { font-size: 9px; color: var(--mut); text-transform: uppercase; }
+.trade-item__arrow { color: var(--mut); display: inline-flex; align-items: center; }
+.trade-item__gain { font-weight: 700; color: var(--ok); flex-shrink: 0; }
 
-.trade-item__col {
+/* Booster Completion Progress Bar */
+.booster-progress-track {
+  height: 3px;
+  width: 100%;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 2px;
+  overflow: hidden;
+  margin-top: 6px;
+}
+.booster-progress-bar {
+  height: 100%;
+  background: linear-gradient(90deg, var(--gold), var(--acc));
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.pity-banner {
   display: flex;
-  flex-direction: column;
-  gap: 1px;
-  min-width: 0;
+  align-items: center;
+  gap: 10px;
+  background: rgba(245, 197, 24, 0.08);
+  border: 1px solid rgba(245, 197, 24, 0.3);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
 }
-
-.trade-item__label {
-  font-size: 9px;
-  color: var(--mut);
-  text-transform: uppercase;
-}
-
-.trade-item__arrow {
-  color: var(--mut);
-  font-size: 12px;
-}
-
-.trade-item__gain {
-  font-weight: 700;
-  color: var(--ok);
-  flex-shrink: 0;
-}
+.pity-banner__icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.pity-banner__title { font-size: 12px; color: var(--gold); }
+.pity-banner__desc { font-size: 10.5px; color: var(--fg2); margin: 2px 0 0; }

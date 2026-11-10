@@ -3,6 +3,7 @@ import { state } from '../state';
 import { recordCumulativeMetric, appendJournal } from '../journal';
 import { isInterrupted, loadCardLedger, type CardLedger } from '../safety';
 import { mapLimit } from '../../lib/concurrency';
+import { triageDuplicatesLive } from './market-triage';
 
 /** Recycles `qty` reserved copies. The caller must have reserved them in the ledger first. */
 export async function recycleCopies(
@@ -32,15 +33,24 @@ export async function executeAutoRecycle(
   dashboard: any,
   ledger?: CardLedger
 ): Promise<{ recycledCards: number; recycledCopies: number; chakraGained: number }> {
-  const candidates = (dashboard?.duplicates || []).filter((d: any) => d.canAutoRecycle && d.spare > 0);
   const total = { recycledCards: 0, recycledCopies: 0, chakraGained: 0 };
+  const book = ledger ?? (await loadCardLedger());
+  const triaged = await triageDuplicatesLive(dashboard?.duplicates || [], book, state.currentSettings, 18);
+  const candidates = triaged.filter(
+    (d: any) =>
+      (d.canAutoRecycle || d.verdict === 'RECYCLER') &&
+      !d.pinned &&
+      state.currentSettings.autoRecycleRarities.includes(d.rarity)
+  );
   if (!candidates.length) return total;
 
-  const book = ledger ?? (await loadCardLedger());
   // Writes are paced by the API layer; a few in flight hide the network latency between them.
-  const results = await mapLimit(candidates, 3, async (cand: any) => {
+  const results = await mapLimit(candidates, 4, async (cand: any) => {
     if (isInterrupted()) return null;
-    const qty = Math.min(cand.spare, book.get(cand.characterId).spare);
+    const avail = book.get(cand.characterId);
+    const availQty = (avail as any).recyclable ?? avail.spare;
+    const candQty = cand.recyclableSpare ?? cand.spare;
+    const qty = Math.min(candQty, availQty);
     if (qty <= 0 || !book.reserve(cand.characterId, qty, 'recycle')) return null;
     return recycleCopies(book, cand, qty);
   });

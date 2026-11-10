@@ -1,6 +1,6 @@
 import { kyaraApi } from './api';
 import { state } from './state';
-import { computeSpareCopies } from '../lib/analytics/fees';
+import { computeSpareCopies, computeRecyclableCopies } from '../lib/analytics/fees';
 import { extractActiveListings } from './snapshot';
 
 export function positiveInteger(value: unknown, label: string): number {
@@ -25,6 +25,7 @@ export interface CardAvailability {
   pinned: Set<number>;
   listed: number;
   spare: number;
+  recyclable: number;
 }
 
 type ReserveKind = 'recycle' | 'list';
@@ -74,15 +75,18 @@ export function buildCardLedger(collection: any[], marketListings: any[], pinned
         0
       );
     const keep = Math.max(1, Math.floor(Number(state.currentSettings.autoRecycleKeepCopies) || 1));
-    const spare = pinned.has(characterId) ? 0 : Math.max(0, computeSpareCopies(entry, listed) - (keep - 1));
-    return { entry, listings, pinned, listed, spare };
+    const spare = pinned.has(characterId) ? 0 : computeSpareCopies(entry, listed, keep);
+    const recyclable = pinned.has(characterId) ? 0 : computeRecyclableCopies(entry, listed, keep);
+    return { entry, listings, pinned, listed, spare, recyclable };
   };
 
   return {
     listings,
     get,
     reserve(characterId, qty, kind) {
-      if (!Number.isInteger(qty) || qty <= 0 || qty > get(characterId).spare) return false;
+      const avail = get(characterId);
+      const maxQty = kind === 'recycle' ? avail.recyclable : avail.spare;
+      if (!Number.isInteger(qty) || qty <= 0 || qty > maxQty) return false;
       add(kind === 'recycle' ? recycled : pendingList, characterId, qty);
       return true;
     },

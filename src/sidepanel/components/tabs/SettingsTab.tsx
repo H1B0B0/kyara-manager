@@ -9,6 +9,12 @@ export interface SettingsTabProps {
   onToast: (msg: string) => void;
 }
 
+const BoltIcon: React.FC = () => (
+  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'var(--acc)', marginRight: '6px' }}>
+    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+  </svg>
+);
+
 export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSettings, onToast }) => {
   const [form, setForm] = useState<KyaraSettings>(settings);
   const edits = useRef<Partial<KyaraSettings>>({});
@@ -53,16 +59,16 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
               onChange={(e) => handleChange('language', e.target.value as Language)}
               className="select"
             >
-              <option value="fr">Français 🇫🇷</option>
-              <option value="en">English 🇬🇧</option>
-              <option value="es">Español 🇪🇸</option>
+              <option value="fr">FR — Français</option>
+              <option value="en">EN — English</option>
+              <option value="es">ES — Español</option>
             </select>
           </div>
         </div>
 
         {/* Pricing Strategy */}
         <div className="card card--compact">
-          <h3 className="card__title">Stratégie de Vente & Anti-Krach</h3>
+          <h3 className="card__title">Stratégie de Vente &amp; Anti-Krach</h3>
 
           <div className="form-group" style={{ marginTop: '8px' }}>
             <label className="form-label">Stratégie de tarification</label>
@@ -92,7 +98,9 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
 
         {/* Sell pace */}
         <div className="card card--compact">
-          <h3 className="card__title">⚡ Rythme de vente</h3>
+          <h3 className="card__title" style={{ display: 'flex', alignItems: 'center' }}>
+            <BoltIcon /> Rythme de vente
+          </h3>
           <p className="form-hint">
             Le marché n'a que 10 créneaux : plus une carte reste en vente, moins le stock s'écoule. Le mode adaptatif vend vite les
             cartes bon marché (prix plancher, annonce relancée moins chère toutes les 30 min, recyclage si elle ne part pas) et laisse
@@ -149,7 +157,10 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
 
         {/* Turbo Liquidity */}
         <div className="card card--compact">
-          <h3 className="card__title">⚡ Mode Turbo Liquidité</h3>
+          <h3 className="card__title" style={{ display: 'flex', alignItems: 'center' }}>
+            <span className="kanji-box kanji-box--sm kanji-box--acc" style={{ marginRight: '6px' }} aria-hidden="true">速</span>
+            Mode Turbo Liquidité
+          </h3>
           <p className="form-hint">
             Désengorge les 10 créneaux face aux backlogs de cartes en recyclant immédiatement les cartes lentes ou à faible marge.
           </p>
@@ -178,7 +189,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
 
         {/* Wishlist Auto-Buy */}
         <div className="card card--compact">
-          <h3 className="card__title">Mes Envies & Marché</h3>
+          <h3 className="card__title">Mes Envies &amp; Marché</h3>
 
           <label className="check-row" style={{ marginTop: '8px' }}>
             <input

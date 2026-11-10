@@ -1,9 +1,56 @@
-/* Journal List */
+/* ==========================================================================
+   Autopilot Journal / Live Activity Log
+   ========================================================================== */
+.card--journal .card__header {
+  margin-bottom: 8px;
+}
+
+.journal-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.journal-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 9px;
+  padding-bottom: 7px;
+  border-bottom: 1px solid var(--line);
+}
+
+.journal-filter-pill {
+  appearance: none;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  color: var(--mut);
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.journal-filter-pill:hover {
+  background: var(--raise);
+  color: var(--fg);
+}
+
+.journal-filter-pill.is-active {
+  background: var(--raise);
+  border-color: rgba(255, 77, 46, 0.5);
+  color: var(--acc);
+}
+
 .journal-list {
   list-style: none;
   margin: 0;
   padding: 0;
-  max-height: 210px;
+  max-height: 230px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -13,24 +60,118 @@
 .journal-item {
   content-visibility: auto;
   contain-intrinsic-size: auto none auto 34px;
-  padding: 6px 8px;
+  padding: 5px 8px;
   border-radius: 6px;
   background: var(--bg2);
   border: 1px solid var(--line);
-  border-left: 2px solid var(--dim);
+  border-left: 2.5px solid var(--dim);
   font-size: 11.5px;
   display: flex;
   justify-content: space-between;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 8px;
+  transition: background-color 0.15s ease;
 }
 
-.journal-item--sell { border-left-color: var(--acc); }
+.journal-item:hover {
+  background: var(--panel2);
+}
+
+.journal-item--sell { border-left-color: var(--gold); }
 .journal-item--sold { border-left-color: var(--ok); }
-.journal-item--recycle { border-left-color: var(--cyan); }
-.journal-item--buy { border-left-color: var(--gold); }
-.journal-item--open { border-left-color: var(--rarity-E); }
+.journal-item--recycle { border-left-color: var(--ok); }
+.journal-item--booster { border-left-color: var(--purple); }
+.journal-item--market { border-left-color: var(--cyan); }
+.journal-item--mission { border-left-color: var(--purple); }
+.journal-item--afk { border-left-color: var(--warn); }
 .journal-item--error { border-left-color: var(--danger); }
+
+.journal-item__lead {
+  display: flex;
+  align-items: flex-start;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+
+.journal-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--raise);
+  border: 1px solid var(--line2);
+  color: var(--fg2);
+  flex-shrink: 0;
+  line-height: 1.3;
+  margin-top: 1px;
+}
+
+.journal-badge svg {
+  flex-shrink: 0;
+}
+
+.journal-badge--sell {
+  background: rgba(245, 197, 24, 0.12);
+  border-color: rgba(245, 197, 24, 0.35);
+  color: var(--gold);
+}
+
+.journal-badge--recycle {
+  background: rgba(63, 191, 127, 0.12);
+  border-color: rgba(63, 191, 127, 0.35);
+  color: var(--ok);
+}
+
+.journal-badge--booster {
+  background: rgba(176, 114, 255, 0.12);
+  border-color: rgba(176, 114, 255, 0.35);
+  color: var(--purple);
+}
+
+.journal-badge--market {
+  background: rgba(77, 214, 255, 0.12);
+  border-color: rgba(77, 214, 255, 0.35);
+  color: var(--cyan);
+}
+
+.journal-badge--mission {
+  background: rgba(176, 114, 255, 0.12);
+  border-color: rgba(176, 114, 255, 0.35);
+  color: var(--purple);
+}
+
+.journal-badge--afk {
+  background: rgba(255, 179, 71, 0.12);
+  border-color: rgba(255, 179, 71, 0.35);
+  color: var(--warn);
+}
+
+.journal-badge--error {
+  background: rgba(255, 92, 92, 0.12);
+  border-color: rgba(255, 92, 92, 0.35);
+  color: var(--danger);
+}
+
+.journal-badge--info {
+  background: var(--raise);
+  border-color: var(--line2);
+  color: var(--fg2);
+}
+
+.journal-item__msg {
+  flex: 1;
+  min-width: 0;
+  white-space: normal;
+  line-height: 1.35;
+  color: var(--fg);
+  word-break: break-word;
+}
 
 .journal-time {
   color: var(--mut);
@@ -38,25 +179,12 @@
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
+  margin-top: 2px;
 }
 
 .journal-empty {
   color: var(--mut);
   font-size: 11.5px;
   text-align: center;
-  padding: 12px;
-}
-
-
-/* Journal Item Icon & Msg */
-.journal-item__icon {
-  font-size: 12px;
-  line-height: 1;
-  flex-shrink: 0;
-  margin-right: 4px;
-}
-
-.journal-item__msg {
-  flex: 1;
-  min-width: 0;
+  padding: 14px;
 }

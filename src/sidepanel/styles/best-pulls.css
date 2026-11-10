@@ -2,20 +2,14 @@
    Autopilot Best Pulls / Hall of Fame Showcase
    ========================================================================== */
 .card--best-pulls {
-  border-color: rgba(245, 197, 24, 0.25);
-  background: linear-gradient(135deg, rgba(245, 197, 24, 0.04), rgba(20, 18, 27, 0.96));
+  border-color: rgba(245, 197, 24, 0.28);
+  background: linear-gradient(135deg, rgba(245, 197, 24, 0.05), rgba(20, 18, 27, 0.96));
 }
 
 .best-pulls-title-wrap {
   display: flex;
   align-items: center;
-  gap: 10px;
-}
-
-.trophy-badge {
-  font-size: 20px;
-  line-height: 1;
-  filter: drop-shadow(0 0 6px rgba(245, 197, 24, 0.45));
+  gap: 9px;
 }
 
 .counter-pill {
@@ -51,6 +45,8 @@
   border-radius: 6px;
   cursor: pointer;
   transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
 }
 
 .chip-filter:hover {
@@ -67,25 +63,28 @@
 .chip-filter--M.is-active {
   border-color: var(--rarity-M);
   color: var(--rarity-M);
+  background: rgba(255, 77, 46, 0.12);
 }
 
 .chip-filter--L.is-active {
   border-color: var(--rarity-L);
   color: var(--rarity-L);
+  background: rgba(245, 197, 24, 0.12);
 }
 
 .chip-filter--E.is-active {
   border-color: var(--rarity-E);
   color: var(--rarity-E);
+  background: rgba(176, 114, 255, 0.12);
 }
 
 .best-pulls-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
-  max-height: 290px;
+  max-height: 380px;
   overflow-y: auto;
-  padding: 4px 2px;
+  padding: 4px 2px 8px;
 }
 
 .pull-card {
@@ -105,13 +104,13 @@
 }
 
 .pull-card--M {
-  border-color: rgba(255, 77, 46, 0.65);
-  box-shadow: 0 0 12px rgba(255, 77, 46, 0.18);
+  border-color: rgba(255, 77, 46, 0.75);
+  box-shadow: 0 0 14px rgba(255, 77, 46, 0.24);
 }
 
 .pull-card--L {
-  border-color: rgba(245, 197, 24, 0.65);
-  box-shadow: 0 0 12px rgba(245, 197, 24, 0.18);
+  border-color: rgba(245, 197, 24, 0.75);
+  box-shadow: 0 0 14px rgba(245, 197, 24, 0.24);
 }
 
 .pull-card--E {

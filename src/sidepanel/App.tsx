@@ -78,7 +78,15 @@ export const App: React.FC = () => {
         </div>}
         {settings.dryRun && <p className="connection-notice" role="status">Mode simulation actif : aucune modification envoyée à Kyara.</p>}
         {visitedTabs.has('autopilot') && (
-          <div role="tabpanel" id="km-panel-autopilot" aria-labelledby="km-tab-autopilot" hidden={activeTab !== 'autopilot'}>
+          <div
+            key="autopilot"
+            role="tabpanel"
+            id="km-panel-autopilot"
+            aria-labelledby="km-tab-autopilot"
+            className={`tab-panel ${activeTab === 'autopilot' ? 'is-active' : 'is-inactive'}`}
+            aria-hidden={activeTab !== 'autopilot'}
+            inert={activeTab !== 'autopilot' ? true : undefined}
+          >
             <AutopilotTab
               dashboard={dashboard}
               settings={settings}
@@ -95,7 +103,15 @@ export const App: React.FC = () => {
         )}
 
         {visitedTabs.has('duplicates') && (
-          <div role="tabpanel" id="km-panel-duplicates" aria-labelledby="km-tab-duplicates" hidden={activeTab !== 'duplicates'}>
+          <div
+            key="duplicates"
+            role="tabpanel"
+            id="km-panel-duplicates"
+            aria-labelledby="km-tab-duplicates"
+            className={`tab-panel ${activeTab === 'duplicates' ? 'is-active' : 'is-inactive'}`}
+            aria-hidden={activeTab !== 'duplicates'}
+            inert={activeTab !== 'duplicates' ? true : undefined}
+          >
             <DuplicatesTab
               duplicates={duplicates}
               stats={dashboard?.collectionStats}
@@ -111,7 +127,15 @@ export const App: React.FC = () => {
         )}
 
         {visitedTabs.has('market') && (
-          <div role="tabpanel" id="km-panel-market" aria-labelledby="km-tab-market" hidden={activeTab !== 'market'}>
+          <div
+            key="market"
+            role="tabpanel"
+            id="km-panel-market"
+            aria-labelledby="km-tab-market"
+            className={`tab-panel ${activeTab === 'market' ? 'is-active' : 'is-inactive'}`}
+            aria-hidden={activeTab !== 'market'}
+            inert={activeTab !== 'market' ? true : undefined}
+          >
             <MarketTab
               deals={deals}
               trades={trades}
@@ -123,7 +147,15 @@ export const App: React.FC = () => {
         )}
 
         {visitedTabs.has('wishlist') && (
-          <div role="tabpanel" id="km-panel-wishlist" aria-labelledby="km-tab-wishlist" hidden={activeTab !== 'wishlist'}>
+          <div
+            key="wishlist"
+            role="tabpanel"
+            id="km-panel-wishlist"
+            aria-labelledby="km-tab-wishlist"
+            className={`tab-panel ${activeTab === 'wishlist' ? 'is-active' : 'is-inactive'}`}
+            aria-hidden={activeTab !== 'wishlist'}
+            inert={activeTab !== 'wishlist' ? true : undefined}
+          >
             <WishlistTab
               wishlist={wishlist.map((wish) => {
                 const matching = deals.filter((deal) => deal.characterId === wish.characterId).sort((a, b) => a.buyPrice - b.buyPrice);
@@ -141,7 +173,15 @@ export const App: React.FC = () => {
         )}
 
         {visitedTabs.has('boosters') && (
-          <div role="tabpanel" id="km-panel-boosters" aria-labelledby="km-tab-boosters" hidden={activeTab !== 'boosters'}>
+          <div
+            key="boosters"
+            role="tabpanel"
+            id="km-panel-boosters"
+            aria-labelledby="km-tab-boosters"
+            className={`tab-panel ${activeTab === 'boosters' ? 'is-active' : 'is-inactive'}`}
+            aria-hidden={activeTab !== 'boosters'}
+            inert={activeTab !== 'boosters' ? true : undefined}
+          >
             <BoostersTab
               boosters={dashboard?.boosters}
               onToast={showToast}
@@ -151,7 +191,15 @@ export const App: React.FC = () => {
         )}
 
         {visitedTabs.has('settings') && (
-          <div role="tabpanel" id="km-panel-settings" aria-labelledby="km-tab-settings" hidden={activeTab !== 'settings'}>
+          <div
+            key="settings"
+            role="tabpanel"
+            id="km-panel-settings"
+            aria-labelledby="km-tab-settings"
+            className={`tab-panel ${activeTab === 'settings' ? 'is-active' : 'is-inactive'}`}
+            aria-hidden={activeTab !== 'settings'}
+            inert={activeTab !== 'settings' ? true : undefined}
+          >
             <SettingsTab
               settings={settings}
               onUpdateSettings={updateSettings}

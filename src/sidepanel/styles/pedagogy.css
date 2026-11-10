@@ -37,6 +37,12 @@
   font-weight: 600;
   display: inline-flex;
   align-items: center;
+  gap: 4px;
+}
+
+.badge-crash svg {
+  flex-shrink: 0;
+  color: #ff6b6b;
 }
 
 .pedagogy-card {
@@ -63,6 +69,22 @@
 
 .pedagogy-card__row {
   margin: 3px 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.pedagogy-card__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  vertical-align: middle;
+}
+
+.pedagogy-card__item svg {
+  flex-shrink: 0;
+  color: var(--mut);
 }
 
 .pedagogy-card__row strong {
