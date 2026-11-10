@@ -1,10 +1,10 @@
 import type { DashboardState, WishlistItem } from './kyara';
-import type { KyaraSettings } from './settings';
+import type { KyaraSettings, SellMode } from './settings';
 
 export type ExtensionCommand =
   | { type: 'km:cmd:refresh'; forcePrices?: boolean; scanMarketDeals?: boolean }
   | { type: 'km:cmd:run-cycle' }
-  | { type: 'km:cmd:sell-now' }
+  | { type: 'km:cmd:sell-now'; mode?: SellMode }
   | { type: 'km:cmd:recycle-now' }
   | { type: 'km:cmd:bulk-recycle' }
   | { type: 'km:cmd:open-recommended' }
@@ -32,8 +32,9 @@ export interface CommandResponse {
     recycledCopies: number;
     listed: number;
     bought: number;
+    repriced?: number;
   };
-  sellRes?: { listedCount: number };
+  sellRes?: { listedCount: number; repriced?: number; recycledCopies?: number };
   recRes?: { recycledCopies: number; chakraGained: number };
   recycledCount?: number;
   chakraGained?: number;

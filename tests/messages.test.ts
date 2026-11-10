@@ -1,15 +1,19 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockChrome, mockLocks } from './chrome';
-const mocks = vi.hoisted(() => ({ api: vi.fn(), snapshot: vi.fn(), availability: vi.fn(), journal: vi.fn(), metric: vi.fn() }));
+const mocks = vi.hoisted(() => ({ api: vi.fn(), snapshot: vi.fn(), availability: vi.fn(), ledger: vi.fn(), journal: vi.fn(), metric: vi.fn() }));
 vi.mock('../src/content/api', () => ({ kyaraApi: mocks.api }));
 vi.mock('../src/content/snapshot', () => ({ refreshDashboardSnapshot: mocks.snapshot }));
 vi.mock('../src/content/journal', () => ({ appendJournal: mocks.journal, recordCumulativeMetric: mocks.metric, DEFAULT_CUMULATIVE_STATS: {} }));
-vi.mock('../src/content/safety', async (original) => ({ ...await original<any>(), getCardAvailability: mocks.availability }));
+vi.mock('../src/content/safety', async (original) => ({ ...await original<any>(), getCardAvailability: mocks.availability, loadCardLedger: mocks.ledger }));
 vi.mock('../src/content/automation/cycle', () => ({ runAutomationCycle: vi.fn() }));
 vi.mock('../src/content/automation/auto-sell', () => ({ executeAutoSell: vi.fn() }));
-vi.mock('../src/content/automation/auto-recycle', () => ({ executeAutoRecycle: vi.fn() }));
 vi.mock('../src/content/automation/live-opening', () => ({ executeAutoOpenBoosters: vi.fn(), pilotLiveBoosterOpening: vi.fn() }));
 vi.mock('../src/content/utils', () => ({ sleep: vi.fn() }));
+
+const fakeLedger = (spare: number) => ({
+  listings: [], get: () => ({ spare }), reserve: (_id: number, qty: number) => qty <= spare, release: vi.fn(),
+  listingCreated: vi.fn(), listingCancelled: vi.fn()
+});
 
 describe('content command safeguards', () => {
   beforeEach(() => { vi.resetModules(); vi.clearAllMocks(); mockLocks(); });
@@ -31,7 +35,7 @@ describe('content command safeguards', () => {
   it('caps bulk recycle to fresh availability and reports actual counts', async () => {
     const { message } = await start();
     mocks.snapshot.mockResolvedValue({ duplicates: [{ characterId: 1, name: 'A', rarity: 'C', spare: 7, recycleValue: 2, verdict: 'RECYCLER' }] });
-    mocks.availability.mockResolvedValue({ spare: 1 });
+    mocks.ledger.mockResolvedValue(fakeLedger(1));
     mocks.api.mockResolvedValue({ gained: 2 });
     const response = await message({ type: 'km:cmd:bulk-recycle' });
     expect(response).toMatchObject({ ok: true, recycledCount: 1, chakraGained: 2 });
@@ -40,7 +44,7 @@ describe('content command safeguards', () => {
   it('never writes or fabricates gains for bulk simulation', async () => {
     const { message } = await start(true);
     mocks.snapshot.mockResolvedValue({ duplicates: [{ characterId: 1, rarity: 'C', spare: 7, verdict: 'RECYCLER' }] });
-    mocks.availability.mockResolvedValue({ spare: 3 });
+    mocks.ledger.mockResolvedValue(fakeLedger(3));
     const response = await message({ type: 'km:cmd:bulk-recycle' });
     expect(response.recycledCount).toBe(0);
     expect(mocks.api).not.toHaveBeenCalled();

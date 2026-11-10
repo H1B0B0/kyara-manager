@@ -33,4 +33,16 @@ describe('API write safety', () => {
     const { kyaraApi } = await import('../src/content/api');
     await expect(kyaraApi('/me')).rejects.toThrow('rechargée');
   });
+  it('lets high-priority writes jump ahead of queued bulk writes', async () => {
+    const { waitForWriteSlot } = await import('../src/content/api');
+    const order: string[] = [];
+    await Promise.all([
+      ...[1, 2, 3, 4].map((n) => waitForWriteSlot().then(() => order.push(`bulk-${n}`))),
+      waitForWriteSlot('high').then(() => order.push('listing'))
+    ]);
+    // Whatever was already dequeued goes first; the listing must not wait behind the rest of the bulk queue.
+    expect(order.indexOf('listing')).toBeLessThan(order.indexOf('bulk-4'));
+    expect(order.indexOf('listing')).toBeLessThanOrEqual(2);
+    expect(order).toHaveLength(5);
+  });
 });

@@ -2,6 +2,8 @@ import { kyaraApi } from './api';
 import { ensureCatalog, ensurePackPools, ensureCollectionPrices, runtimeCache } from './cache';
 import { state, loadSettings } from './state';
 import { recordConfirmedSale } from './journal';
+import { clearRepriceHint } from './automation/reprice';
+import { mapLimit } from '../lib/concurrency';
 import { notifyDesktop } from './utils';
 import { updateFloatingHud } from './hud';
 import { scanMarketDealsInternal, scanProfitableTrades } from './scanner';
@@ -97,20 +99,20 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
   const activeListings = extractActiveListings(myMarket, now);
 
   const currentIds = new Set(activeListings.map((l: any) => String(l.id)));
-  if (state.previousActiveListings.size > 0) {
-    for (const [oldId, oldInfo] of state.previousActiveListings.entries()) {
-      if (!currentIds.has(oldId)) {
-        const expired = oldInfo.endsAt && Date.parse(oldInfo.endsAt) <= now;
-        const listing = !expired ? await kyaraApi(`/market/listings/${encodeURIComponent(oldId)}`).catch(() => null) : null;
-        if (listing?.status === 'sold') {
-          const net = computeNetProceeds(oldInfo.price);
-          if (await recordConfirmedSale(oldId, oldInfo)) notifyDesktop(
-            'Carte vendue sur Kyara !',
-            `${oldInfo.name} vendue pour ${oldInfo.price} ◆ (+${net} ◆ net)`,
-            'km-sold'
-          );
-        }
-      }
+  // Listings that vanished are checked together: each one is either sold, cancelled or expired.
+  const vanished = [...state.previousActiveListings.entries()].filter(([oldId]) => !currentIds.has(oldId));
+  const verdicts = await mapLimit(vanished, 4, async ([oldId, oldInfo]) => {
+    const expired = oldInfo.endsAt && Date.parse(oldInfo.endsAt) <= now;
+    const listing = !expired ? await kyaraApi(`/market/listings/${encodeURIComponent(oldId)}`).catch(() => null) : null;
+    return { oldId, oldInfo, sold: listing?.status === 'sold' };
+  });
+  for (const verdict of verdicts) {
+    if (verdict.status !== 'fulfilled' || !verdict.value.sold) continue;
+    const { oldId, oldInfo } = verdict.value;
+    const net = computeNetProceeds(oldInfo.price);
+    if (await recordConfirmedSale(oldId, oldInfo)) {
+      await clearRepriceHint(oldInfo.characterId).catch(() => {});
+      notifyDesktop('Carte vendue sur Kyara !', `${oldInfo.name} vendue pour ${oldInfo.price} ◆ (+${net} ◆ net)`, 'km-sold');
     }
   }
   state.previousActiveListings = new Map(

@@ -42,15 +42,25 @@ Les clients 1.4.1 doivent recevoir cette nouvelle version avant de bénéficier 
 
 Référence : [cycle de mise à jour Chrome](https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle).
 
+## Vente rapide et parallélisation
+
+- Le marché n'offre que 10 créneaux : le débit de vente dépend du temps passé par chaque annonce. Le profil de vente (rapide / normal / patient) est choisi par carte et fixe prix, délai de stagnation, pas de baisse et recyclage de repli (`src/lib/analytics/sell-profile.ts`).
+- Les tâches indépendantes (boosters, missions, recyclage + vente) tournent en parallèle ; elles ne partagent que le registre de cartes (`src/content/safety.ts`), dont les réservations sont synchrones : deux tâches ne peuvent pas dépenser le même exemplaire. L'achat attend la fin pour partir d'un solde à jour.
+- Toutes les écritures passent par une seule file espacée (300 ms + `x-kyara-rush`). Le parallélisme ne contourne donc pas la limite du serveur : il supprime les attentes inutiles (lectures répétées, étapes enchaînées sans dépendance).
+- Un 429 est rejoué ; un 503 sur une écriture ne l'est jamais (la transaction a pu aboutir).
+
 ## Recette restante dans Chrome
 
-1. Charger `dist/` après le build, ouvrir Kyara et vérifier le HUD, les six onglets, les erreurs de connexion et les largeurs de panneau 320, 400 et 600 px.
-2. Activer la simulation et vérifier dans les requêtes réseau qu'aucune écriture ne part lors d'un cycle, du recyclage Turbo, du pack quotidien ou d'une action manuelle.
-3. Désactiver boosters, missions et marché ; vérifier leur état après fermeture du panneau puis redémarrage de Chrome.
-4. Ouvrir deux onglets Kyara de même origine ; déclencher un cycle et une action manuelle simultanément. Une seule opération doit agir.
-5. Protéger une carte, garder plusieurs exemplaires et comparer l'interface aux quantités réelles après une vente ou un recyclage autorisé.
-6. Tester une ouverture native avec une réponse `cards` puis une réponse groupée `results`. Le jeu peut modifier ses sélecteurs DOM ; en cas d'interface ambiguë avant le clic, le repli API conserve `maxChakra: 0`. Après un clic non confirmé, aucune deuxième ouverture n'est tentée automatiquement.
-7. Installer une version Store suivante avec le panneau ouvert, puis pendant une opération. Vérifier l'attente, l'installation, la reprise des onglets existants et la conservation des réglages.
+1. Avec ~100 doublons : lancer « ⚡ Écouler » et vérifier dans le journal les mises en vente au prix plancher, les relances moins chères après 30 min et le recyclage des cartes sans preneur. Vérifier qu'aucune annonce n'est retirée alors qu'elle est déjà au prix plancher.
+
+
+2. Charger `dist/` après le build, ouvrir Kyara et vérifier le HUD, les six onglets, les erreurs de connexion et les largeurs de panneau 320, 400 et 600 px.
+3. Activer la simulation et vérifier dans les requêtes réseau qu'aucune écriture ne part lors d'un cycle, du recyclage Turbo, du pack quotidien ou d'une action manuelle.
+4. Désactiver boosters, missions et marché ; vérifier leur état après fermeture du panneau puis redémarrage de Chrome.
+5. Ouvrir deux onglets Kyara de même origine ; déclencher un cycle et une action manuelle simultanément. Une seule opération doit agir.
+6. Protéger une carte, garder plusieurs exemplaires et comparer l'interface aux quantités réelles après une vente ou un recyclage autorisé.
+7. Tester une ouverture native avec une réponse `cards` puis une réponse groupée `results`. Le jeu peut modifier ses sélecteurs DOM ; en cas d'interface ambiguë avant le clic, le repli API conserve `maxChakra: 0`. Après un clic non confirmé, aucune deuxième ouverture n'est tentée automatiquement.
+8. Installer une version Store suivante avec le panneau ouvert, puis pendant une opération. Vérifier l'attente, l'installation, la reprise des onglets existants et la conservation des réglages.
 
 ## Limites à conserver en tête
 

@@ -1,49 +1,55 @@
 import { kyaraApi } from '../api';
 import { state } from '../state';
 import { recordCumulativeMetric, appendJournal } from '../journal';
-import { getCardAvailability } from '../safety';
+import { isInterrupted, loadCardLedger, type CardLedger } from '../safety';
+import { mapLimit } from '../../lib/concurrency';
 
-export async function executeAutoRecycle(dashboard: any): Promise<{ recycledCards: number; recycledCopies: number; chakraGained: number }> {
+/** Recycles `qty` reserved copies. The caller must have reserved them in the ledger first. */
+export async function recycleCopies(
+  book: CardLedger,
+  card: { characterId: number; name: string; rarity: string; recycleValue: number },
+  qty: number,
+  label = 'Recyclé'
+): Promise<{ qty: number; gained: number } | null> {
+  if (state.currentSettings.dryRun) {
+    await appendJournal('recycle', `[SIMULATION] Recyclerait ${card.name} [${card.rarity}] ×${qty} (+${qty * card.recycleValue} ◆)`);
+    return { qty, gained: qty * card.recycleValue };
+  }
+  try {
+    const res = await kyaraApi(`/me/collection/${card.characterId}/recycle`, { method: 'POST', body: { qty } });
+    const gained = Number(res?.gained ?? qty * card.recycleValue);
+    await recordCumulativeMetric({ chakraFromRecycle: gained, cardsRecycled: qty });
+    await appendJournal('recycle', `${label} : ${card.name} [${card.rarity}] ×${qty} (+${gained} ◆)`);
+    return { qty, gained };
+  } catch (err: any) {
+    book.release(card.characterId, qty, 'recycle');
+    await appendJournal('warn', `Échec recyclage ${card.name} : ${err.message}`);
+    return null;
+  }
+}
+
+export async function executeAutoRecycle(
+  dashboard: any,
+  ledger?: CardLedger
+): Promise<{ recycledCards: number; recycledCopies: number; chakraGained: number }> {
   const candidates = (dashboard?.duplicates || []).filter((d: any) => d.canAutoRecycle && d.spare > 0);
-  if (!candidates.length) {
-    return { recycledCards: 0, recycledCopies: 0, chakraGained: 0 };
+  const total = { recycledCards: 0, recycledCopies: 0, chakraGained: 0 };
+  if (!candidates.length) return total;
+
+  const book = ledger ?? (await loadCardLedger());
+  // Writes are paced by the API layer; a few in flight hide the network latency between them.
+  const results = await mapLimit(candidates, 3, async (cand: any) => {
+    if (isInterrupted()) return null;
+    const qty = Math.min(cand.spare, book.get(cand.characterId).spare);
+    if (qty <= 0 || !book.reserve(cand.characterId, qty, 'recycle')) return null;
+    return recycleCopies(book, cand, qty);
+  });
+
+  for (const result of results) {
+    if (result.status !== 'fulfilled' || !result.value) continue;
+    total.recycledCards += 1;
+    total.recycledCopies += result.value.qty;
+    total.chakraGained += result.value.gained;
   }
-
-  let recycledCards = 0;
-  let recycledCopies = 0;
-  let chakraGained = 0;
-
-  for (const cand of candidates) {
-    const { spare } = await getCardAvailability(cand.characterId);
-    const safeSpare = Math.min(cand.spare, spare);
-    if (safeSpare <= 0) continue;
-
-    if (state.currentSettings.dryRun) {
-      recycledCards += 1;
-      recycledCopies += safeSpare;
-      chakraGained += safeSpare * cand.recycleValue;
-      await appendJournal(
-        'recycle',
-        `[SIMULATION] Recyclerait ${cand.name} [${cand.rarity}] ×${safeSpare} (+${safeSpare * cand.recycleValue} ◆)`
-      );
-      continue;
-    }
-
-    try {
-      const res = await kyaraApi(`/me/collection/${cand.characterId}/recycle`, {
-        method: 'POST',
-        body: { qty: safeSpare }
-      });
-      const gained = Number(res?.gained ?? safeSpare * cand.recycleValue);
-      recycledCards += 1;
-      recycledCopies += safeSpare;
-      chakraGained += gained;
-      await recordCumulativeMetric({ chakraFromRecycle: gained, cardsRecycled: safeSpare });
-      await appendJournal('recycle', `Recyclé : ${cand.name} [${cand.rarity}] ×${safeSpare} (+${gained} ◆)`);
-    } catch (err: any) {
-      await appendJournal('warn', `Échec recyclage ${cand.name} : ${err.message}`);
-    }
-  }
-
-  return { recycledCards, recycledCopies, chakraGained };
+  return total;
 }

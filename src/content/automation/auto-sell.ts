@@ -1,174 +1,150 @@
 import { kyaraApi } from '../api';
 import { state } from '../state';
-import { recordCumulativeMetric, appendJournal } from '../journal';
-import { computeLiveMarketDepth } from '../../lib/analytics/market-depth';
+import { appendJournal } from '../journal';
 import { evaluateDuplicate } from '../../lib/analytics/duplicates';
-import { getCardAvailability } from '../safety';
-import { refreshDashboardSnapshot } from '../snapshot';
+import { createLimiter } from '../../lib/concurrency';
+import type { SellMode } from '../../types/settings';
+import { isInterrupted, loadCardLedger, type CardLedger } from '../safety';
+import { fetchLiveStats } from './sell-live';
+import { recycleCopies } from './auto-recycle';
+import { HINT_TTL_MS, loadRepriceHints, retireStaleListings, saveRepriceHints } from './reprice';
 
-export async function executeAutoSell(dashboard: any): Promise<{ listedCount: number; slotsAvailable: number }> {
-  const now = Date.now();
-  const expireHours = Number(state.currentSettings.autoSellExpireHours ?? 2);
-  let activeListings = [...(dashboard?.activeListings || [])];
+export interface SellOptions {
+  /** Overrides the saved sell mode for this run only (e.g. the "sell everything fast" button). */
+  mode?: SellMode;
+}
 
-  let cancelled = false;
-  const { kmPinnedCards = [] } = await chrome.storage.local.get('kmPinnedCards');
-  const pinned = new Set<number>((Array.isArray(kmPinnedCards) ? kmPinnedCards : []).map(Number));
-  if (expireHours > 0) {
-    for (const listing of activeListings) {
-      const createdMs = Date.parse(listing.createdAt || '');
-      const charId = Number(listing.character?.id ?? listing.characterId);
-      const rarity = listing.character?.rarity || listing.rarity;
-      if (!Number.isFinite(createdMs) || now - createdMs < expireHours * 3600000) continue;
-      if (pinned.has(charId) || (rarity === 'M' && !state.currentSettings.autoSellIncludeM) ||
-          (rarity === 'L' && state.currentSettings.autoSellIncludeL === false)) continue;
-      if (state.currentSettings.dryRun) {
-        await appendJournal('sell', `[SIMULATION] Réévaluerait l'annonce stagnante : ${listing.name || charId}`);
+export interface SellResult {
+  listedCount: number;
+  slotsAvailable: number;
+  repriced: number;
+  recycledCopies: number;
+}
+
+const FETCH_CONCURRENCY = 5;
+
+function sellPriority(d: any): number {
+  const p = d.saleProb?.p12h ?? 10;
+  return p * (d.fees?.netProceeds ?? 0);
+}
+
+export async function executeAutoSell(dashboard: any, ledger?: CardLedger, options: SellOptions = {}): Promise<SellResult> {
+  const settings = options.mode ? { ...state.currentSettings, autoSellMode: options.mode } : state.currentSettings;
+  const result: SellResult = { listedCount: 0, slotsAvailable: 0, repriced: 0, recycledCopies: 0 };
+  const duplicates: any[] = dashboard?.duplicates || [];
+  const book = ledger ?? (await loadCardLedger());
+  const hints = await loadRepriceHints();
+
+  const stale = await retireStaleListings({ book, duplicates, hints, settings });
+  result.repriced = stale.cancelled;
+
+  const maxSlots = Math.max(1, Math.min(10, Number(settings.autoSellMaxListings ?? 10)));
+  let slots = Math.max(0, maxSlots - book.listings.length);
+  result.slotsAvailable = slots;
+
+  const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U'];
+  // With a forced mode, verdicts computed under the saved mode are not trusted: live data decides.
+  const eligible = (d: any) =>
+    !d.pinned && d.spare > 0 && (options.mode ? d.verdict !== 'PROTÉGÉ' : Boolean(d.canAutoSell));
+  const listedChars = new Set<number>(book.listings.map((l: any) => Number(l.character?.id ?? l.characterId)));
+  const pool = duplicates
+    .filter((d) => !listedChars.has(d.characterId) && (stale.chars.has(d.characterId) || eligible(d)))
+    .sort((a, b) => sellPriority(b) - sellPriority(a));
+
+  // Market reads for upcoming cards run ahead while the current card is being listed.
+  const lookahead = Math.max(4, Math.min(10, slots * 2));
+  const fetchLimiter = createLimiter(FETCH_CONCURRENCY);
+  const live = new Map<number, ReturnType<typeof fetchLiveStats>>();
+  const prefetch = (i: number) => {
+    if (i < pool.length && !live.has(i)) live.set(i, fetchLimiter(() => fetchLiveStats(pool[i])));
+  };
+  for (let i = 0; i < lookahead; i += 1) prefetch(i);
+
+  try {
+    for (let i = 0; i < pool.length; i += 1) {
+      if (slots <= 0 || isInterrupted()) break;
+      prefetch(i + lookahead);
+      const cand = pool[i];
+      const stats = await live.get(i)!;
+      const avail = book.get(cand.characterId);
+      if (avail.spare <= 0) continue;
+
+      const ev = evaluateDuplicate(
+        { id: cand.characterId, name: cand.name, rarity: cand.rarity, series: cand.series },
+        avail.entry,
+        stats,
+        { [cand.rarity]: cand.recycleValue },
+        settings,
+        avail.listed,
+        avail.pinned
+      );
+      const canRecycle = settings.autoRecycleEnabled && recycleRarities.includes(cand.rarity);
+
+      if (ev.canAutoRecycle && canRecycle && ev.sellProfile?.turbo) {
+        if (!book.reserve(cand.characterId, avail.spare, 'recycle')) continue;
+        const done = await recycleCopies(book, cand, avail.spare, 'Recyclage Turbo');
+        if (done) result.recycledCopies += done.qty;
         continue;
       }
+      if (!ev.canAutoSell) continue;
+
+      let price = ev.prices.recommended;
+      const hint = hints.get(cand.characterId);
+      if (hint && Date.now() - hint.at < HINT_TTL_MS) {
+        if (hint.ceiling < ev.prices.minSafe && ev.sellProfile?.recycleStale && canRecycle) {
+          // Stalled below the safety floor: free the slot by recycling instead of dumping.
+          hints.delete(cand.characterId);
+          if (book.reserve(cand.characterId, 1, 'recycle')) {
+            const done = await recycleCopies(book, cand, 1, 'Recyclé après stagnation');
+            if (done) result.recycledCopies += done.qty;
+          }
+          continue;
+        }
+        price = Math.min(price, Math.max(hint.ceiling, ev.prices.minSafe));
+      }
+      const durationHours = ev.sellProfile?.durationHours ?? 12;
+
+      if (settings.dryRun) {
+        slots -= 1;
+        result.listedCount += 1;
+        await appendJournal(
+          'sell',
+          `[SIMULATION] Mettrait en vente ${cand.name} [${cand.rarity}] à ${price} ◆ (${ev.sellTier}, net ${ev.fees.netProceeds} ◆)`
+        );
+        continue;
+      }
+      if (!book.reserve(cand.characterId, 1, 'list')) continue;
       try {
-        await kyaraApi(`/market/listings/${encodeURIComponent(listing.id)}/cancel`, { method: 'POST' });
-        state.previousActiveListings.delete(String(listing.id));
-        cancelled = true;
-        await appendJournal('info', `Annonce stagnante retirée : ${listing.name || charId}. Nouvelle évaluation avant toute action.`);
-      } catch (err: any) {
-        await appendJournal('warn', `Retrait impossible : ${err.message}`);
-      }
-    }
-  }
-  if (cancelled) {
-    dashboard = await refreshDashboardSnapshot({ forcePrices: false });
-    activeListings = [...dashboard.activeListings];
-  }
-
-  const maxSlots = Math.max(1, Math.min(10, Number(state.currentSettings.autoSellMaxListings ?? 10)));
-  let slotsAvailable = Math.max(0, maxSlots - activeListings.length);
-  if (slotsAvailable <= 0) {
-    return { listedCount: 0, slotsAvailable: 0 };
-  }
-
-  const alreadyListedCharIds = new Set(activeListings.map((l) => l.characterId));
-  const candidates = (dashboard?.duplicates || [])
-    .filter((d: any) => d.canAutoSell && d.spare > 0 && !alreadyListedCharIds.has(d.characterId))
-    .sort((a: any, b: any) => {
-      const pA = a.saleProb?.p12h ?? 10;
-      const pB = b.saleProb?.p12h ?? 10;
-      const evA = pA * (a.fees?.netProceeds ?? 0);
-      const evB = pB * (b.fees?.netProceeds ?? 0);
-      return evB - evA;
-    });
-
-  let listedCount = 0;
-  for (const cand of candidates) {
-    if (slotsAvailable <= 0) break;
-
-    const availability = await getCardAvailability(cand.characterId);
-    if (availability.spare <= 0) continue;
-    const [liveListingsRes, liveOrdersRes, livePricesRes] = await Promise.all([
-      kyaraApi(`/market/listings?characterId=${cand.characterId}&type=fixed&sort=price_asc&pageSize=20`, {
-        auth: false
-      }).catch(() => null),
-      kyaraApi(`/market/buy-orders?characterId=${cand.characterId}`, { auth: false }).catch(() => null),
-      kyaraApi(`/market/prices/${cand.characterId}`, { auth: false }).catch(() => null)
-    ]);
-
-    const refMedian = livePricesRes?.median7d ?? cand.referenceMedian;
-    const liveDepth = computeLiveMarketDepth(liveListingsRes?.items, refMedian);
-    const orders = Array.isArray(liveOrdersRes) ? liveOrdersRes : [];
-    const bestBuyOrder = orders.length > 0 ? Math.max(...orders.map((o: any) => Number(o.price) || 0)) : null;
-
-    const liveStats = {
-      median7d: refMedian,
-      median30d: livePricesRes?.median30d ?? cand.referenceMedian,
-      sales7d: livePricesRes?.sales7d ?? cand.sales7d,
-      liveDepth,
-      lowestFixed: liveDepth.lowestFixed,
-      highestFixed: liveDepth.highestFixed,
-      bestBuyOrder: Number.isFinite(bestBuyOrder) && bestBuyOrder! > 0 ? bestBuyOrder : null
-    };
-
-    const reevaluated = evaluateDuplicate(
-      { id: cand.characterId, name: cand.name, rarity: cand.rarity, series: cand.series },
-      availability.entry,
-      liveStats,
-      { [cand.rarity]: cand.recycleValue },
-      state.currentSettings,
-      availability.listed,
-      availability.pinned
-    );
-
-    if (reevaluated.canAutoRecycle && state.currentSettings.autoRecycleEnabled && state.currentSettings.autoSellTurboLiquidity) {
-      if (state.currentSettings.dryRun) {
-        await appendJournal('recycle', `[SIMULATION] Recyclerait ${cand.name} ×1`);
-      } else {
-        try {
-          const result = await kyaraApi(`/me/collection/${cand.characterId}/recycle`, { method: 'POST', body: { qty: 1 } });
-          const gained = Number(result?.gained ?? cand.recycleValue);
-          await recordCumulativeMetric({ chakraFromRecycle: gained, cardsRecycled: 1 });
-          await appendJournal('recycle', `Recyclage Turbo : ${cand.name} (+${gained} ◆)`);
-        } catch (err: any) {
-          await appendJournal('warn', `Recyclage impossible : ${err.message}`);
-        }
-      }
-      continue;
-    }
-
-    if (!reevaluated.canAutoSell) {
-      continue;
-    }
-
-    const sellPrice = reevaluated.prices.recommended;
-    const netProceeds = reevaluated.fees.netProceeds;
-    const durationHours = [12, 24, 48].includes(Number(state.currentSettings.autoSellDurationHours))
-      ? Number(state.currentSettings.autoSellDurationHours)
-      : 12;
-
-    if (state.currentSettings.dryRun) {
-      listedCount += 1;
-      slotsAvailable -= 1;
-      alreadyListedCharIds.add(cand.characterId);
-      await appendJournal(
-        'sell',
-        `[SIMULATION] Mettrait en vente ${cand.name} [${cand.rarity}] à ${sellPrice} ◆ (net ${netProceeds} ◆)`
-      );
-      continue;
-    }
-
-    try {
-      const created = await kyaraApi('/market/listings', {
-        method: 'POST',
-        withPass: true,
-        body: {
-          characterId: cand.characterId,
-          type: 'fixed',
-          price: sellPrice,
-          buyoutPrice: null,
-          durationHours
-        }
-      });
-      listedCount += 1;
-      slotsAvailable -= 1;
-      alreadyListedCharIds.add(cand.characterId);
-      if (created?.id) {
-        state.previousActiveListings.set(String(created.id), {
+        const created = await kyaraApi('/market/listings', {
+          method: 'POST',
+          withPass: true,
+          priority: 'high',
+          body: { characterId: cand.characterId, type: 'fixed', price, buyoutPrice: null, durationHours }
+        });
+        slots -= 1;
+        result.listedCount += 1;
+        const info = {
           characterId: cand.characterId,
           name: cand.name,
-          price: sellPrice,
-          endsAt: created.endsAt || null,
-          createdAt: created.createdAt || new Date().toISOString()
-        });
-      }
-      await appendJournal(
-        'sell',
-        `Mise en vente auto : ${cand.name} [${cand.rarity}] à ${sellPrice} ◆ (net +${netProceeds} ◆ · prob 24h ${reevaluated.saleProb.p24h}%)`
-      );
-    } catch (err: any) {
-      await appendJournal('warn', `Échec mise en vente ${cand.name} : ${err.message}`);
-      if (err.code === 'too_many_listings' || err.code === 'pass_required') {
-        break;
+          price,
+          endsAt: created?.endsAt || null,
+          createdAt: created?.createdAt || new Date().toISOString()
+        };
+        book.listingCreated({ id: String(created?.id ?? `local-${cand.characterId}-${Date.now()}`), ...info });
+        if (created?.id) state.previousActiveListings.set(String(created.id), info);
+        await appendJournal(
+          'sell',
+          `Mise en vente ${ev.sellTier === 'fast' ? '⚡ rapide' : ev.sellTier === 'patient' ? 'patiente' : 'auto'} : ${cand.name} [${cand.rarity}] à ${price} ◆ (net +${ev.fees.netProceeds} ◆ · prob 24h ${ev.saleProb.p24h}%)`
+        );
+      } catch (err: any) {
+        book.release(cand.characterId, 1, 'list');
+        await appendJournal('warn', `Échec mise en vente ${cand.name} : ${err.message}`);
+        if (err.code === 'too_many_listings' || err.code === 'pass_required') break;
       }
     }
+  } finally {
+    result.slotsAvailable = slots;
+    await saveRepriceHints(hints).catch(() => {});
   }
-
-  return { listedCount, slotsAvailable };
+  return result;
 }

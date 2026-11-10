@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { DashboardState, AutopilotPullRecord } from '../../../types/kyara';
-import type { KyaraSettings, PricingStrategy } from '../../../types/settings';
+import type { KyaraSettings, PricingStrategy, SellMode } from '../../../types/settings';
 import type { CumulativeStats, JournalItem } from '../../../types/journal';
 import { t } from '../../../lib/i18n';
 import { sendCommand } from '../../hooks/useDashboard';
@@ -63,19 +63,20 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     setRunningCycle(false);
     if (res?.ok && res.summary) {
       const s = res.summary;
-      onToast(`Cycle terminé : ${s.opened} booster(s), ${s.recycledCopies} recyclée(s), ${s.listed} en vente, ${s.bought} achetée(s)`);
+      onToast(`Cycle terminé : ${s.opened} booster(s), ${s.recycledCopies} recyclée(s), ${s.listed} en vente${s.repriced ? ` (+${s.repriced} relancées)` : ''}, ${s.bought} achetée(s)`);
     } else if (res?.error) {
       onToast(res.error);
     }
   };
 
-  const handleSellNow = async () => {
+  const handleSellNow = async (mode?: SellMode) => {
     setActingSell(true);
-    onToast('Mise en vente des doublons…');
-    const res = await sendCommand({ type: 'km:cmd:sell-now' });
+    onToast(mode === 'fast' ? 'Écoulement rapide des doublons…' : 'Mise en vente des doublons…');
+    const res = await sendCommand({ type: 'km:cmd:sell-now', mode });
     setActingSell(false);
     if (res?.ok) {
-      onToast(`${res.sellRes?.listedCount ?? 0} annonce(s) créée(s)`);
+      const { listedCount = 0, repriced = 0, recycledCopies = 0 } = res.sellRes ?? {};
+      onToast(`${listedCount} annonce(s) créée(s)${repriced ? `, ${repriced} relancée(s)` : ''}${recycledCopies ? `, ${recycledCopies} recyclée(s)` : ''}`);
     } else if (res?.error) {
       onToast(res.error);
     }
@@ -196,7 +197,22 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
           {/* Pricing Strategy Selector */}
           <div className="module-card__sub-config">
             <div className="strategy-selector-row">
-              <label htmlFor="sel-pricing-strat" className="strategy-selector-label">Stratégie :</label>
+              <label htmlFor="sel-sell-mode" className="strategy-selector-label">Rythme :</label>
+              <select
+                id="sel-sell-mode"
+                value={settings.autoSellMode || 'adaptive'}
+                onChange={(e) => onUpdateSettings({ autoSellMode: e.target.value as SellMode })}
+                className="select select--xs"
+                title="Vitesse de vente : adaptatif = rapide pour les cartes bon marché, patient pour les plus chères"
+              >
+                <option value="adaptive">Adaptatif (selon le prix de la carte)</option>
+                <option value="fast">⚡ Rapide (écouler le stock)</option>
+                <option value="normal">Normal (selon tes réglages)</option>
+                <option value="patient">🕰 Patient (meilleur prix)</option>
+              </select>
+            </div>
+            <div className="strategy-selector-row">
+              <label htmlFor="sel-pricing-strat" className="strategy-selector-label">Stratégie (normal) :</label>
               <select
                 id="sel-pricing-strat"
                 value={settings.autoSellStrategy || 'recent20_median'}
@@ -216,14 +232,25 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             <span className="mono-stat">
               {t('copiesCount', { n: sellCount })} · +{sellNet} ◆ net
             </span>
-            <button
-              type="button"
-              onClick={handleSellNow}
-              disabled={actingSell || sellCount === 0}
-              className="btn btn--xs btn--ghost"
-            >
-              {actingSell ? 'En cours…' : t('sellNow')}
-            </button>
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button
+                type="button"
+                onClick={() => handleSellNow('fast')}
+                disabled={actingSell || sellCount === 0}
+                className="btn btn--xs btn--ghost"
+                title="Met en vente au prix le plus bas et recycle les cartes peu rentables"
+              >
+                ⚡ Écouler
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSellNow()}
+                disabled={actingSell || sellCount === 0}
+                className="btn btn--xs btn--ghost"
+              >
+                {actingSell ? 'En cours…' : t('sellNow')}
+              </button>
+            </span>
           </div>
         </div>
 

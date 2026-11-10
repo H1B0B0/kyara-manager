@@ -2,13 +2,13 @@ import { kyaraApi } from './api';
 import { state } from './state';
 import { appendJournal, DEFAULT_CUMULATIVE_STATS, recordCumulativeMetric } from './journal';
 import { refreshDashboardSnapshot } from './snapshot';
-import { sleep } from './utils';
 import { runAutomationCycle } from './automation/cycle';
 import { executeAutoSell } from './automation/auto-sell';
-import { executeAutoRecycle } from './automation/auto-recycle';
+import { executeAutoRecycle, recycleCopies } from './automation/auto-recycle';
 import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/live-opening';
 import { runExclusive } from './operations';
-import { getCardAvailability, positiveInteger } from './safety';
+import { getCardAvailability, isInterrupted, loadCardLedger, positiveInteger } from './safety';
+import { fulfilled, mapLimit } from '../lib/concurrency';
 import { mergeSettings } from '../types/settings';
 
 async function refreshAfterAction(options = {}): Promise<any> {
@@ -59,8 +59,9 @@ export function setupMessageListener(): () => void {
         }
 
         if (message.type === 'km:cmd:sell-now') {
+          const mode = ['fast', 'normal', 'patient', 'adaptive'].includes(message.mode) ? message.mode : undefined;
           const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
-          const sellRes = await executeAutoSell(dashboard);
+          const sellRes = await executeAutoSell(dashboard, undefined, { mode });
           const updated = await refreshAfterAction({ forcePrices: false });
           sendResponse({ ok: true, sellRes, dashboard: updated });
           return;
@@ -206,32 +207,16 @@ export function setupMessageListener(): () => void {
             if (excludeRarities.includes(d.rarity)) return false;
             return d.verdict === 'RECYCLER' || (d.fees?.netGainOverRecycle <= maxNetGain && (d.rarity === 'C' || d.rarity === 'U'));
           });
-
-          let totalRecycled = 0;
-          let totalChakra = 0;
-          for (const item of candidates) {
-            try {
-              const { spare } = await getCardAvailability(item.characterId);
-              const qty = Math.min(spare, item.spare);
-              if (qty <= 0) continue;
-              if (state.currentSettings.dryRun) {
-                await appendJournal('recycle', `[SIMULATION] Recyclerait ${item.name} ×${qty}`);
-                continue;
-              }
-              const res = await kyaraApi(`/me/collection/${item.characterId}/recycle`, {
-                method: 'POST',
-                body: { qty }
-              });
-              const gained = Number(res?.gained ?? qty * item.recycleValue);
-              totalRecycled += qty;
-              totalChakra += gained;
-              await recordCumulativeMetric({ chakraFromRecycle: gained, cardsRecycled: qty });
-              await sleep(250);
-            } catch (err) {
-              console.warn(`[KyaraManager] Erreur recyclage groupé sur ${item.name}:`, err);
-            }
-          }
-
+          const book = await loadCardLedger();
+          const results = await mapLimit(candidates, 3, async (item: any) => {
+            if (isInterrupted()) return null;
+            const qty = Math.min(book.get(item.characterId).spare, item.spare);
+            return qty > 0 && book.reserve(item.characterId, qty, 'recycle') ? recycleCopies(book, item, qty) : null;
+          });
+          // Simulation reports nothing as recycled: no copy actually left the collection.
+          const done = state.currentSettings.dryRun ? [] : (fulfilled(results).filter(Boolean) as Array<{ qty: number; gained: number }>);
+          const totalRecycled = done.reduce((sum, r) => sum + r.qty, 0);
+          const totalChakra = done.reduce((sum, r) => sum + r.gained, 0);
           await appendJournal('recycle', `Recyclage Turbo groupé terminé : ${totalRecycled} carte(s) recyclée(s) (+${totalChakra} ◆ générés)`);
           const updated = await refreshAfterAction({ forcePrices: false });
           sendResponse({ ok: true, recycledCount: totalRecycled, chakraGained: totalChakra, dashboard: updated });

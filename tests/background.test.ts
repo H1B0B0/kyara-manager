@@ -25,7 +25,7 @@ describe('background routing', () => {
     const { message, chrome } = await start();
     chrome.tabs.query.mockResolvedValue([{ id: 1, active: true }, { id: 2 }]);
     chrome.tabs.sendMessage.mockImplementation(async (_id: number, payload: any) => {
-      if (payload.type === 'km:ping') return { ok: true, version: '1.4.2' } as any;
+      if (payload.type === 'km:ping') return { ok: true, version: chrome.runtime.getManifest().version } as any;
       throw new Error('port closed');
     });
     const response = await message({ type: 'km:cmd:single-recycle', characterId: 1, qty: 1 });

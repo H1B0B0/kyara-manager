@@ -2,31 +2,46 @@ import { KyaraApiOptions } from './types';
 import { sleep, randomJitter, readSiteAuth } from './utils';
 import { state } from './state';
 
-let writeQueue = Promise.resolve();
+const WRITE_GAP_MS = 300;
+const WRITE_JITTER_MS = 100;
 let lastWriteAt = 0;
 let rushMultiplier = 1;
 let cooldownUntil = 0;
 
-export async function waitForWriteSlot(): Promise<void> {
-  const turn = writeQueue.then(async () => {
-    const now = Date.now();
-    if (cooldownUntil > now) {
-      await sleep(cooldownUntil - now);
+type WriteWaiter = () => void;
+// Index 0 = high priority, 1 = normal. One pump spaces every write, whichever queue it came from.
+const writeQueues: WriteWaiter[][] = [[], []];
+let pumping = false;
+
+async function pumpWrites(): Promise<void> {
+  if (pumping) return;
+  pumping = true;
+  try {
+    for (;;) {
+      const next = writeQueues[0].shift() ?? writeQueues[1].shift();
+      if (!next) break;
+      const now = Date.now();
+      if (cooldownUntil > now) await sleep(cooldownUntil - now);
+      const waitMs = lastWriteAt + WRITE_GAP_MS * rushMultiplier + randomJitter(WRITE_JITTER_MS) - Date.now();
+      if (waitMs > 0) await sleep(waitMs);
+      lastWriteAt = Date.now();
+      next();
     }
-    const minGap = 340 * rushMultiplier + randomJitter(120);
-    const waitMs = lastWriteAt + minGap - Date.now();
-    if (waitMs > 0) {
-      await sleep(waitMs);
-    }
-    lastWriteAt = Date.now();
+  } finally {
+    pumping = false;
+  }
+}
+
+export function waitForWriteSlot(priority: 'high' | 'normal' = 'normal'): Promise<void> {
+  return new Promise<void>((resolve) => {
+    writeQueues[priority === 'high' ? 0 : 1].push(resolve);
+    void pumpWrites();
   });
-  writeQueue = turn.catch(() => {});
-  return turn;
 }
 
 export async function kyaraApi<T = any>(
   path: string,
-  { method = 'GET', body, withPass = false, extraHeaders = {}, auth = true }: KyaraApiOptions = {}
+  { method = 'GET', body, withPass = false, extraHeaders = {}, auth = true, priority = 'normal' }: KyaraApiOptions = {}
 ): Promise<T> {
   const isWrite = method !== 'GET';
   if (state.disposed || !chrome.runtime?.id) throw new Error('Extension rechargée. Actualise cet onglet Kyara.');
@@ -37,7 +52,7 @@ export async function kyaraApi<T = any>(
 
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
     if (isWrite) {
-      await waitForWriteSlot();
+      await waitForWriteSlot(priority);
     } else if (cooldownUntil > Date.now()) {
       await sleep(cooldownUntil - Date.now());
     }

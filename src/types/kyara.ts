@@ -30,6 +30,8 @@ export interface DuplicateCard {
   pinned?: boolean;
   canAutoSell?: boolean;
   canAutoRecycle?: boolean;
+  sellTier?: 'fast' | 'normal' | 'patient';
+  sellProfile?: import('../lib/analytics/sell-profile').SellProfile;
   score?: number;
   isSlowMover?: boolean;
   hourlyExpectedChakra?: number;

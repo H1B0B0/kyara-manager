@@ -3,6 +3,7 @@ import { KyaraSettings, DEFAULT_SETTINGS, PricingStrategy } from '../../types/se
 import { DEFAULT_RECYCLE_VALUES, RARITY_PRICE_FLOORS, RARITY_LABELS } from './constants';
 import { computeSpareCopies, computeNetProceeds, computeListingFee, computeSaleTax } from './fees';
 import { LiveMarketDepth, computeLiveMarketDepth, estimateSaleProbability } from './market-depth';
+import { resolveSellProfile } from './sell-profile';
 
 export function evaluateDuplicate(
   card: any,
@@ -60,7 +61,9 @@ export function evaluateDuplicate(
       (pinnedCardIds instanceof Set ? pinnedCardIds.has(charId) : Array.isArray(pinnedCardIds) && pinnedCardIds.includes(charId)))
   );
 
-  const medianFloorPct = Math.max(30, Math.min(100, Number(settings?.autoSellMedianFloorPct ?? 70)));
+  // Cheap cards sell fast, premium cards wait: the profile depends on the card's own market price.
+  const profile = resolveSellProfile(settings, referenceMedian ?? lowestFixed);
+  const medianFloorPct = Math.max(30, Math.min(100, profile.medianFloorPct));
   const baseMedianGuardFloor = referenceMedian ? Math.ceil((referenceMedian * medianFloorPct) / 100) : 0;
   const liveGuardFloor = liveMedian20 ? Math.ceil(liveMedian20 * 0.85) : lowestFixed || 0;
   const effectiveGuardFloor =
@@ -105,9 +108,16 @@ export function evaluateDuplicate(
       : balancedPrice;
   const maxPrice = Math.max(balancedPrice, Math.round(rawMax));
 
-  const strategy: PricingStrategy = settings?.autoSellStrategy || 'quick';
+  // Patient: aim for the 7d median, but never sit more than 5% above the cheapest live offer.
+  const patientPrice = Math.max(
+    minSafePrice,
+    lowestFixed !== null ? Math.min(balancedPrice, Math.ceil(lowestFixed * 1.05)) : balancedPrice
+  );
+  const strategy: PricingStrategy = profile.strategy;
   const recommendedPrice =
-    strategy === 'recent20_median'
+    profile.tier === 'patient'
+      ? patientPrice
+      : strategy === 'recent20_median'
       ? recent20MedianPrice
       : strategy === 'recent20_avg'
         ? recent20AvgPrice
@@ -130,8 +140,8 @@ export function evaluateDuplicate(
   const minSalesForLowMargin = 2;
   const maxRecycleNet = 6;
 
-  const velocityFirst = settings?.autoSellVelocityFirst !== false;
-  const turboEnabled = settings?.autoSellTurboLiquidity !== false;
+  const velocityFirst = profile.velocityFirst;
+  const turboEnabled = profile.turbo;
   const turboMaxNet = Number(settings?.autoSellTurboMaxNetProfit ?? 4);
   const minVelocity12h = 20;
   const estimatedSales48h = sales7d !== null ? Math.round(((sales7d / 7) * 2) * 10) / 10 : null;
@@ -191,6 +201,18 @@ export function evaluateDuplicate(
   const allowedRecycleRarities = Array.isArray(settings?.autoRecycleRarities)
     ? settings.autoRecycleRarities
     : ['C', 'U'];
+
+  // A recycle verdict on a rarity that auto-recycle ignores would strand the card forever:
+  // sell it instead whenever the sale beats the recycle value (except in patient mode).
+  if (verdict === 'RECYCLER' && !isPinned && !allowedRecycleRarities.includes(rarity) &&
+      profile.tier !== 'patient' && netProceeds > recycleValue) {
+    verdict = 'VENDRE';
+    verdictReason = `Recyclage désactivé pour ${RARITY_LABELS[rarity] || rarity} : mise en vente à ${recommendedPrice} ◆ (net ${netProceeds} ◆)`;
+  }
+  if (verdict === 'VENDRE') {
+    if (profile.tier === 'fast') verdictReason += ' · ⚡ vente rapide';
+    else if (profile.tier === 'patient') verdictReason += ' · 🕰 vente patiente';
+  }
 
   const canAutoRecycle =
     verdict === 'RECYCLER' &&
@@ -252,6 +274,8 @@ export function evaluateDuplicate(
     pinned: isPinned,
     canAutoSell,
     canAutoRecycle,
+    sellTier: profile.tier,
+    sellProfile: profile,
     score,
     hourlyExpectedChakra,
     prices: {

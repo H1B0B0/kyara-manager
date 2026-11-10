@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import type { KyaraSettings, Language, PricingStrategy } from '../../../types/settings';
+import type { KyaraSettings, Language, PricingStrategy, SellMode } from '../../../types/settings';
 import { DEFAULT_SETTINGS } from '../../../types/settings';
 import { t } from '../../../lib/i18n';
 
@@ -87,6 +87,63 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
               onChange={(e) => handleChange('autoSellCrashProtection', e.target.checked)}
             />
             <span>Protection Krach Live (débraye le garde-fou 70% si krach détecté)</span>
+          </label>
+        </div>
+
+        {/* Sell pace */}
+        <div className="card card--compact">
+          <h3 className="card__title">⚡ Rythme de vente</h3>
+          <p className="form-hint">
+            Le marché n'a que 10 créneaux : plus une carte reste en vente, moins le stock s'écoule. Le mode adaptatif vend vite les
+            cartes bon marché (prix plancher, annonce relancée moins chère toutes les 30 min, recyclage si elle ne part pas) et laisse
+            les cartes chères attendre un meilleur prix.
+          </p>
+          <div className="form-group" style={{ marginTop: '8px' }}>
+            <label className="form-label">Mode</label>
+            <select
+              value={form.autoSellMode}
+              onChange={(e) => handleChange('autoSellMode', e.target.value as SellMode)}
+              className="select"
+            >
+              <option value="adaptive">Adaptatif (recommandé)</option>
+              <option value="fast">Rapide : tout écouler au plus vite</option>
+              <option value="normal">Normal : mes réglages de stratégie</option>
+              <option value="patient">Patient : viser le meilleur prix</option>
+            </select>
+          </div>
+          {form.autoSellMode === 'adaptive' && (
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Vente rapide sous (◆)</label>
+                <input
+                  type="number"
+                  value={form.autoSellCheapBelow}
+                  onChange={(e) => handleChange('autoSellCheapBelow', Number(e.target.value))}
+                  min="2"
+                  max="500"
+                  className="input input--num"
+                />
+              </div>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Vente patiente dès (◆)</label>
+                <input
+                  type="number"
+                  value={form.autoSellPremiumAbove}
+                  onChange={(e) => handleChange('autoSellPremiumAbove', Number(e.target.value))}
+                  min="3"
+                  max="5000"
+                  className="input input--num"
+                />
+              </div>
+            </div>
+          )}
+          <label className="check-row" style={{ marginTop: '8px' }}>
+            <input
+              type="checkbox"
+              checked={form.autoSellRecycleExpired !== false}
+              onChange={(e) => handleChange('autoSellRecycleExpired', e.target.checked)}
+            />
+            <span>Recycler une carte rapide qui ne trouve pas preneur au prix plancher</span>
           </label>
         </div>
 

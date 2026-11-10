@@ -8,10 +8,17 @@ export type PricingStrategy =
   | 'balanced'
   | 'max';
 
+/** `adaptive` picks fast/normal/patient per card from its market price. */
+export type SellMode = 'adaptive' | 'fast' | 'normal' | 'patient';
+export type SellTier = 'fast' | 'normal' | 'patient';
+
 export interface KyaraSettings {
   masterEnabled: boolean;
   autoSellEnabled: boolean;
   autoSellStrategy: PricingStrategy;
+  autoSellMode: SellMode;
+  autoSellCheapBelow: number;
+  autoSellPremiumAbove: number;
   autoSellMinNetOverRecycle: number;
   autoSellDurationHours: number;
   autoSellMedianFloorPct: number;
@@ -66,6 +73,9 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   masterEnabled: true,
   autoSellEnabled: true,
   autoSellStrategy: 'recent20_median',
+  autoSellMode: 'adaptive',
+  autoSellCheapBelow: 12,
+  autoSellPremiumAbove: 60,
   autoSellMinNetOverRecycle: 2,
   autoSellDurationHours: 12,
   autoSellMedianFloorPct: 70,
@@ -120,6 +130,15 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   settings.autoBuyFlipEnabled = settings.autoMarketEnabled;
   settings.autoBuyMinChakraReserve = raw.autoMarketReserveChakra ?? raw.autoBuyMinChakraReserve ?? DEFAULT_SETTINGS.autoMarketReserveChakra;
   settings.autoMarketReserveChakra = settings.autoBuyMinChakraReserve;
+  if (!['adaptive', 'fast', 'normal', 'patient'].includes(settings.autoSellMode)) {
+    settings.autoSellMode = DEFAULT_SETTINGS.autoSellMode;
+  }
+  const cheap = Number(settings.autoSellCheapBelow);
+  settings.autoSellCheapBelow = Number.isFinite(cheap) ? Math.max(2, Math.min(500, Math.round(cheap))) : DEFAULT_SETTINGS.autoSellCheapBelow;
+  const premium = Number(settings.autoSellPremiumAbove);
+  settings.autoSellPremiumAbove = Number.isFinite(premium)
+    ? Math.max(settings.autoSellCheapBelow + 1, Math.min(5000, Math.round(premium)))
+    : Math.max(settings.autoSellCheapBelow + 1, DEFAULT_SETTINGS.autoSellPremiumAbove);
   return settings;
 }
 

@@ -18,6 +18,7 @@ export async function fallbackApiOpenBooster(packId: string, packName: string, c
     const single = await kyaraApi(`/packs/${encodeURIComponent(packId)}/open`, {
       method: 'POST',
       withPass: true,
+      priority: 'high',
       extraHeaders: { 'x-request-id': reqId },
       body: { maxChakra: 0 }
     });
@@ -29,6 +30,7 @@ export async function fallbackApiOpenBooster(packId: string, packName: string, c
     const many = await kyaraApi(`/packs/${encodeURIComponent(packId)}/open-many`, {
       method: 'POST',
       withPass: true,
+      priority: 'high',
       extraHeaders: { 'x-request-id': reqId },
       body: { count: Math.min(10, countToOpen), maxChakra: 0 }
     });

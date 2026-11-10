@@ -12,6 +12,8 @@ export interface KyaraApiOptions {
   withPass?: boolean;
   extraHeaders?: Record<string, string>;
   auth?: boolean;
+  /** High-priority writes (listings, boosters) jump ahead of bulk writes such as mass recycling. */
+  priority?: 'high' | 'normal';
 }
 
 export interface CatalogItem {

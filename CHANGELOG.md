@@ -4,6 +4,24 @@ Toutes les modifications notables de **Kyara Manager** sont documentées dans ce
 
 Le format est basé sur [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/), et ce projet adhère au [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.5.0] - 2026-11-10
+
+### Ajouté
+- **Rythme de vente** (Autopilote et Réglages) : *Adaptatif* (par défaut), *Rapide*, *Normal* ou *Patient*. En adaptatif, les cartes bon marché (< 12 ◆) sont vendues au prix le plus bas du marché, celles de prix moyen suivent la stratégie choisie, les cartes chères (≥ 60 ◆) visent la médiane 7 j sans dépasser de 5 % l'offre la moins chère. Seuils réglables.
+- **Relance dégressive** : une annonce stagnante (30 min en rapide, 3 h en normal, 12 h en patient) est retirée puis relancée au moins 1 ◆ (8 %, 5 % ou 3 %) sous son ancien prix ; au prix plancher, la carte est recyclée si le recyclage est autorisé plutôt que bradée. Aucune annonce déjà au plancher n'est retirée inutilement.
+- Bouton **⚡ Écouler** : écoule les doublons en mode rapide pour un passage, sans modifier les réglages.
+
+### Corrigé
+- Les cartes dont le verdict était « Recycler » mais dont la rareté n'est pas dans les rarités recyclables restaient bloquées indéfiniment : elles sont désormais mises en vente.
+- En mode rapide, les cartes à vente lente ne sont plus mises de côté (« Conserver ») : elles partent au prix plancher.
+
+### Amélioré
+- **Parallélisation** : ouverture des boosters, missions, recyclage et vente s'exécutent en même temps et une tâche en échec n'annule plus les autres. L'achat démarre ensuite avec le solde à jour.
+- Les lectures du marché des cartes suivantes se font pendant la mise en vente de la carte courante (5 en parallèle) ; la détection des ventes vérifie les annonces disparues en parallèle.
+- Un seul registre de cartes (2 requêtes) remplace 2 requêtes par carte : recyclage et vente réservent leurs exemplaires de façon atomique et ne peuvent plus dépenser deux fois la même copie.
+- File d'écriture prioritaire : annonces, retraits et ouvertures de boosters passent devant un recyclage de masse ; écart entre écritures ramené de 340 à 300 ms (toujours adaptatif via `x-kyara-rush`).
+- Un cycle s'arrête dès que l'autopilote est désactivé ou qu'une mise à jour est en attente.
+
 ## [1.4.2] - 2026-11-06
 
 ### Corrigé

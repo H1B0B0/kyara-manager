@@ -7,6 +7,7 @@ import { executeAutoRecycle } from './auto-recycle';
 import { executeAutoSell } from './auto-sell';
 import { executeAutoBuy } from './auto-buy';
 import { runExclusive } from '../operations';
+import { loadCardLedger } from '../safety';
 
 export async function runAutomationCycle({ manual = false } = {}): Promise<any> {
   try {
@@ -23,73 +24,112 @@ export async function runAutomationCycle({ manual = false } = {}): Promise<any> 
   }
 }
 
+interface CycleSummary {
+  opened: number;
+  recycledCopies: number;
+  listed: number;
+  bought: number;
+  repriced: number;
+}
+
+/** Recycling and selling work on disjoint cards; one shared ledger keeps them from spending the same copy twice. */
+async function runMarketStage(dashboard: any, summary: CycleSummary): Promise<boolean> {
+  const { autoRecycleEnabled, autoSellEnabled } = state.currentSettings;
+  const book = await loadCardLedger();
+  const [recycled, sold] = await Promise.allSettled([
+    autoRecycleEnabled ? executeAutoRecycle(dashboard, book) : Promise.resolve(null),
+    autoSellEnabled ? executeAutoSell(dashboard, book) : Promise.resolve(null)
+  ]);
+  if (recycled.status === 'rejected') await appendJournal('error', `Recyclage auto interrompu : ${recycled.reason?.message || recycled.reason}`);
+  if (sold.status === 'rejected') await appendJournal('error', `Vente auto interrompue : ${sold.reason?.message || sold.reason}`);
+  if (recycled.status === 'fulfilled' && recycled.value) summary.recycledCopies += recycled.value.recycledCopies;
+  if (sold.status === 'fulfilled' && sold.value) {
+    summary.listed += sold.value.listedCount;
+    summary.repriced += sold.value.repriced;
+    summary.recycledCopies += sold.value.recycledCopies;
+  }
+  return summary.recycledCopies > 0 || summary.listed > 0 || summary.repriced > 0;
+}
+
 async function executeCycle(manual: boolean): Promise<any> {
   if (state.isCycleRunning) {
     return { ok: false, error: "Un cycle d'automatisation est déjà en cours." };
   }
   state.isCycleRunning = true;
+  state.abortWhenMasterOff = !manual;
   try {
     await loadSettings();
     if (!manual && !state.currentSettings.masterEnabled) {
       return { ok: true, skipped: true };
     }
 
-    let dashboard = await refreshDashboardSnapshot({
-      forcePrices: false,
-      scanMarketDeals: false
-    });
-
+    let dashboard = await refreshDashboardSnapshot({ forcePrices: false, scanMarketDeals: false });
     if (!dashboard.authenticated) {
       return { ok: false, error: dashboard.error };
     }
 
-    const summary = {
-      opened: 0,
-      recycledCopies: 0,
-      listed: 0,
-      bought: 0
-    };
-
+    const summary: CycleSummary = { opened: 0, recycledCopies: 0, listed: 0, bought: 0, repriced: 0 };
     const canContinue = () => manual || state.currentSettings.masterEnabled;
-    if (canContinue() && state.currentSettings.autoBoosterEnabled) {
-      const openRes = await executeAutoOpenBoosters(dashboard);
-      summary.opened = openRes.openedCount;
-      if (openRes.openedCount > 0) {
-        dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+    const settings = state.currentSettings;
+
+    // Independent tasks run together: opening boosters and claiming missions never wait for the market.
+    // Each task is isolated, so one failure no longer cancels the others.
+    let dirty = false;
+    const tasks: Array<{ label: string; run: Promise<void> }> = [];
+    if (canContinue() && settings.autoBoosterEnabled) {
+      tasks.push({
+        label: 'Ouverture des boosters',
+        run: executeAutoOpenBoosters(dashboard).then((res) => {
+          summary.opened = res.openedCount;
+          dirty ||= res.openedCount > 0;
+        })
+      });
+    }
+    if (canContinue() && settings.autoClaimMissionsEnabled) {
+      tasks.push({
+        label: 'Récompenses de missions',
+        run: executeAutoClaimMissions(dashboard).then((res) => {
+          dirty ||= res.claimed;
+        })
+      });
+    }
+    if (canContinue() && (settings.autoRecycleEnabled || settings.autoSellEnabled)) {
+      tasks.push({
+        label: 'Recyclage et vente',
+        run: runMarketStage(dashboard, summary).then((changed) => {
+          dirty ||= changed;
+        })
+      });
+    }
+    const outcomes = await Promise.allSettled(tasks.map((task) => task.run));
+    for (const [index, outcome] of outcomes.entries()) {
+      if (outcome.status === 'rejected') {
+        await appendJournal('error', `${tasks[index].label} : ${outcome.reason?.message || outcome.reason}`);
       }
     }
 
-    if (canContinue() && state.currentSettings.autoClaimMissionsEnabled) {
-      await executeAutoClaimMissions(dashboard);
-      dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+    const buyEnabled = settings.autoBuyFlipEnabled || settings.autoBuyMissingEnabled || settings.wishlistAutoBuyEnabled;
+    if (canContinue() && buyEnabled) {
+      // Buying spends Chakra, so it starts from the balance left by the previous tasks.
+      if (dirty) {
+        dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+        dirty = false;
+      }
+      try {
+        summary.bought = (await executeAutoBuy(dashboard)).boughtCount;
+        dirty = summary.bought > 0;
+      } catch (err: any) {
+        await appendJournal('error', `Achats auto : ${err.message}`);
+      }
     }
 
-    if (canContinue() && state.currentSettings.autoRecycleEnabled) {
-      const recRes = await executeAutoRecycle(dashboard);
-      summary.recycledCopies = recRes.recycledCopies;
-      if (recRes.recycledCopies > 0) dashboard = await refreshDashboardSnapshot({ forcePrices: false });
-    }
-
-    if (canContinue() && state.currentSettings.autoSellEnabled) {
-      const sellRes = await executeAutoSell(dashboard);
-      summary.listed = sellRes.listedCount;
-    }
-
-    if (canContinue() && (state.currentSettings.autoBuyFlipEnabled || state.currentSettings.autoBuyMissingEnabled || state.currentSettings.wishlistAutoBuyEnabled)) {
-      dashboard = await refreshDashboardSnapshot({ forcePrices: false });
-      const buyRes = await executeAutoBuy(dashboard);
-      summary.bought = buyRes.boughtCount;
-    }
-
-    if (summary.recycledCopies > 0 || summary.listed > 0 || summary.bought > 0) {
-      dashboard = await refreshDashboardSnapshot({ forcePrices: false });
-    }
-
+    if (dirty) dashboard = await refreshDashboardSnapshot({ forcePrices: false });
     return { ok: true, summary, dashboard };
   } catch (err: any) {
     await appendJournal('error', `Erreur cycle auto : ${err.message}`);
     return { ok: false, error: String(err?.message || err) };
   } finally {
+    state.abortWhenMasterOff = false;
     state.isCycleRunning = false;
   }
 }
