@@ -99,6 +99,56 @@ describe('v2.0.0 market triage & auto-recycle engine', () => {
     });
   });
 
+  describe('v2.0.1 Rare cards market net vs commission-free recycling fix', () => {
+    it('advises RECYCLER for a Rare card at market price 3 ◆ (net 1 ◆ <= 3 ◆) even with legacy [C, U] settings', () => {
+      const res = evaluateDuplicate(
+        { id: 601, name: 'Rare à 3 chakra', rarity: 'R' },
+        { characterId: 601, qty: 3, locked: 0 },
+        { median7d: 3, lowestFixed: 3, sales7d: 5 },
+        undefined,
+        { ...DEFAULT_SETTINGS, autoRecycleRarities: ['C', 'U'] }
+      );
+      expect(res.verdict).toBe('RECYCLER');
+      expect(res.canAutoRecycle).toBe(true);
+      expect(res.canAutoSell).toBe(false);
+      expect(res.verdictReason).toContain('net après commission) ≤ recyclage sans frais');
+    });
+
+    it('advises RECYCLER for a Rare card at market price 4 ◆ (net 2 ◆ <= 3 ◆ recycle)', () => {
+      const res = evaluateDuplicate(
+        { id: 602, name: 'Rare à 4 chakra', rarity: 'R' },
+        { characterId: 602, qty: 2, locked: 0 },
+        { median7d: 4, lowestFixed: 4, sales7d: 10 }
+      );
+      expect(res.verdict).toBe('RECYCLER');
+      expect(res.canAutoRecycle).toBe(true);
+      expect(res.canAutoSell).toBe(false);
+      expect(res.verdictReason).toContain('net après commission) ≤ recyclage sans frais');
+    });
+
+    it('advises RECYCLER for a Rare card at market price 5 ◆ (net 3 ◆ <= 3 ◆ recycle)', () => {
+      const res = evaluateDuplicate(
+        { id: 603, name: 'Rare à 5 chakra', rarity: 'R' },
+        { characterId: 603, qty: 2, locked: 0 },
+        { median7d: 5, lowestFixed: 5, sales7d: 8 }
+      );
+      expect(res.verdict).toBe('RECYCLER');
+      expect(res.canAutoRecycle).toBe(true);
+      expect(res.canAutoSell).toBe(false);
+    });
+
+    it('advises VENDRE for a Rare card when market net strictly exceeds recycle value (price 12 ◆ -> net 10 ◆ > 3 ◆)', () => {
+      const res = evaluateDuplicate(
+        { id: 604, name: 'Rare rentable', rarity: 'R' },
+        { characterId: 604, qty: 2, locked: 0 },
+        { median7d: 12, lowestFixed: 12, sales7d: 10 }
+      );
+      expect(res.verdict).toBe('VENDRE');
+      expect(res.canAutoSell).toBe(true);
+      expect(res.canAutoRecycle).toBe(false);
+    });
+  });
+
   describe('computeRecyclableCopies and buildCardLedger resale isolation', () => {
     it('allows recycling copies on resale cooldown or listable: 0 while blocking market listing', () => {
       const cooldownEntry = {

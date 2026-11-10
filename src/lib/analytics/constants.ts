@@ -23,7 +23,7 @@ export const DEFAULT_RECYCLE_VALUES: Record<Rarity, number> = {
 export const RARITY_PRICE_FLOORS: Record<Rarity, number> = {
   C: 3,
   U: 3,
-  R: 5,
+  R: 3,
   E: 15,
   L: 100,
   M: 815

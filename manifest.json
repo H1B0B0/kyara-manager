@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Kyara Manager — Pilote Auto, Doublons, Marché & Boosters",
   "short_name": "Kyara Manager",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "Pilote auto Kyara.games : auto-vente des doublons, recyclage, flip marché et ouverture live des boosters gratuits conseillés.",
   "icons": {
     "16": "icons/icon-16.png",

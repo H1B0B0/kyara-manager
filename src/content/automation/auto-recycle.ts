@@ -38,9 +38,8 @@ export async function executeAutoRecycle(
   const triaged = await triageDuplicatesLive(dashboard?.duplicates || [], book, state.currentSettings, 18);
   const candidates = triaged.filter(
     (d: any) =>
-      (d.canAutoRecycle || d.verdict === 'RECYCLER') &&
       !d.pinned &&
-      state.currentSettings.autoRecycleRarities.includes(d.rarity)
+      (d.canAutoRecycle || (d.verdict === 'RECYCLER' && state.currentSettings.autoRecycleRarities.includes(d.rarity)))
   );
   if (!candidates.length) return total;
 

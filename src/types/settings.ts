@@ -139,6 +139,14 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   settings.autoSellPremiumAbove = Number.isFinite(premium)
     ? Math.max(settings.autoSellCheapBelow + 1, Math.min(5000, Math.round(premium)))
     : Math.max(settings.autoSellCheapBelow + 1, DEFAULT_SETTINGS.autoSellPremiumAbove);
+  if (Array.isArray(settings.autoRecycleRarities)) {
+    const list = settings.autoRecycleRarities;
+    if (list.length === 2 && list.includes('C') && list.includes('U') && !list.includes('R')) {
+      settings.autoRecycleRarities = ['C', 'U', 'R'];
+    }
+  } else {
+    settings.autoRecycleRarities = ['C', 'U', 'R'];
+  }
   return settings;
 }
 

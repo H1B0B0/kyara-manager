@@ -18,6 +18,10 @@ describe('settings migrations', () => {
     expect(mergeSettings(DEFAULT_SETTINGS, { autoBuyFlipEnabled: true }).autoMarketEnabled).toBe(true);
     expect(mergeSettings(DEFAULT_SETTINGS, { autoMarketReserveChakra: 400 }).autoBuyMinChakraReserve).toBe(400);
   });
+  it("upgrades legacy ['C', 'U'] autoRecycleRarities to ['C', 'U', 'R']", () => {
+    expect(normalizeSettings({ autoRecycleRarities: ['C', 'U'] }).autoRecycleRarities).toEqual(['C', 'U', 'R']);
+    expect(normalizeSettings({ autoRecycleRarities: ['C'] }).autoRecycleRarities).toEqual(['C']);
+  });
   it('requires a 20% surge, not the numeric value of a boolean', () => {
     const result = evaluateDuplicate({ id: 1, rarity: 'L' }, { qty: 3 }, { median7d: 110, median30d: 100, sales7d: 20 });
     expect(result.isSurging).toBe(false);

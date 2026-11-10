@@ -203,8 +203,9 @@ export function setupMessageListener(): () => void {
           const { maxNetGain = 4, excludeRarities = ['L', 'M'] } = message;
           const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
           const candidates = (dashboard.duplicates || []).filter((d: any) => {
-            const candQty = d.recyclableSpare ?? d.spare;
-            if (d.pinned || candQty <= 0 || !state.currentSettings.autoRecycleRarities.includes(d.rarity)) return false;
+            const recQty = d.recyclableSpare ?? d.spare;
+            const allowedRarity = d.canAutoRecycle || state.currentSettings.autoRecycleRarities.includes(d.rarity);
+            if (d.pinned || recQty <= 0 || !allowedRarity) return false;
             if (excludeRarities.includes(d.rarity)) return false;
             return d.verdict === 'RECYCLER' || (d.fees?.netGainOverRecycle <= maxNetGain && (d.rarity === 'C' || d.rarity === 'U'));
           });

@@ -47,6 +47,12 @@ export function evaluateDuplicate(
   const crashDiscountPct = liveDepth?.crashDiscountPct || 0;
   const bestBuyOrder = Number.isFinite(marketStats.bestBuyOrder) && marketStats.bestBuyOrder > 0 ? marketStats.bestBuyOrder : null;
 
+  const actualMarketPrice =
+    lowestFixed !== null && referenceMedian !== null
+      ? Math.min(lowestFixed, referenceMedian)
+      : (lowestFixed ?? referenceMedian);
+  const actualMarketNet = actualMarketPrice !== null ? computeNetProceeds(actualMarketPrice) : null;
+
   const surgeThresholdPct = 20;
   const trendPct = median7d && median30d ? Math.round(((median7d - median30d) / median30d) * 100) : 0;
   const isSurging = Boolean(
@@ -159,6 +165,15 @@ export function evaluateDuplicate(
   if (isPinned) {
     verdict = 'PROTÉGÉ';
     verdictReason = "Carte favorite protégée (exclue de l'auto-vente et de l'auto-recyclage)";
+  } else if (
+    actualMarketPrice !== null &&
+    actualMarketNet !== null &&
+    actualMarketNet <= recycleValue &&
+    rarity !== 'L' &&
+    rarity !== 'M'
+  ) {
+    verdict = 'RECYCLER';
+    verdictReason = `Vente (${actualMarketPrice} ◆ → ${actualMarketNet} ◆ net après commission) ≤ recyclage sans frais (+${recycleValue} ◆) · Recyclage direct`;
   } else if (isSurging && settings?.speculateHoldSurging !== false) {
     verdict = 'CONSERVER';
     verdictReason = `📈 En forte hausse (+${trendPct}% sur 7j vs 30j) · Conservation conseillée`;
@@ -215,6 +230,9 @@ export function evaluateDuplicate(
     if (netProceeds > recycleValue && spare > 0) {
       verdict = 'VENDRE';
       verdictReason = `Recyclage désactivé pour ${RARITY_LABELS[rarity] || rarity} : mise en vente à ${recommendedPrice} ◆ (net ${netProceeds} ◆)`;
+    } else if (actualMarketNet !== null ? actualMarketNet <= recycleValue : netProceeds <= recycleValue) {
+      // NEVER turn into CONSERVER: selling loses chakra compared to commission-free recycling!
+      // Keep verdict = 'RECYCLER' so the UI displays RECYCLER and the Recycler button!
     } else {
       verdict = 'CONSERVER';
       verdictReason = `Recyclage désactivé pour ${RARITY_LABELS[rarity] || rarity} · Conservation conseillée`;
@@ -225,11 +243,15 @@ export function evaluateDuplicate(
     else if (profile.tier === 'patient') verdictReason += ' · 🕰 vente patiente';
   }
 
+  const isUnprofitableRare =
+    rarity === 'R' &&
+    (actualMarketNet !== null ? actualMarketNet <= recycleValue : netProceeds <= recycleValue);
+
   const canAutoRecycle =
     verdict === 'RECYCLER' &&
     !isPinned &&
     recyclableSpare > 0 &&
-    allowedRecycleRarities.includes(rarity);
+    (allowedRecycleRarities.includes(rarity) || isUnprofitableRare);
 
   const canAutoSell =
     verdict === 'VENDRE' &&
