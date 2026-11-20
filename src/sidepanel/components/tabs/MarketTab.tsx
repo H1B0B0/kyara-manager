@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { DashboardState, MarketDeal, ProfitableTrade, Rarity, SeriesProgress } from '../../../types/kyara';
 import { DEFAULT_SETTINGS, type KyaraSettings } from '../../../types/settings';
 import { RarityPill } from '../common/RarityPill';
@@ -77,9 +77,28 @@ export const MarketTab: React.FC<MarketTabProps> = ({
   const effectiveSettings = settings || DEFAULT_SETTINGS;
   const seriesProgress = dashboard?.seriesProgress || [];
   const seriesCount = seriesProgress.length;
+  const autoScannedRef = useRef(false);
+
+  const runDealsScan = async () => {
+    setScanning(true);
+    onToast('Scan des annonces du marché en cours…');
+    try {
+      if (onScanDeals) {
+        const res = await onScanDeals();
+        onToast(`${(res?.dashboard?.deals || []).length} opportunité(s) trouvée(s)`);
+      } else {
+        onRefresh();
+      }
+    } finally {
+      setScanning(false);
+    }
+  };
 
   useEffect(() => {
-    if (deals.length === 0 && onScanDeals) void onScanDeals();
+    if (!autoScannedRef.current && deals.length === 0 && onScanDeals) {
+      autoScannedRef.current = true;
+      void onScanDeals();
+    }
   }, [deals.length, onScanDeals]);
 
   const handleUpdateSettings = (partial: Partial<KyaraSettings>) => {
@@ -205,16 +224,7 @@ export const MarketTab: React.FC<MarketTabProps> = ({
               </div>
               <button
                 type="button" disabled={scanning} className="btn btn--primary btn--sm"
-                onClick={async () => {
-                  setScanning(true);
-                  onToast('Scan des annonces du marché en cours…');
-                  try {
-                    if (onScanDeals) {
-                      const res = await onScanDeals();
-                      onToast(`${(res?.dashboard?.deals || []).length} opportunité(s) trouvée(s)`);
-                    } else onRefresh();
-                  } finally { setScanning(false); }
-                }}
+                onClick={() => void runDealsScan()}
               >
                 <ScanIcon />
                 <span>{scanning ? 'Scan…' : 'Scanner'}</span>
@@ -260,8 +270,8 @@ export const MarketTab: React.FC<MarketTabProps> = ({
               <span className="empty-state-box__icon">市</span>
               <strong className="empty-state-box__title">Aucune opportunité correspondante</strong>
               <p className="empty-state-box__text">{t('noDeals')}</p>
-              <button type="button" onClick={onRefresh} className="btn btn--ghost btn--sm" style={{ marginTop: '8px' }}>
-                Scanner le marché maintenant
+              <button type="button" disabled={scanning} onClick={() => void runDealsScan()} className="btn btn--ghost btn--sm" style={{ marginTop: '8px' }}>
+                {scanning ? 'Scan en cours…' : 'Scanner le marché maintenant'}
               </button>
             </div>
           ) : viewMode === 'cards' ? (

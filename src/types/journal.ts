@@ -1,4 +1,18 @@
-export type JournalType = 'info' | 'success' | 'warn' | 'error' | 'sell' | 'recycle' | 'booster' | 'market' | 'mission' | 'afk';
+export type JournalType =
+  | 'info'
+  | 'success'
+  | 'warn'
+  | 'error'
+  | 'sell'
+  | 'sold'
+  | 'recycle'
+  | 'booster'
+  | 'open'
+  | 'market'
+  | 'buy'
+  | 'mission'
+  | 'claim'
+  | 'afk';
 
 export interface JournalItem {
   ts: number;

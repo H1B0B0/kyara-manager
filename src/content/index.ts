@@ -2,7 +2,7 @@ import { state, loadSettings, restartLoopTimer } from './state';
 import { mountFloatingHud, updateFloatingHud } from './hud';
 import { setupAntiAfkObserver } from './automation/anti-afk';
 import { runAutomationCycle } from './automation/cycle';
-import { startMarketWatcher } from './automation/market-watcher';
+import { runMarketWatchTick, startMarketWatcher } from './automation/market-watcher';
 import { refreshDashboardSnapshot } from './snapshot';
 import { setupMessageListener } from './messages';
 import { setupOverlayListeners } from './overlay';
@@ -52,6 +52,13 @@ function initKyaraManager(): void {
       setLanguage(state.currentSettings.language);
       updateFloatingHud();
       restartLoopTimer(() => runAutomationCycle({ manual: false }));
+      const s = state.currentSettings;
+      if (
+        s.masterEnabled &&
+        (s.autoBuyFlipEnabled || s.autoMarketEnabled || s.autoBuyMissingEnabled || s.wishlistAutoBuyEnabled || s.renaissanceFocusEnabled)
+      ) {
+        void runMarketWatchTick({ manual: false });
+      }
     }
   };
   chrome.storage.onChanged.addListener(onStorage);
@@ -70,9 +77,10 @@ function initKyaraManager(): void {
       forcePrices: false,
       scanMarketDeals: Boolean(
         state.currentSettings.autoBuyFlipEnabled ||
+        state.currentSettings.autoMarketEnabled ||
         state.currentSettings.autoBuyMissingEnabled ||
         state.currentSettings.wishlistAutoBuyEnabled ||
-        (state.currentSettings.renaissanceFocusEnabled && state.currentSettings.autoMarketEnabled)
+        state.currentSettings.renaissanceFocusEnabled
       )
     }).catch(() => null);
     if (!disposed && state.currentSettings.masterEnabled && dashboard?.authenticated) {

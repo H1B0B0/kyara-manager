@@ -14,9 +14,10 @@ export async function executeAutoBuy(
   const s = state.currentSettings;
   const marketBuyEnabled = Boolean(
     s.autoBuyFlipEnabled ||
+    s.autoMarketEnabled ||
     s.autoBuyMissingEnabled ||
     s.wishlistAutoBuyEnabled ||
-    (s.renaissanceFocusEnabled && s.autoMarketEnabled)
+    s.renaissanceFocusEnabled
   );
   if (!marketBuyEnabled && !options.manual) {
     return { boughtCount: 0, dealsFound: 0 };
@@ -42,15 +43,30 @@ export async function executeAutoBuy(
   const minReserve = Math.max(0, Number(s.autoBuyMinChakraReserve ?? 500));
   let boughtCount = 0;
 
+  const remainingByRarity: Partial<Record<Rarity, number>> = {};
+  const renByRarity = dashboard?.renaissance?.byRarity;
+  if (renByRarity && typeof renByRarity === 'object') {
+    for (const r of ['C', 'U', 'R', 'E', 'L', 'M'] as Rarity[]) {
+      const rem = renByRarity[r]?.remainingForTarget;
+      if (typeof rem === 'number' && Number.isFinite(rem)) {
+        remainingByRarity[r] = Math.max(0, rem);
+      }
+    }
+  }
+
   for (const deal of deals) {
-    const shouldBuyFlip = Boolean(s.autoBuyFlipEnabled && deal.isGoodFlip);
+    const rarity = deal.rarity as Rarity;
+    const rarityRemaining = remainingByRarity[rarity];
+    const rarityStillNeededForRenaissance = rarityRemaining === undefined || rarityRemaining > 0;
+    const shouldBuyFlip = Boolean((s.autoBuyFlipEnabled || s.autoMarketEnabled) && deal.isGoodFlip);
     const renMaxPrice =
-      s.batchBuyDefaultMaxPrice?.[deal.rarity as Rarity] ??
+      s.batchBuyDefaultMaxPrice?.[rarity] ??
       s.autoBuyMissingMaxPrice ??
       25;
     const isRenaissanceBuy =
-      Boolean(s.renaissanceFocusEnabled && (s.autoBuyMissingEnabled || s.autoMarketEnabled)) &&
+      Boolean(s.renaissanceFocusEnabled) &&
       Boolean(deal.isRenaissanceNeed) &&
+      rarityStillNeededForRenaissance &&
       !ownedSet.has(deal.characterId) &&
       deal.buyPrice <= renMaxPrice;
     const shouldBuyMissing =
@@ -78,6 +94,9 @@ export async function executeAutoBuy(
         boughtCount += 1;
         currentChakra -= freshPrice;
         ownedSet.add(deal.characterId);
+        if (isRenaissanceBuy && remainingByRarity[rarity] !== undefined) {
+          remainingByRarity[rarity] = Math.max(0, (remainingByRarity[rarity] || 0) - 1);
+        }
         await appendJournal(
           'buy',
           `[SIMULATION] Achèterait ${deal.name} [${deal.rarity}] à ${freshPrice} ◆ (${
@@ -94,6 +113,9 @@ export async function executeAutoBuy(
       boughtCount += 1;
       currentChakra = Number(buyRes?.user?.chakra ?? currentChakra - freshPrice);
       ownedSet.add(deal.characterId);
+      if (isRenaissanceBuy && remainingByRarity[rarity] !== undefined) {
+        remainingByRarity[rarity] = Math.max(0, (remainingByRarity[rarity] || 0) - 1);
+      }
       const reasonTag = shouldBuyWish
         ? `Envie de collection (budget max : ${deal.wishlistMatch?.maxBudget} ◆)`
         : shouldBuyFlip

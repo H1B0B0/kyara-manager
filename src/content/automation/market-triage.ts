@@ -93,7 +93,7 @@ export async function triageDuplicatesLive(
       avail.listed,
       avail.pinned
     );
-    const candRecyclable = d.recyclableSpare ?? (avail as any).recyclable ?? reEvaluated.spare;
+    const candRecyclable = reEvaluated.recyclableSpare ?? (avail as any).recyclable ?? reEvaluated.spare;
     (reEvaluated as any).recyclableSpare = candRecyclable;
     return reEvaluated;
   });

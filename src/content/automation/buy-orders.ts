@@ -61,7 +61,10 @@ export async function scanBuyOrderOpportunities(
   dashboard: any,
   options: { limit?: number; discountPct?: number } = {}
 ): Promise<BuyOrderOpportunity[]> {
-  const rawColl = await kyaraApi('/me/collection?lean=1').catch(() => null);
+  const [rawColl, myMarket] = await Promise.all([
+    kyaraApi('/me/collection?lean=1').catch(() => null),
+    kyaraApi('/me/market').catch(() => null)
+  ]);
   const ownedSet = new Set<number>();
   if (Array.isArray(rawColl)) {
     for (const e of rawColl) {
@@ -69,9 +72,20 @@ export async function scanBuyOrderOpportunities(
       if (Number.isFinite(cid) && Number(e?.qty) > 0) ownedSet.add(cid);
     }
   }
+  const activeOrderCharIds = new Set<number>();
+  const myOrders = Array.isArray(myMarket?.buyOrders)
+    ? myMarket.buyOrders
+    : Array.isArray(myMarket?.orders)
+      ? myMarket.orders
+      : [];
+  for (const ord of myOrders) {
+    if (ord?.status && ord.status !== 'active' && ord.status !== 'pending') continue;
+    const cid = Number(ord?.character?.id ?? ord?.characterId);
+    if (Number.isFinite(cid) && cid > 0) activeOrderCharIds.add(cid);
+  }
   const cap = Math.max(1, Math.min(20, Number(options.limit) || 16));
   const candidates = collectCandidates(dashboard, cap * 2)
-    .filter((c) => !ownedSet.has(c.characterId))
+    .filter((c) => !ownedSet.has(c.characterId) && !activeOrderCharIds.has(c.characterId))
     .slice(0, cap);
   if (candidates.length === 0) return [];
 
@@ -79,13 +93,16 @@ export async function scanBuyOrderOpportunities(
   const results = await mapLimit(candidates, 5, async (cand): Promise<BuyOrderOpportunity> => {
     const id = cand.characterId;
     const [orders, prices, listings] = await Promise.all([
-      kyaraApi(`/market/buy-orders?characterId=${id}`, { auth: false }).catch(() => null),
+      kyaraApi(`/market/buy-orders?characterId=${id}`, { auth: true }).catch(() => null),
       kyaraApi(`/market/prices/${id}`, { auth: false }).catch(() => null),
       kyaraApi(`/market/listings?characterId=${id}&type=fixed&sort=price_asc&pageSize=3`, { auth: true }).catch(() => null)
     ]);
 
     const orderList = Array.isArray(orders) ? orders : Array.isArray(orders?.items) ? orders.items : [];
-    const bids = orderList.map((o: any) => Number(o?.price)).filter((p: number) => Number.isFinite(p) && p > 0);
+    const bids = orderList
+      .filter((o: any) => !o?.isMine)
+      .map((o: any) => Number(o?.price))
+      .filter((p: number) => Number.isFinite(p) && p > 0);
     const bestExistingBid = bids.length > 0 ? Math.max(...bids) : null;
     const median7d = Number.isFinite(Number(prices?.median7d)) && Number(prices.median7d) > 0 ? Number(prices.median7d) : null;
     const fixedPrices = (Array.isArray(listings?.items) ? listings.items : [])

@@ -34,8 +34,12 @@ export async function scanMarketDealsInternal(
       : state.currentSettings.renaissanceTargetRarities?.length
         ? state.currentSettings.renaissanceTargetRarities
         : (['C', 'U', 'R'] as Rarity[]);
-    for (const r of rawFocus.slice(0, 2)) {
+    for (const r of rawFocus) {
       queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(r)}&pageSize=50&page=1`);
+    }
+  } else if (state.currentSettings.autoBuyMissingEnabled || state.currentSettings.autoMarketEnabled || state.currentSettings.autoBuyFlipEnabled) {
+    for (const r of ['U', 'R', 'E'] as Rarity[]) {
+      queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${r}&pageSize=50&page=1`);
     }
   }
 

@@ -42,6 +42,7 @@ export const PLAYSTYLE_PRESETS: PlaystylePreset[] = [
       autoBoosterStrategy: 'new',
       autoOpenMode: 'recommended_new',
       renaissanceFocusEnabled: true,
+      autoBuyMissingEnabled: true,
       autoOpenGoldenSniper: true
     }
   },

@@ -19,7 +19,7 @@ const DEFAULT_MAX_PRICES: Record<Rarity, number> = { C: 3, U: 4, R: 6, E: 18, L:
 
 const RARITY_OPTIONS: Array<{ value: Rarity | 'RENAISSANCE'; label: string }> = [
   { value: 'RENAISSANCE', label: 'Focus' }, { value: 'C', label: 'C' }, { value: 'U', label: 'U' },
-  { value: 'R', label: 'R' }, { value: 'E', label: 'E' }, { value: 'L', label: 'L' }
+  { value: 'R', label: 'R' }, { value: 'E', label: 'E' }, { value: 'L', label: 'L' }, { value: 'M', label: 'M' }
 ];
 
 const QTY_PRESETS = [10, 25, 50, 100];

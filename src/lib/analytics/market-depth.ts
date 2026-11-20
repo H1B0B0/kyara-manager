@@ -23,7 +23,7 @@ export function computeLiveMarketDepth(
   referenceMedian: number | null = null
 ): LiveMarketDepth {
   const activePrices = (Array.isArray(listings) ? listings : [])
-    .filter((l) => l && (l.status === 'active' || l.status === undefined) && (!l.endsAt || Date.parse(l.endsAt) > Date.now()))
+    .filter((l) => l && !l.isMine && (l.status === 'active' || l.status === undefined) && (!l.endsAt || Date.parse(l.endsAt) > Date.now()))
     .map((l) => (typeof l === 'number' ? l : Number(l.price)))
     .filter((p) => Number.isFinite(p) && p > 0)
     .sort((a, b) => a - b);

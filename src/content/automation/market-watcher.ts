@@ -8,9 +8,10 @@ function isAnyMarketBuyEnabled(): boolean {
   const s = state.currentSettings;
   return Boolean(
     s.autoBuyFlipEnabled ||
+    s.autoMarketEnabled ||
     s.autoBuyMissingEnabled ||
     s.wishlistAutoBuyEnabled ||
-    (s.renaissanceFocusEnabled && s.autoMarketEnabled)
+    s.renaissanceFocusEnabled
   );
 }
 

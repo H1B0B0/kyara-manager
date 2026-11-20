@@ -2,7 +2,7 @@ import type { Rarity, SeriesMissingCard, SeriesProgress } from '../../types/kyar
 import { RARITIES, RARITY_PRICE_FLOORS } from './constants';
 
 const NEAR_COMPLETE_PCT = 75;
-const MAX_MISSING_CARDS_PREVIEW = 12;
+const MAX_MISSING_CARDS_PREVIEW = 50;
 
 interface SeriesAccumulator {
   series: string;

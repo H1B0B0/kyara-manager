@@ -7,6 +7,7 @@ import { runtimeCache } from '../src/content/cache';
 import { scanMarketDealsInternal } from '../src/content/scanner';
 import { executeAutoBuy } from '../src/content/automation/auto-buy';
 import { runMarketWatchTick } from '../src/content/automation/market-watcher';
+import { computeLiveMarketDepth } from '../src/lib/analytics/market-depth';
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
@@ -151,5 +152,71 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
 
     const res = await runMarketWatchTick({ manual: false });
     expect(res).toEqual({ ok: true, boughtCount: 1, dealsFound: 1 });
+  });
+
+  it('Test 5: runMarketWatchTick runs with only renaissanceFocusEnabled=true and skips rarities whose Rebirth target is already reached', async () => {
+    const renOnlySettings = normalizeSettings({
+      masterEnabled: true,
+      autoMarketEnabled: false,
+      autoBuyFlipEnabled: false,
+      autoBuyMissingEnabled: false,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['C', 'E', 'M'],
+      autoBuyMinChakraReserve: 100
+    });
+    mockChrome({
+      settings: renOnlySettings,
+      kmDashboard: {
+        authenticated: true,
+        me: { chakra: 600 },
+        renaissance: {
+          byRarity: {
+            C: { remainingForTarget: 5 },
+            E: { remainingForTarget: 10 },
+            M: { remainingForTarget: 0 }
+          }
+        }
+      }
+    });
+    state.currentSettings = renOnlySettings;
+
+    const bought: string[] = [];
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-mythic-done', status: 'active', type: 'fixed', price: 100, character: { id: 9101, name: 'Done Mythic', rarity: 'M' } },
+            { id: 'l-epic-needed', status: 'active', type: 'fixed', price: 12, character: { id: 9102, name: 'Needed Epic', rarity: 'E' } }
+          ]
+        };
+      }
+      if (path === '/market/listings/l-epic-needed') return { id: 'l-epic-needed', status: 'active', type: 'fixed', price: 12 };
+      if (path === '/market/listings/l-mythic-done') return { id: 'l-mythic-done', status: 'active', type: 'fixed', price: 100 };
+      if (path === '/me/bootstrap') return { me: { chakra: 600 } };
+      if (path.endsWith('/buy') && opts.method === 'POST') {
+        bought.push(path);
+        return { user: { chakra: 588 } };
+      }
+      return {};
+    });
+
+    const res = await runMarketWatchTick({ manual: false });
+    expect(res).toEqual({ ok: true, boughtCount: 1, dealsFound: 2 });
+    expect(bought).toEqual(['/market/listings/l-epic-needed/buy']);
+  });
+
+  it('Test 6: computeLiveMarketDepth excludes own listings (isMine: true) to prevent self-undercutting', () => {
+    const depth = computeLiveMarketDepth(
+      [
+        { status: 'active', price: 10, isMine: true },
+        { status: 'active', price: 15, isMine: false },
+        { status: 'active', price: 18 }
+      ],
+      16
+    );
+    expect(depth.count).toBe(2);
+    expect(depth.lowestFixed).toBe(15);
+    expect(depth.highestFixed).toBe(18);
   });
 });

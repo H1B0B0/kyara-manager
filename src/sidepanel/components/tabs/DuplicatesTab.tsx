@@ -55,12 +55,18 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
   const [draining, setDraining] = useState(false);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
 
+  const allowedRecRarities = settings.autoRecycleRarities || ['C', 'U', 'R'];
   const turboCandidates = useMemo(
-    () => duplicates.filter((d) => d.verdict === 'RECYCLER' && !d.pinned && !pinnedCards.has(d.characterId)),
-    [duplicates, pinnedCards]
+    () =>
+      duplicates.filter((d) => {
+        const recQty = d.recyclableSpare ?? d.spare ?? 0;
+        const allowed = Boolean(d.canAutoRecycle || allowedRecRarities.includes(d.rarity));
+        return d.verdict === 'RECYCLER' && !d.pinned && !pinnedCards.has(d.characterId) && recQty > 0 && allowed;
+      }),
+    [duplicates, pinnedCards, allowedRecRarities]
   );
-  const turboCopies = turboCandidates.reduce((acc, c) => acc + (c.recyclableSpare ?? c.spare ?? 1), 0);
-  const turboChakra = turboCandidates.reduce((acc, c) => acc + (c.recyclableSpare ?? c.spare ?? 1) * (c.recycleValue || 1), 0);
+  const turboCopies = turboCandidates.reduce((acc, c) => acc + (c.recyclableSpare ?? c.spare ?? 0), 0);
+  const turboChakra = turboCandidates.reduce((acc, c) => acc + (c.recyclableSpare ?? c.spare ?? 0) * (c.recycleValue || 1), 0);
   const showTurbo = settings.autoSellTurboLiquidity !== false && turboCopies > 0;
 
   const handleBulkRecycle = async () => {
@@ -270,12 +276,12 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
                     <span className={`sell-tier-pill ${tier.cls}`}>{tier.label}</span>
                   </div>
                   <div className="inventory-card__actions">
-                    {d.verdict === 'VENDRE' && !isPinned && (
+                    {d.verdict === 'VENDRE' && !isPinned && d.spare > 0 && (
                       <button type="button" onClick={() => handleSellOne(d)} className="btn btn--primary btn--xs">
                         Vendre à {recPrice} ◆
                       </button>
                     )}
-                    {d.verdict === 'RECYCLER' && !isPinned && (
+                    {d.verdict === 'RECYCLER' && !isPinned && recQty > 0 && (
                       <button type="button" onClick={() => handleRecycleOne(d)} className="btn btn--accent btn--xs">
                         Recycler (+{(d.recycleValue || 1) * recQty} ◆)
                       </button>
@@ -338,12 +344,12 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
                     <td data-label={t('thMarketPrice')} className="num font-mono">{d.lowestFixed ? `${d.lowestFixed} ◆` : '—'}</td>
                     <td data-label={t('thVerdict')}><VerdictBadge verdict={isPinned ? 'PROTÉGÉ' : d.verdict} /></td>
                     <td data-label={t('thAction')}>
-                      {d.verdict === 'VENDRE' && !isPinned && (
+                      {d.verdict === 'VENDRE' && !isPinned && d.spare > 0 && (
                         <button type="button" onClick={() => handleSellOne(d)} className="btn btn--primary btn--xs">
                           {t('btnSell')}
                         </button>
                       )}
-                      {d.verdict === 'RECYCLER' && !isPinned && (
+                      {d.verdict === 'RECYCLER' && !isPinned && recQty > 0 && (
                         <button type="button" onClick={() => handleRecycleOne(d)} className="btn btn--accent btn--xs">
                           {t('btnRecycleCount', { n: recQty })}
                         </button>

@@ -74,12 +74,24 @@ const JournalIcon: React.FC<{ type: JournalType }> = ({ type }) => {
   }
 };
 
+const normalizeCategory = (type: JournalType): JournalType => {
+  if (type === 'sold') return 'sell';
+  if (type === 'open') return 'booster';
+  if (type === 'buy') return 'market';
+  if (type === 'claim') return 'mission';
+  return type;
+};
+
 const badgeLabelMap: Record<JournalType, string> = {
   sell: 'VENTE',
+  sold: 'VENDU',
   recycle: 'RECYCL.',
   booster: 'PACK',
+  open: 'PACK',
   market: 'MARCHÉ',
+  buy: 'ACHAT',
   mission: 'MISSION',
+  claim: 'MISSION',
   afk: 'AFK',
   error: 'ERREUR',
   warn: 'AVIS',
@@ -93,16 +105,16 @@ export const AutopilotJournal: React.FC<AutopilotJournalProps> = ({ journal, onC
   const counts = useMemo(() => {
     return {
       all: journal.length,
-      sell: journal.filter((j) => j.type === 'sell').length,
-      recycle: journal.filter((j) => j.type === 'recycle').length,
-      booster: journal.filter((j) => j.type === 'booster').length,
-      market: journal.filter((j) => j.type === 'market').length
+      sell: journal.filter((j) => normalizeCategory(j.type) === 'sell').length,
+      recycle: journal.filter((j) => normalizeCategory(j.type) === 'recycle').length,
+      booster: journal.filter((j) => normalizeCategory(j.type) === 'booster').length,
+      market: journal.filter((j) => normalizeCategory(j.type) === 'market').length
     };
   }, [journal]);
 
   const filteredJournal = useMemo(() => {
     if (filter === 'all') return journal;
-    return journal.filter((item) => item.type === filter);
+    return journal.filter((item) => normalizeCategory(item.type) === filter);
   }, [journal, filter]);
 
   const filterButtons: Array<{ key: JournalFilterKey; label: string }> = [
@@ -156,12 +168,13 @@ export const AutopilotJournal: React.FC<AutopilotJournalProps> = ({ journal, onC
           </li>
         ) : (
           filteredJournal.slice(0, 50).map((item, idx) => {
-            const badgeLabel = badgeLabelMap[item.type] || 'INFO';
+            const cat = normalizeCategory(item.type);
+            const badgeLabel = badgeLabelMap[item.type] || badgeLabelMap[cat] || 'INFO';
             return (
-              <li key={`${item.ts}-${idx}`} className={`journal-item journal-item--${item.type}`}>
+              <li key={`${item.ts}-${idx}`} className={`journal-item journal-item--${cat}`}>
                 <div className="journal-item__lead">
-                  <span className={`journal-badge journal-badge--${item.type}`}>
-                    <JournalIcon type={item.type} />
+                  <span className={`journal-badge journal-badge--${cat}`}>
+                    <JournalIcon type={cat} />
                     <span className="journal-badge__text">{badgeLabel}</span>
                   </span>
                   <span className="journal-item__msg">{item.message}</span>

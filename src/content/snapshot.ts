@@ -209,15 +209,7 @@ async function buildDashboardSnapshot({
     const stats = runtimeCache.collectionPrices.get(cid) || {};
     const activeQty = activeQtyByChar.get(cid) || 0;
     const ev = evaluateDuplicate(card, entry, stats, recycleMap, state.currentSettings, activeQty, pinnedSet);
-    const locked = Math.max(0, Math.floor(Number(entry.locked) || 0));
-    const recyclableQty = entry.recyclable !== undefined
-      ? Math.max(0, Number(entry.recyclable))
-      : Math.max(0, Math.floor(Number(entry.qty) || 0) - locked - 1);
-    const candRecyclable = Math.max(ev.spare, recyclableQty);
-    (ev as any).recyclableSpare = candRecyclable;
-    if (ev.verdict === 'RECYCLER' && !ev.pinned && candRecyclable > 0 && (state.currentSettings.autoRecycleRarities || ['C', 'U']).includes(ev.rarity)) {
-      ev.canAutoRecycle = true;
-    }
+    const candRecyclable = ev.recyclableSpare ?? ev.spare;
     if (ev.spare > 0 || candRecyclable > 0 || activeQty > 0 || ev.pinned) {
       evaluatedDuplicates.push(ev);
     }

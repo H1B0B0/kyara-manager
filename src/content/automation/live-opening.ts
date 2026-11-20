@@ -321,6 +321,9 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
   if (boosters.isGoldenNext && boosters.recommendedGolden && state.currentSettings.autoOpenGoldenSniper !== false && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
     targetPack = boosters.recommendedGolden;
   }
+  if (boosters.isPityNear && boosters.recommendedPity && state.currentSettings.autoOpenPitySniper !== false && state.currentSettings.autoOpenMode !== 'custom') {
+    targetPack = boosters.recommendedPity;
+  }
   if (state.currentSettings.autoOpenMode === 'custom' && state.currentSettings.autoOpenCustomPackId) {
     targetPack = boosters.all.find((p: any) => p.packId === state.currentSettings.autoOpenCustomPackId);
   }

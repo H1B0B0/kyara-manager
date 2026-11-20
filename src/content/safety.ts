@@ -66,6 +66,9 @@ export function buildCardLedger(collection: any[], marketListings: any[], pinned
           qty: Math.max(0, Number(base.qty) - gone),
           ...(base.listable !== undefined && base.listable !== null
             ? { listable: Math.max(0, Number(base.listable) - gone) }
+            : {}),
+          ...(base.recyclable !== undefined && base.recyclable !== null
+            ? { recyclable: Math.max(0, Number(base.recyclable) - gone) }
             : {})
         };
     const listed =

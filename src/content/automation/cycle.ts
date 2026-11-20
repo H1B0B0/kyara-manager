@@ -121,9 +121,10 @@ async function executeCycle(manual: boolean): Promise<any> {
     // Stage 3: Buying stage
     const buyEnabled = Boolean(
       settings.autoBuyFlipEnabled ||
+      settings.autoMarketEnabled ||
       settings.autoBuyMissingEnabled ||
       settings.wishlistAutoBuyEnabled ||
-      (settings.renaissanceFocusEnabled && settings.autoMarketEnabled)
+      settings.renaissanceFocusEnabled
     );
     if (canContinue() && buyEnabled) {
       // Buying spends Chakra, so it starts from the balance left by the previous tasks.

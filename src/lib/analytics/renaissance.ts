@@ -52,7 +52,8 @@ function resolveTarget(
     if (Number.isFinite(parsed) && parsed > 0) {
       const floored = Math.floor(parsed);
       const isHighTier = rarity === 'E' || rarity === 'L' || rarity === 'M';
-      if (!isHighTier || (total > 0 && floored < total)) {
+      const maxOfficial = OFFICIAL_REBIRTH_1_TARGETS[rarity];
+      if (!isHighTier || (floored <= maxOfficial && (total <= 0 || floored < total))) {
         return total > 0 ? Math.min(total, floored) : floored;
       }
     }

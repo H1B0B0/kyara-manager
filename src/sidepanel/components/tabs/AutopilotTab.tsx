@@ -104,7 +104,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   const recCount = collStats?.recyclableDuplicatesCount ?? 0;
   const recPack = dashboard?.boosters?.recommendedNew;
   const dailyPack = (dashboard?.boosters?.all || []).find((p) => p.packId === 'daily');
-  const canOpen = (me?.freePacks ?? 0) > 0 && recPack?.canOpenNow !== false;
+  const canOpen = Boolean(recPack?.canOpenNow && (recPack?.openableFreeCount ?? me?.freePacks ?? 0) > 0);
   const dealsCount = dashboard?.deals?.length ?? 0;
   const tradesCount = dashboard?.trades?.length ?? 0;
   const pity = me?.pity ?? 0;
@@ -340,10 +340,41 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             <CollapsibleModuleCard
               id="market" variant="market" kanji="市" kanjiTone="cyan"
               title={t('modMarketTitle')} summary={marketSummary} switchId="sw-automarket"
-              checked={Boolean(settings.autoMarketEnabled ?? settings.autoBuyFlipEnabled)} expanded={expandedModule === 'market'}
-              onToggleExpand={toggleModule} onToggleSwitch={(v) => onUpdateSettings({ autoMarketEnabled: v, autoBuyFlipEnabled: v })}
+              checked={Boolean(
+                settings.autoMarketEnabled ||
+                settings.autoBuyFlipEnabled ||
+                settings.autoBuyMissingEnabled ||
+                settings.wishlistAutoBuyEnabled ||
+                settings.renaissanceFocusEnabled
+              )}
+              expanded={expandedModule === 'market'}
+              onToggleExpand={toggleModule}
+              onToggleSwitch={(v) =>
+                onUpdateSettings(
+                  v
+                    ? { autoMarketEnabled: true, autoBuyFlipEnabled: true }
+                    : {
+                        autoMarketEnabled: false,
+                        autoBuyFlipEnabled: false,
+                        autoBuyMissingEnabled: false,
+                        wishlistAutoBuyEnabled: false,
+                        renaissanceFocusEnabled: false
+                      }
+                )
+              }
             >
               <p className="module-card__desc">{t('modMarketDesc')}</p>
+              <div className="switch-row switch-row--compact">
+                <label htmlFor="sw-autobuy-flip" className="module-card__sublabel">Flips rentables (achat/revente sous la médiane)</label>
+                <input
+                  type="checkbox"
+                  role="switch"
+                  id="sw-autobuy-flip"
+                  className="switch switch--sm"
+                  checked={Boolean(settings.autoMarketEnabled ?? settings.autoBuyFlipEnabled)}
+                  onChange={(e) => onUpdateSettings({ autoMarketEnabled: e.target.checked, autoBuyFlipEnabled: e.target.checked })}
+                />
+              </div>
               <div className="switch-row switch-row--compact">
                 <label htmlFor="sw-autobuy-missing" className="module-card__sublabel">Acheter les cartes manquantes</label>
                 <input type="checkbox" role="switch" id="sw-autobuy-missing" className="switch switch--sm" checked={Boolean(settings.autoBuyMissingEnabled)} onChange={(e) => onUpdateSettings({ autoBuyMissingEnabled: e.target.checked })} />

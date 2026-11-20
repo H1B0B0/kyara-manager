@@ -4,8 +4,15 @@ import type { ExtensionCommand, CommandResponse } from '../../types/messages';
 
 let mutationPending = false;
 
+const READ_ONLY_COMMANDS = new Set([
+  'km:cmd:refresh',
+  'km:cmd:scan-deals',
+  'km:cmd:preview-batch-buy',
+  'km:cmd:scan-buy-orders'
+]);
+
 export function sendCommand(cmd: ExtensionCommand): Promise<CommandResponse> {
-  const mutation = cmd.type.startsWith('km:cmd:') && !['km:cmd:refresh', 'km:cmd:scan-deals'].includes(cmd.type);
+  const mutation = cmd.type.startsWith('km:cmd:') && !READ_ONLY_COMMANDS.has(cmd.type);
   if (mutation && mutationPending) return Promise.resolve({ ok: false, error: 'Une action est déjà en cours. Patiente jusqu’à sa confirmation.' });
   if (mutation) mutationPending = true;
   return new Promise<CommandResponse>((resolve) => {

@@ -63,7 +63,7 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
     const syncExpanded = () => {
-      setExpanded(document.documentElement.classList.contains('km-mode-full') && window.innerWidth >= 860);
+      if (isWideCockpit()) setExpanded(true);
     };
     window.addEventListener('resize', syncExpanded);
     const observer = typeof MutationObserver !== 'undefined' ? new MutationObserver(syncExpanded) : null;
@@ -119,17 +119,29 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
     };
   };
 
-  const overallPct = renaissance?.overallPct ?? 0;
+  const cellsByRarity = Object.fromEntries(RARITIES.map((r) => [r, getCellData(r)])) as Record<Rarity, RarityProgress>;
+  const focusRaritiesArr = RARITIES.filter((r) => focusSet.has(r));
+  const liveTotalTarget = focusRaritiesArr.reduce((sum, r) => sum + cellsByRarity[r].target, 0);
+  const liveTotalRem = focusRaritiesArr.reduce((sum, r) => sum + cellsByRarity[r].remainingForTarget, 0);
+  const overallPct = renaissance
+    ? liveTotalTarget > 0
+      ? Math.min(100, Math.round(((liveTotalTarget - liveTotalRem) / liveTotalTarget) * 1000) / 10)
+      : 100
+    : 0;
   const remainingCost = renaissance?.estimatedRemainingCost ?? 0;
   const boostersOpened = renaissance?.boostersOpened ?? 0;
   const boostersTarget = renaissance?.boostersTarget || 1500;
   const boostersPct = boostersTarget > 0 ? Math.min(100, Math.round((boostersOpened / boostersTarget) * 100)) : 100;
   const rebirthPayoutChakra = renaissance?.rebirthPayoutChakra ?? 0;
   const estimatedRenown = renaissance?.estimatedRenown ?? 0;
-  const conditionsMet = renaissance?.conditionsMet ?? 0;
-  const conditionsTotal = renaissance?.conditionsTotal ?? 8;
   const blockingListingsCount = renaissance?.blockingListingsCount ?? 0;
-  const focusRaritiesList = RARITIES.filter((r) => focusSet.has(r)).join(', ');
+  const conditionsTotal = renaissance?.conditionsTotal ?? 8;
+  const conditionsMet = renaissance
+    ? RARITIES.filter((r) => cellsByRarity[r].remainingForTarget === 0).length +
+      (boostersOpened >= boostersTarget ? 1 : 0) +
+      (blockingListingsCount === 0 ? 1 : 0)
+    : 0;
+  const focusRaritiesList = focusRaritiesArr.join(', ');
 
   const handleCancelBlocking = async () => {
     setCancelingBlocking(true);
@@ -172,7 +184,14 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
             type="checkbox" role="switch" id="sw-renaissance-focus" className="switch switch--sm"
             aria-label="Activer le Focus Renaissance"
             checked={Boolean(settings.renaissanceFocusEnabled)}
-            onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })}
+            onChange={(e) =>
+              onUpdateSettings({
+                renaissanceFocusEnabled: e.target.checked,
+                ...(e.target.checked && !settings.autoBuyMissingEnabled && !settings.autoMarketEnabled
+                  ? { autoBuyMissingEnabled: true }
+                  : {})
+              })
+            }
           />
           <button
             type="button" className="ren-collapse-btn" aria-expanded={expanded}
