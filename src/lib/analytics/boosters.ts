@@ -10,7 +10,8 @@ export function evaluateBoosterPack(
   rarityAvgPrices: Record<string, number> = {},
   config: any = {},
   me: any = null,
-  packState: any = null
+  packState: any = null,
+  settings: Partial<KyaraSettings> = DEFAULT_SETTINGS
 ): BoosterPack {
   const packId = String(pack?.id || pack?.packId || '');
   const name = String(pack?.name || packId || 'Booster');
@@ -78,16 +79,24 @@ export function evaluateBoosterPack(
     }
   }
 
+  const focusRarities: Rarity[] =
+    Array.isArray(settings?.renaissanceTargetRarities) && settings.renaissanceTargetRarities.length
+      ? settings.renaissanceTargetRarities
+      : ['C', 'U', 'R'];
+  const focusSet = new Set<Rarity>(focusRarities);
+
   const computeForSlots = (slots: any[]) => {
     if (!Array.isArray(slots) || !slots.length) {
-      return { expectedNew: 0, probAtLeastOneNew: 0, expectedValue: 0 };
+      return { expectedNew: 0, expectedRenaissance: 0, probAtLeastOneNew: 0, expectedValue: 0 };
     }
     let expectedNew = 0;
+    let expectedRenaissance = 0;
     let probNoNew = 1.0;
     let expectedValue = 0;
 
     for (const slot of slots) {
       let slotProbNew = 0;
+      let slotProbRenaissance = 0;
       let slotEv = 0;
       const pctMap = slot?.pct || {};
       for (const r of RARITIES) {
@@ -106,23 +115,30 @@ export function evaluateBoosterPack(
           pNewGivenRarity = featuredShare * pFeatNew + (1 - featuredShare) * pNonFeatNew;
         }
 
-        slotProbNew += rProb * pNewGivenRarity;
+        const contrib = rProb * pNewGivenRarity;
+        slotProbNew += contrib;
+        if (focusSet.has(r)) {
+          slotProbRenaissance += contrib;
+        }
         const avgVal = Number(rarityAvgPrices[r] ?? RARITY_PRICE_FLOORS[r] ?? 3);
         slotEv += rProb * avgVal;
       }
       expectedNew += slotProbNew;
+      expectedRenaissance += slotProbRenaissance;
       probNoNew *= Math.max(0, 1 - slotProbNew);
       expectedValue += slotEv;
     }
 
     return {
       expectedNew,
+      expectedRenaissance,
       probAtLeastOneNew: (1 - probNoNew) * 100,
       expectedValue
     };
   };
 
   let expectedNewCards = 0;
+  let expectedRenaissanceCards = 0;
   let probAtLeastOneNewPct = 0;
   let expectedChakraValue = 0;
 
@@ -134,11 +150,14 @@ export function evaluateBoosterPack(
     const goldenStats = goldenSlots ? computeForSlots(goldenSlots) : normalStats;
 
     expectedNewCards = Math.round((normalStats.expectedNew * (1 - gWeight) + goldenStats.expectedNew * gWeight) * 100) / 100;
+    expectedRenaissanceCards = Math.round((normalStats.expectedRenaissance * (1 - gWeight) + goldenStats.expectedRenaissance * gWeight) * 100) / 100;
     probAtLeastOneNewPct = Math.round(normalStats.probAtLeastOneNew * (1 - gWeight) + goldenStats.probAtLeastOneNew * gWeight);
     expectedChakraValue = Math.round(normalStats.expectedValue * (1 - gWeight) + goldenStats.expectedValue * gWeight);
   } else {
+    const missingFocus = focusRarities.reduce((sum, r) => sum + (missingByRarity[r] || 0), 0);
     probAtLeastOneNewPct = totalPool > 0 ? Math.round((1 - Math.pow(Math.max(0, totalPool - totalMissing) / totalPool, 5)) * 100) : 0;
     expectedNewCards = Math.round((5 * (totalMissing / Math.max(1, totalPool))) * 10) / 10;
+    expectedRenaissanceCards = Math.round((5 * (missingFocus / Math.max(1, totalPool))) * 100) / 100;
     expectedChakraValue = Math.round(15 + (100 - completionPct) * 0.5);
   }
 
@@ -175,6 +194,7 @@ export function evaluateBoosterPack(
     completionPct,
     probAtLeastOneNewPct,
     expectedNewCards,
+    expectedRenaissanceCards,
     expectedChakraValue,
     openableFreeCount,
     canOpenNow,
@@ -204,7 +224,9 @@ export function rankBoostersForCollection(
 
   if (isSimpleTest) {
     const effectiveOwned = packPoolsOrOwned instanceof Set ? packPoolsOrOwned : new Set(Array.isArray(packPoolsOrOwned) ? packPoolsOrOwned : []);
-    evaluated = (packs || []).map((p) => evaluateBoosterPack(p, effectiveOwned));
+    evaluated = (packs || []).map((p) =>
+      evaluateBoosterPack(p, effectiveOwned, null, null, rarityAvgPrices, config, me, packState, settings)
+    );
     userPity = typeof catalogById === 'number' ? catalogById : 0;
   } else {
     const packPools = packPoolsOrOwned || {};
@@ -218,7 +240,8 @@ export function rankBoostersForCollection(
         rarityAvgPrices,
         config,
         me,
-        packState
+        packState,
+        settings
       )
     );
   }
@@ -247,15 +270,28 @@ export function rankBoostersForCollection(
     return b.expectedChakraValue - a.expectedChakraValue;
   });
 
-  const activeRecommendedNew =
-    isPityNear && recommendedPity && settings?.autoOpenPitySniper !== false
-      ? recommendedPity
+  const sortedRenaissance = [...evaluated].sort((a, b) => {
+    if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
+    if (Number(b.usesFreePacks) !== Number(a.usesFreePacks)) return Number(b.usesFreePacks) - Number(a.usesFreePacks);
+    return (
+      (b.expectedRenaissanceCards ?? 0) - (a.expectedRenaissanceCards ?? 0) ||
+      b.expectedNewCards - a.expectedNewCards
+    );
+  });
+
+  const recommendedRenaissance = sortedRenaissance[0] || null;
+  const isPityOverride = Boolean(isPityNear && recommendedPity && settings?.autoOpenPitySniper !== false);
+  const activeRecommendedNew = isPityOverride
+    ? recommendedPity
+    : settings?.renaissanceFocusEnabled
+      ? recommendedRenaissance || sortedNew[0] || null
       : sortedNew[0] || null;
 
   return {
     recommendedNew: activeRecommendedNew,
     recommendedEv: sortedEv[0] || null,
     recommendedPity,
+    recommendedRenaissance,
     isPityNear,
     all: sortedNew
   };

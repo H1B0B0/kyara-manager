@@ -266,6 +266,16 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             <label htmlFor="sw-autobuy-missing" className="module-card__sublabel">{t('modBuyMissing')}</label>
             <input type="checkbox" role="switch" id="sw-autobuy-missing" className="switch switch--xs" checked={settings.wishlistAutoBuyEnabled} onChange={(e) => onUpdateSettings({ wishlistAutoBuyEnabled: e.target.checked })} />
           </div>
+          <div className="switch-row switch-row--compact">
+            <label htmlFor="sw-autopilot-renaissance" className="module-card__sublabel">
+              Focus Renaissance <span className="mono-stat">(Cibles : {(settings.renaissanceTargetRarities || ['C', 'U', 'R']).join(', ')})</span>
+            </label>
+            <input
+              type="checkbox" role="switch" id="sw-autopilot-renaissance" className="switch switch--sm"
+              checked={Boolean(settings.renaissanceFocusEnabled)}
+              onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })}
+            />
+          </div>
           <div className="module-card__footer">
             <span className="mono-stat">{dealsCount} deal(s) · {tradesCount} trade(s) rentables</span>
           </div>

@@ -1,6 +1,7 @@
 import type {
   DashboardState, DuplicateCard, MarketDeal, ProfitableTrade, BoosterRecommendations,
-  BoosterPack, WishlistItem, WishlistSuggestion, AutopilotPullRecord, Rarity, MarketListing
+  BoosterPack, WishlistItem, WishlistSuggestion, AutopilotPullRecord, Rarity, MarketListing,
+  RenaissanceSummary, RarityProgress, BatchMissingPreview, BatchMissingPreviewItem
 } from '../types/kyara';
 import { DEFAULT_SETTINGS, type KyaraSettings } from '../types/settings';
 import type { CumulativeStats, JournalItem } from '../types/journal';
@@ -57,10 +58,13 @@ const mockActiveListings: PreviewListing[] = [
 
 const mockDeals: MarketDeal[] = [
   { listingId: 'deal-1', characterId: 1002, name: 'Gojo Satoru', series: 'Jujutsu Kaisen', rarity: 'L', buyPrice: 45, refMedian: 78, targetResalePrice: 75, flipProfit: 25, roiPct: 55, isGoodFlip: true, isMissing: false, discountPct: 42, sales7d: 18 },
-  { listingId: 'deal-2', characterId: 1005, name: 'Tanjiro Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 12, refMedian: 22, targetResalePrice: 21, flipProfit: 7, roiPct: 58, isGoodFlip: true, isMissing: true, discountPct: 45, sales7d: 34 },
+  { listingId: 'deal-2', characterId: 1005, name: 'Tanjiro Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 5, refMedian: 11, targetResalePrice: 10, flipProfit: 3, roiPct: 60, isGoodFlip: true, isMissing: true, isRenaissanceNeed: true, discountPct: 55, sales7d: 34 },
   { listingId: 'deal-3', characterId: 2003, name: 'Mikasa Ackerman', series: 'Attack on Titan', rarity: 'E', buyPrice: 20, refMedian: 35, targetResalePrice: 33, flipProfit: 10, roiPct: 50, isGoodFlip: true, isMissing: true, discountPct: 43, sales7d: 16 },
   { listingId: 'deal-4', characterId: 2001, name: 'Roronoa Zoro', series: 'One Piece', rarity: 'L', buyPrice: 52, refMedian: 72, targetResalePrice: 70, flipProfit: 14, roiPct: 27, isGoodFlip: true, isMissing: false, discountPct: 28, sales7d: 22, isWishlistMatch: true },
-  { listingId: 'deal-5', characterId: 2004, name: 'Ryomen Sukuna', series: 'Jujutsu Kaisen', rarity: 'M', buyPrice: 140, refMedian: 210, targetResalePrice: 200, flipProfit: 46, roiPct: 33, isGoodFlip: true, isMissing: false, discountPct: 33, sales7d: 9 }
+  { listingId: 'deal-5', characterId: 2004, name: 'Ryomen Sukuna', series: 'Jujutsu Kaisen', rarity: 'M', buyPrice: 140, refMedian: 210, targetResalePrice: 200, flipProfit: 46, roiPct: 33, isGoodFlip: true, isMissing: false, discountPct: 33, sales7d: 9 },
+  { listingId: 'deal-6', characterId: 2005, name: 'Denji', series: 'Chainsaw Man', rarity: 'C', buyPrice: 2, refMedian: null, targetResalePrice: null, flipProfit: null, roiPct: null, isGoodFlip: false, isMissing: true, isRenaissanceNeed: true, discountPct: 33, sales7d: 24 },
+  { listingId: 'deal-7', characterId: 2006, name: 'Megumi Fushiguro', series: 'Jujutsu Kaisen', rarity: 'U', buyPrice: 3, refMedian: 6, targetResalePrice: 5, flipProfit: 1, roiPct: 33, isGoodFlip: false, isMissing: true, discountPct: 50, sales7d: 19 },
+  { listingId: 'deal-8', characterId: 2007, name: 'Nezuko Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 6, refMedian: 13, targetResalePrice: 12, flipProfit: 4, roiPct: 67, isGoodFlip: true, isMissing: true, isRenaissanceNeed: true, discountPct: 54, sales7d: 29 }
 ];
 
 const mockTrades: ProfitableTrade[] = [
@@ -70,14 +74,14 @@ const mockTrades: ProfitableTrade[] = [
 ];
 
 const packs: BoosterPack[] = [
-  { packId: 'p-shonen', name: 'Pack Shonen Legends', series: 'Shonen', totalPool: 64, totalMissing: 5, completionPct: 92, probAtLeastOneNewPct: 35, expectedNewCards: 0.4, expectedChakraValue: 34, canOpenNow: true, openableFreeCount: 7 },
-  { packId: 'p-mecha', name: 'Pack Mecha Horizon', series: 'Mecha', totalPool: 48, totalMissing: 14, completionPct: 70, probAtLeastOneNewPct: 88, expectedNewCards: 1.4, expectedChakraValue: 22, canOpenNow: true, openableFreeCount: 7 },
-  { packId: 'p-dark', name: 'Pack Dark Fantasy', series: 'Fantasy', totalPool: 56, totalMissing: 18, completionPct: 67, probAtLeastOneNewPct: 76, expectedNewCards: 1.1, expectedChakraValue: 26, canOpenNow: true, openableFreeCount: 7 },
-  { packId: 'p-isekai', name: 'Pack Isekai Reborn', series: 'Isekai', totalPool: 40, totalMissing: 8, completionPct: 80, probAtLeastOneNewPct: 45, expectedNewCards: 0.6, expectedChakraValue: 20, canOpenNow: true, openableFreeCount: 7 }
+  { packId: 'p-shonen', name: 'Pack Shonen Legends', series: 'Shonen', totalPool: 64, totalMissing: 5, completionPct: 92, probAtLeastOneNewPct: 35, expectedNewCards: 0.4, expectedRenaissanceCards: 1.1, expectedChakraValue: 34, canOpenNow: true, openableFreeCount: 7 },
+  { packId: 'p-mecha', name: 'Pack Mecha Horizon', series: 'Mecha', totalPool: 48, totalMissing: 14, completionPct: 70, probAtLeastOneNewPct: 88, expectedNewCards: 1.4, expectedRenaissanceCards: 2.6, expectedChakraValue: 22, canOpenNow: true, openableFreeCount: 7 },
+  { packId: 'p-dark', name: 'Pack Dark Fantasy', series: 'Fantasy', totalPool: 56, totalMissing: 18, completionPct: 67, probAtLeastOneNewPct: 76, expectedNewCards: 1.1, expectedRenaissanceCards: 1.9, expectedChakraValue: 26, canOpenNow: true, openableFreeCount: 7 },
+  { packId: 'p-isekai', name: 'Pack Isekai Reborn', series: 'Isekai', totalPool: 40, totalMissing: 8, completionPct: 80, probAtLeastOneNewPct: 45, expectedNewCards: 0.6, expectedRenaissanceCards: 1.4, expectedChakraValue: 20, canOpenNow: true, openableFreeCount: 7 }
 ];
 
 const mockBoosters: BoosterRecommendations & { boosterTargets: BoosterPack[] } = {
-  recommendedNew: packs[1], recommendedEv: packs[0], recommendedPity: packs[2], isPityNear: true, all: packs, boosterTargets: packs
+  recommendedNew: packs[1], recommendedEv: packs[0], recommendedPity: packs[2], recommendedRenaissance: packs[1], isPityNear: true, all: packs, boosterTargets: packs
 };
 
 const mockWishlist: WishlistItem[] = [
@@ -112,19 +116,54 @@ const mockJournal: JournalItem[] = [
   { type: 'afk', message: 'Anti-AFK : Présence confirmée automatiquement', ts: now - 7200000 }
 ];
 
-const mockSettings: KyaraSettings & { sellPace?: string } = { ...DEFAULT_SETTINGS, autoSellMode: 'adaptive', sellPace: 'adaptive', masterEnabled: true };
+const REN_COST: Record<Rarity, number> = { C: 2, U: 3, R: 5, E: 15, L: 65, M: 190 };
+const REN_BASE: Record<Rarity, { owned: number; total: number; target: number }> = {
+  C: { owned: 1120, total: 1400, target: 1400 }, U: { owned: 890, total: 1100, target: 1100 },
+  R: { owned: 410, total: 600, target: 600 }, E: { owned: 210, total: 300, target: 300 },
+  L: { owned: 62, total: 90, target: 90 }, M: { owned: 14, total: 25, target: 25 }
+};
+
+function buildRenaissance(ownedMap: Record<Rarity, number>, targetOverrides: Partial<Record<Rarity, number>>, focusRarities: Rarity[], enabled: boolean): RenaissanceSummary {
+  const byRarity = {} as Record<Rarity, RarityProgress>;
+  let totalOwned = 0; let totalTarget = 0; let estimatedRemainingCost = 0;
+  for (const r of ['C', 'U', 'R', 'E', 'L', 'M'] as Rarity[]) {
+    const owned = Math.min(REN_BASE[r].total, ownedMap[r] ?? REN_BASE[r].owned);
+    const total = REN_BASE[r].total;
+    const target = targetOverrides[r] ?? REN_BASE[r].target;
+    const remainingForTarget = Math.max(0, target - owned);
+    const estCost = remainingForTarget * REN_COST[r];
+    byRarity[r] = {
+      rarity: r, owned, total, missing: Math.max(0, total - owned), target, remainingForTarget,
+      pct: Math.round((owned / total) * 100), targetPct: target > 0 ? Math.min(100, Math.round((owned / target) * 100)) : 100, estimatedCostChakra: estCost
+    };
+    totalOwned += Math.min(owned, target); totalTarget += target; estimatedRemainingCost += estCost;
+  }
+  return {
+    enabled, focusRarities, totalOwned, totalTarget,
+    overallPct: totalTarget > 0 ? Math.round((totalOwned / totalTarget) * 100) : 100, ready: totalOwned >= totalTarget, byRarity,
+    priorityRarities: [...focusRarities].sort((a, b) => byRarity[b].remainingForTarget - byRarity[a].remainingForTarget), estimatedRemainingCost
+  };
+}
+
+const mockSettings: KyaraSettings & { sellPace?: string } = {
+  ...DEFAULT_SETTINGS, autoSellMode: 'adaptive', sellPace: 'adaptive', masterEnabled: true,
+  renaissanceFocusEnabled: true, renaissanceTargetRarities: ['C', 'R']
+};
+
+const renOwnedState: Record<Rarity, number> = { C: 1120, U: 890, R: 410, E: 210, L: 62, M: 14 };
+const mockRenaissance = buildRenaissance(renOwnedState, {}, ['C', 'R'], true);
 
 const mockDashboard: DashboardState = {
   authenticated: true, me: mockMe, collectionStats: mockCollectionStats, duplicates: mockDuplicates, activeListings: mockActiveListings,
   deals: mockDeals, trades: mockTrades, boosters: mockBoosters, wishlist: mockWishlist, wishlistSuggestions: mockWishlistSuggestions,
-  bestPulls: mockBestPulls, pinnedCards: [1001], updatedAt: now
+  bestPulls: mockBestPulls, pinnedCards: [1001], renaissance: mockRenaissance, updatedAt: now
 };
 
 const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.0.1' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.1.0' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -142,6 +181,37 @@ function notifyStorage(patch: Record<string, any>) {
     if (k === 'kmBestPulls' || k === 'km:best_pulls') { store.kmBestPulls = v; store['km:best_pulls'] = v; }
   }
   storageListeners.forEach((fn) => { try { fn(changes, 'local'); } catch (e) { console.error(e); } });
+}
+
+let lastBatchPreview: BatchMissingPreview | null = null;
+const BATCH_NAMES = ['Asta', 'Yuno', 'Nobara Kugisaki', 'Megumi', 'Power', 'Aki Hayakawa', 'Tomioka Giyu', 'Shinobu Kocho', 'Kaguya Shinomiya', 'Violet Evergarden', 'Spike Spiegel', 'Thorfinn', 'Frieren', 'Fern'];
+const BATCH_SERIES = ['Black Clover', 'Jujutsu Kaisen', 'Chainsaw Man', 'Demon Slayer', 'Frieren', 'Vinland Saga', 'One Piece', 'Bleach'];
+
+function generateBatchPreview(cmd: any): BatchMissingPreview {
+  const rarity: Rarity | 'RENAISSANCE' = cmd?.rarity || 'RENAISSANCE';
+  const maxUnitPrice = Math.max(1, Number(cmd?.maxUnitPrice) || 6);
+  const requestedQty = Math.max(1, Math.min(150, Number(cmd?.qty) || 25));
+  const focus: Rarity[] = (store.settings?.renaissanceTargetRarities?.length ? store.settings.renaissanceTargetRarities : ['C', 'R']) as Rarity[];
+  const pool: Rarity[] = rarity === 'RENAISSANCE' ? focus : [rarity];
+  const spendable = Math.max(0, (store.kmDashboard.me?.chakra || 0) - (store.settings?.autoBuyMinChakraReserve ?? 200));
+  const budgetCap = cmd?.maxTotalBudget ? Math.min(spendable, Number(cmd.maxTotalBudget)) : spendable;
+  const items: BatchMissingPreviewItem[] = [];
+  let totalCost = 0;
+  for (let i = 0; i < requestedQty; i++) {
+    const r = pool[i % pool.length];
+    const price = Math.max(1, Math.min(maxUnitPrice, Math.max(1, REN_COST[r] - (i % 2) + (i % 3))));
+    if (price > maxUnitPrice || totalCost + price > budgetCap) continue;
+    items.push({
+      listingId: `batch-${Date.now()}-${i}`, characterId: 5000 + i,
+      name: `${BATCH_NAMES[i % BATCH_NAMES.length]} #${i + 1}`, series: BATCH_SERIES[i % BATCH_SERIES.length],
+      rarity: r, price, median7d: Math.round(price * 1.4)
+    });
+    totalCost += price;
+  }
+  return {
+    rarity, maxUnitPrice, requestedQty, items, totalCost,
+    avgPrice: items.length ? Number((totalCost / items.length).toFixed(1)) : 0, totalFound: items.length
+  };
 }
 
 function handleMessage(cmd: any): any {
@@ -221,9 +291,30 @@ function handleMessage(cmd: any): any {
     notifyStorage({ kmWishlist: wishlist, kmDashboard: { ...store.kmDashboard, wishlist } });
     return { ok: true, wishlist };
   }
-  if (type === 'km:save-settings') { notifyStorage({ settings: { ...store.settings, ...cmd.settings } }); return { ok: true }; }
+  if (type === 'km:cmd:preview-batch-buy') {
+    lastBatchPreview = generateBatchPreview(cmd);
+    return { ok: true, preview: lastBatchPreview };
+  }
+  if (type === 'km:cmd:execute-batch-buy') {
+    const preview = lastBatchPreview || generateBatchPreview(cmd);
+    const wantedIds = Array.isArray(cmd?.listingIds) && cmd.listingIds.length ? new Set(cmd.listingIds) : null;
+    const bought = wantedIds ? preview.items.filter((i) => wantedIds.has(i.listingId)) : preview.items;
+    const totalSpent = bought.reduce((sum, i) => sum + i.price, 0);
+    for (const item of bought) renOwnedState[item.rarity] = Math.min(REN_BASE[item.rarity].total, renOwnedState[item.rarity] + 1);
+    const ren = buildRenaissance(renOwnedState, store.settings.renaissanceTargets || {}, store.settings.renaissanceTargetRarities || ['C', 'R'], Boolean(store.settings.renaissanceFocusEnabled));
+    const journal = [{ type: 'market' as const, message: `Achat par lot : ${bought.length} carte(s) manquante(s) (-${totalSpent} ◆)`, ts: Date.now() }, ...store.kmJournal];
+    notifyStorage({ kmDashboard: { ...store.kmDashboard, me: { ...store.kmDashboard.me, chakra: Math.max(0, store.kmDashboard.me.chakra - totalSpent) }, renaissance: ren }, kmJournal: journal });
+    lastBatchPreview = null;
+    return { ok: true, boughtCount: bought.length, totalSpent };
+  }
+  if (type === 'km:save-settings') {
+    const nextSettings = { ...store.settings, ...cmd.settings };
+    const ren = buildRenaissance(renOwnedState, nextSettings.renaissanceTargets || {}, nextSettings.renaissanceTargetRarities || ['C', 'R'], Boolean(nextSettings.renaissanceFocusEnabled));
+    notifyStorage({ settings: nextSettings, kmDashboard: { ...store.kmDashboard, renaissance: ren } });
+    return { ok: true };
+  }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
-  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.0.1' } }); return { ok: true }; }
+  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.1.0' } }); return { ok: true }; }
   return { ok: true, data: {} };
 }
 
@@ -231,13 +322,9 @@ function installChromeMock() {
   (globalThis as any).chrome = {
     runtime: {
       lastError: null,
-      getManifest: () => ({ version: '2.0.1', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }),
+      getManifest: () => ({ version: '2.1.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }),
       getURL: (p: string) => p,
-      sendMessage: (cmd: any, cb?: (res: any) => void) => {
-        const res = handleMessage(cmd);
-        if (cb) setTimeout(() => cb(res), 15);
-        return Promise.resolve(res);
-      },
+      sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },
     tabs: { create: async (opts: { url: string }) => { window.open(opts.url, '_blank'); } },
@@ -253,12 +340,9 @@ function installChromeMock() {
         },
         set: (items: Record<string, any>, cb?: () => void) => { notifyStorage(items); if (cb) cb(); return Promise.resolve(); },
         remove: (keys: string | string[], cb?: () => void) => {
-          const arr = Array.isArray(keys) ? keys : [keys];
           const changes: Record<string, chrome.storage.StorageChange> = {};
-          arr.forEach((k) => { changes[k] = { oldValue: store[k], newValue: undefined }; delete store[k]; });
-          storageListeners.forEach((fn) => fn(changes, 'local'));
-          if (cb) cb();
-          return Promise.resolve();
+          (Array.isArray(keys) ? keys : [keys]).forEach((k) => { changes[k] = { oldValue: store[k], newValue: undefined }; delete store[k]; });
+          storageListeners.forEach((fn) => fn(changes, 'local')); if (cb) cb(); return Promise.resolve();
         }
       },
       onChanged: { addListener: (fn: any) => storageListeners.add(fn), removeListener: (fn: any) => storageListeners.delete(fn) }
@@ -281,12 +365,8 @@ function mountPreviewStudioBar() {
   const applyWidth = (w: '365px' | '440px' | '100%') => {
     const root = document.getElementById('root');
     const isFull = w === '100%';
-    if (root) {
-      root.style.width = w; root.style.maxWidth = w; root.style.margin = isFull ? '0' : '0 auto';
-      root.style.boxShadow = isFull ? 'none' : '0 0 35px rgba(0,0,0,0.55)';
-    }
-    if (isFull) document.documentElement.classList.add('km-mode-full');
-    else document.documentElement.classList.remove('km-mode-full');
+    if (root) { root.style.width = w; root.style.maxWidth = w; root.style.margin = isFull ? '0' : '0 auto'; root.style.boxShadow = isFull ? 'none' : '0 0 35px rgba(0,0,0,0.55)'; }
+    document.documentElement.classList.toggle('km-mode-full', isFull);
     btn365.style.cssText = btnStyle(w === '365px'); btn440.style.cssText = btnStyle(w === '440px'); btnFull.style.cssText = btnStyle(w === '100%');
   };
 
@@ -300,47 +380,34 @@ function mountPreviewStudioBar() {
   updateLiveBtn(false);
 
   const simulateStep = () => {
-    liveIndex = (liveIndex + 1) % 4;
-    const nowTs = Date.now();
+    liveIndex = (liveIndex + 1) % 4; const nowTs = Date.now();
     if (liveIndex === 0) {
       const me = { ...store.kmDashboard.me, chakra: store.kmDashboard.me.chakra + 28 };
       const stats = { ...store.kmCumulativeStats, chakraFromSales: store.kmCumulativeStats.chakraFromSales + 28, cardsSold: store.kmCumulativeStats.cardsSold + 1 };
-      const journal = [{ type: 'sell' as const, message: 'Vente confirmée en direct : Zero Two pour 28 ◆ (+25 ◆ net)', ts: nowTs }, ...store.kmJournal.slice(0, 19)];
-      notifyStorage({ kmDashboard: { ...store.kmDashboard, me }, kmCumulativeStats: stats, kmJournal: journal });
+      notifyStorage({ kmDashboard: { ...store.kmDashboard, me }, kmCumulativeStats: stats, kmJournal: [{ type: 'sell' as const, message: 'Vente confirmée en direct : Zero Two pour 28 ◆ (+25 ◆ net)', ts: nowTs }, ...store.kmJournal.slice(0, 19)] });
     } else if (liveIndex === 1) {
       const me = { ...store.kmDashboard.me, pity: (store.kmDashboard.me.pity + 1) % 250 };
       const pull: AutopilotPullRecord = { characterId: 1002, name: 'Gojo Satoru', rarity: 'L', series: 'Jujutsu Kaisen', packName: 'Pack Shonen Legends', pulledAt: nowTs, isNew: false, medianPrice: 85, image: cardSvg('#ffaa00', 'L') };
       const bestPulls = [pull, ...store.kmBestPulls.slice(0, 9)];
-      const journal = [{ type: 'booster' as const, message: 'Tirage live : Gojo Satoru (Légendaire) tiré du Pack Shonen !', ts: nowTs }, ...store.kmJournal.slice(0, 19)];
-      notifyStorage({ kmDashboard: { ...store.kmDashboard, me, bestPulls }, kmBestPulls: bestPulls, kmJournal: journal });
+      notifyStorage({ kmDashboard: { ...store.kmDashboard, me, bestPulls }, kmBestPulls: bestPulls, kmJournal: [{ type: 'booster' as const, message: 'Tirage live : Gojo Satoru (Légendaire) tiré du Pack Shonen !', ts: nowTs }, ...store.kmJournal.slice(0, 19)] });
     } else if (liveIndex === 2) {
       const me = { ...store.kmDashboard.me, chakra: store.kmDashboard.me.chakra + 16 };
       const stats = { ...store.kmCumulativeStats, chakraFromRecycle: store.kmCumulativeStats.chakraFromRecycle + 16, cardsRecycled: store.kmCumulativeStats.cardsRecycled + 4 };
-      const journal = [{ type: 'recycle' as const, message: 'Recyclage automatique : 4 doublons communs (+16 ◆)', ts: nowTs }, ...store.kmJournal.slice(0, 19)];
-      notifyStorage({ kmDashboard: { ...store.kmDashboard, me }, kmCumulativeStats: stats, kmJournal: journal });
+      notifyStorage({ kmDashboard: { ...store.kmDashboard, me }, kmCumulativeStats: stats, kmJournal: [{ type: 'recycle' as const, message: 'Recyclage automatique : 4 doublons communs (+16 ◆)', ts: nowTs }, ...store.kmJournal.slice(0, 19)] });
     } else {
-      const journal = [{ type: 'market' as const, message: 'Marché : Nouvelle offre détectée sur Mikasa Ackerman à 20 ◆ (-43%)', ts: nowTs }, ...store.kmJournal.slice(0, 19)];
-      notifyStorage({ kmJournal: journal });
+      notifyStorage({ kmJournal: [{ type: 'market' as const, message: 'Marché : Nouvelle offre détectée sur Mikasa Ackerman à 20 ◆ (-43%)', ts: nowTs }, ...store.kmJournal.slice(0, 19)] });
     }
   };
-
-  btnLive.onclick = () => {
-    if (simTimer) { clearInterval(simTimer); simTimer = null; updateLiveBtn(false); }
-    else { updateLiveBtn(true); simulateStep(); simTimer = setInterval(simulateStep, 4000); }
-  };
-
-  const sep = document.createElement('span');
-  sep.style.cssText = 'width:1px;height:14px;background:rgba(255,255,255,0.15);margin:0 2px;';
-  bar.appendChild(btn365); bar.appendChild(btn440); bar.appendChild(btnFull); bar.appendChild(sep); bar.appendChild(btnLive);
-  document.body.appendChild(bar);
+  btnLive.onclick = () => { if (simTimer) { clearInterval(simTimer); simTimer = null; updateLiveBtn(false); } else { updateLiveBtn(true); simulateStep(); simTimer = setInterval(simulateStep, 4000); } };
+  const sep = document.createElement('span'); sep.style.cssText = 'width:1px;height:14px;background:rgba(255,255,255,0.15);margin:0 2px;';
+  bar.append(btn365, btn440, btnFull, sep, btnLive); document.body.appendChild(bar);
   applyWidth(window.location.search.includes('mode=full') ? '100%' : '365px');
 }
 
 export function initDevPreviewIfNeeded(): void {
   if (typeof globalThis.chrome !== 'undefined' && globalThis.chrome?.storage?.local) return;
   installChromeMock();
-  if (typeof document !== 'undefined') {
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountPreviewStudioBar);
-    else mountPreviewStudioBar();
-  }
+  if (typeof document === 'undefined') return;
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountPreviewStudioBar);
+  else mountPreviewStudioBar();
 }

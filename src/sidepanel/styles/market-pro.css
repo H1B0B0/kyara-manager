@@ -1,0 +1,162 @@
+/* ==========================================================================
+   Market Pro, Renaissance Focus & Batch Buy Styles (365px-safe + @container)
+   ========================================================================== */
+.market-pro-container { container-type: inline-size; container-name: market-pro; min-width: 0; }
+
+/* Sub-tab switcher (single-row 365px safe, accessible underline via ::after) */
+.market-subtabs {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+  padding: 3px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 9px;
+}
+.market-subtab {
+  position: relative; appearance: none; border: 1px solid transparent; background: transparent;
+  color: var(--mut); font-family: var(--body); font-size: 10.5px; font-weight: 600;
+  padding: 6px 4px 7px; border-radius: 6px; cursor: pointer; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: color 0.15s ease, background-color 0.15s ease;
+}
+.market-subtab:hover { color: var(--fg); background: rgba(255, 255, 255, 0.04); }
+.market-subtab[aria-selected="true"], .market-subtab.is-active {
+  background: var(--raise); color: var(--fg); border-color: var(--line2);
+}
+.market-subtab[aria-selected="true"]::after {
+  content: ""; position: absolute; inset: auto 18% 0; border-block-end: 2px solid var(--acc);
+}
+
+/* Renaissance Focus Panel */
+.renaissance-panel {
+  container-type: inline-size; border-color: var(--line2);
+  background: linear-gradient(155deg, rgba(255, 77, 46, 0.05) 0%, var(--panel) 55%);
+}
+.renaissance-panel.is-enabled { border-color: rgba(255, 77, 46, 0.42); }
+.ren-header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ren-header__left { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.ren-header__titles { min-width: 0; }
+.ren-header__sub {
+  margin: 1px 0 0; font-size: 10.5px; color: var(--fg2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ren-header__controls { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
+.ren-collapse-btn {
+  appearance: none; background: var(--raise); border: 1px solid var(--line2); color: var(--fg2);
+  width: 24px; height: 24px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; cursor: pointer;
+}
+.ren-collapse-btn:hover { color: var(--fg); border-color: var(--line3); }
+.ren-body { margin-top: 9px; display: flex; flex-direction: column; gap: 8px; }
+.renaissance-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+
+.ren-cell {
+  --ren-color: var(--rarity-C);
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 6px 7px;
+  display: flex; flex-direction: column; gap: 5px; min-width: 0;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.ren-cell[data-rarity="C"] { --ren-color: var(--rarity-C); }
+.ren-cell[data-rarity="U"] { --ren-color: var(--rarity-U); }
+.ren-cell[data-rarity="R"] { --ren-color: var(--rarity-R); }
+.ren-cell[data-rarity="E"] { --ren-color: var(--rarity-E); }
+.ren-cell[data-rarity="L"] { --ren-color: var(--rarity-L); }
+.ren-cell[data-rarity="M"] { --ren-color: var(--rarity-M); }
+.ren-cell.is-focused {
+  border-color: color-mix(in srgb, var(--ren-color) 48%, transparent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--ren-color) 16%, transparent);
+}
+.ren-cell__top { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-width: 0; }
+.ren-cell__left { display: flex; align-items: center; gap: 3px; min-width: 0; }
+.ren-cell__left .rarity-pill { margin-right: 0; }
+.ren-focus-pill {
+  appearance: none; background: transparent; border: 1px solid var(--line2); color: var(--mut);
+  font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 4px; cursor: pointer; line-height: 1.2;
+}
+.ren-focus-pill.is-active {
+  color: var(--ren-color);
+  border-color: color-mix(in srgb, var(--ren-color) 55%, transparent);
+  background: color-mix(in srgb, var(--ren-color) 14%, transparent);
+}
+.ren-cell__ratio { font-size: 10px; color: var(--fg2); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.ren-progress-track { height: 3px; width: 100%; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.ren-progress-fill { height: 100%; border-radius: 999px; background: var(--ren-color); transition: width 0.25s ease; }
+.ren-cell__bottom { display: flex; align-items: center; justify-content: space-between; gap: 4px; min-height: 19px; }
+.ren-cell__rem { font-size: 10px; color: var(--mut); }
+.ren-cell__done { font-size: 10px; font-weight: 700; color: var(--ok); }
+.ren-lot-btn { padding: 1px 7px; font-size: 10px; border-color: var(--line3); }
+
+.ren-footer { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; border-top: 1px dashed var(--line); }
+.ren-edit-toggle {
+  appearance: none; background: transparent; border: none; color: var(--fg2); font-family: var(--body);
+  font-size: 11px; font-weight: 600; display: inline-flex; align-items: center; gap: 5px; padding: 2px 0; cursor: pointer;
+}
+.ren-edit-toggle:hover { color: var(--fg); }
+.ren-focus-summary { font-size: 10px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ren-targets-editor { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding-top: 4px; }
+.ren-target-field {
+  display: flex; align-items: center; gap: 5px; background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; min-width: 0;
+}
+.ren-target-field .rarity-pill { margin-right: 0; flex-shrink: 0; }
+.ren-target-input { width: 100%; min-width: 0; padding: 3px 5px; font-size: 11px; }
+
+/* Market Filters & Badges */
+.market-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.market-filter-bar .input--search { flex: 1 1 130px; min-width: 0; }
+.market-sort-select { flex: 0 1 135px; min-width: 0; font-size: 11px; padding: 5px 6px; }
+.market-chip-row { margin-top: 6px; gap: 4px; }
+.capsule-pill--xs { padding: 2px 8px; font-size: 10px; }
+.renaissance-badge {
+  display: inline-flex; align-items: center; font-family: var(--mono); font-size: 9.5px; font-weight: 700;
+  padding: 2px 6px; border-radius: 6px; background: var(--acc-soft); color: var(--acc2);
+  border: 1px solid rgba(255, 77, 46, 0.45); white-space: nowrap;
+}
+
+/* Batch Buy Panel */
+.batch-buy-panel { container-type: inline-size; display: flex; flex-direction: column; gap: 10px; }
+.batch-section { display: flex; flex-direction: column; gap: 5px; }
+.batch-label { font-size: 11px; font-weight: 600; color: var(--fg2); }
+.batch-pills { margin-top: 0; gap: 5px; }
+.batch-pills--inline { flex-wrap: nowrap; }
+.batch-qty-row { display: flex; flex-direction: column; gap: 5px; }
+.batch-qty-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.batch-qty-input { width: 68px; padding: 4px 6px; font-size: 11.5px; }
+.batch-inputs-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.batch-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.batch-field__input { width: 100%; min-width: 0; text-align: right; }
+.batch-budget-info {
+  font-size: 10.5px; color: var(--mut); background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 6px 8px;
+}
+.batch-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+.batch-actions .btn { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.batch-preview-box { border: 1px solid var(--line2); background: var(--bg2); border-radius: 9px; overflow: hidden; }
+.batch-preview-summary {
+  display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px;
+  padding: 7px 9px; font-size: 10.5px; color: var(--fg2); background: var(--raise); border-bottom: 1px solid var(--line);
+}
+.batch-preview-empty { margin: 0; padding: 12px; font-size: 11px; color: var(--mut); text-align: center; }
+.batch-preview-list { max-height: 220px; overflow-y: auto; scrollbar-width: thin; }
+.batch-preview-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 9px; border-bottom: 1px solid var(--line);
+}
+.batch-preview-row:last-child { border-bottom: none; }
+.batch-preview-row__main { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.batch-preview-row__main .rarity-pill { margin-right: 0; flex-shrink: 0; }
+.batch-preview-row__text { display: flex; flex-direction: column; min-width: 0; }
+.batch-preview-row__name { font-size: 11.5px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batch-preview-row__series { font-size: 10px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.batch-preview-row__price { font-size: 11px; font-weight: 700; color: var(--gold); flex-shrink: 0; }
+
+/* Boosters Renaissance Priority Card */
+.card--renaissance-pack {
+  border-color: rgba(255, 77, 46, 0.45);
+  background: linear-gradient(145deg, rgba(255, 77, 46, 0.08), var(--panel));
+}
+
+/* Container Responsive Upgrades (>= 420px / Fullscreen) */
+@container (min-width: 420px) {
+  .renaissance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .market-subtab { font-size: 11.5px; padding: 7px 8px; }
+}
+@container market-pro (min-width: 640px) {
+  .ren-targets-editor { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}

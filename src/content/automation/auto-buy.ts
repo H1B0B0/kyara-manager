@@ -3,6 +3,7 @@ import { state } from '../state';
 import { appendJournal } from '../journal';
 import { notifyDesktop } from '../utils';
 import { scanMarketDealsInternal } from '../scanner';
+import type { Rarity } from '../../types/kyara';
 
 export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: number; dealsFound?: number }> {
   if (
@@ -30,8 +31,18 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
 
   for (const deal of deals) {
     const shouldBuyFlip = state.currentSettings.autoBuyFlipEnabled && deal.isGoodFlip;
+    const renMaxPrice =
+      state.currentSettings.batchBuyDefaultMaxPrice?.[deal.rarity as Rarity] ??
+      state.currentSettings.autoBuyMissingMaxPrice ??
+      25;
+    const isRenaissanceBuy =
+      Boolean(state.currentSettings.renaissanceFocusEnabled) &&
+      Boolean(deal.isRenaissanceNeed) &&
+      deal.buyPrice <= renMaxPrice;
     const shouldBuyMissing =
-      state.currentSettings.autoBuyMissingEnabled && deal.isGoodMissingBuy && !ownedSet.has(deal.characterId);
+      Boolean(state.currentSettings.autoBuyMissingEnabled) &&
+      !ownedSet.has(deal.characterId) &&
+      (Boolean(deal.isGoodMissingBuy) || isRenaissanceBuy);
     const shouldBuyWish = state.currentSettings.wishlistAutoBuyEnabled && deal.autoBuyWish && !ownedSet.has(deal.characterId);
     if (!shouldBuyFlip && !shouldBuyMissing && !shouldBuyWish) continue;
 

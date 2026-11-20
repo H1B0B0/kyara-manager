@@ -7,6 +7,46 @@ import { navigateSpaTo, waitForElement } from './spa-navigator';
 import { refreshDashboardSnapshot } from '../snapshot';
 import { RARITIES } from '../../lib/analytics/constants';
 
+async function recordOpenedPulls(pulledCards: any[], openedCount: number, packName: string, liveMode: boolean): Promise<number> {
+  const newCards = pulledCards.filter((c: any) => c.isNew);
+  const highRarity = pulledCards.filter((c: any) => c.rarity === 'L' || c.rarity === 'M');
+  const raritySummary = RARITIES.map((r) => {
+    const n = pulledCards.filter((c: any) => c.rarity === r).length;
+    return n > 0 ? `${r}×${n}` : null;
+  }).filter(Boolean).join(' ');
+
+  await recordCumulativeMetric({
+    boostersOpenedCount: openedCount,
+    newCardsPulledCount: newCards.length,
+    mythicsPulledCount: pulledCards.filter((c: any) => c.rarity === 'M').length,
+    legendariesPulledCount: pulledCards.filter((c: any) => c.rarity === 'L').length
+  });
+
+  const msg = liveMode
+    ? `Booster « ${packName} » ouvert en live (×${openedCount}) : ${newCards.length} nouveau(x) perso(s)${raritySummary ? ` (${raritySummary})` : ''}`
+    : `Booster « ${packName} » ×${openedCount} ouvert : ${newCards.length} nouveau(x) perso(s) (${raritySummary})`;
+  await appendJournal('open', msg);
+
+  if (highRarity.length > 0) {
+    const names = highRarity.map((c: any) => `${c.name} [${c.rarity}]`).join(', ');
+    notifyDesktop('Tirage Légendaire / Mythique !', `Obtenu dans ${packName} : ${names}`, 'km-pull');
+  }
+  await recordBestPulls(pulledCards, packName);
+  return newCards.length;
+}
+
+function isFreeOpenButton(btn: HTMLButtonElement): boolean {
+  const txt = (btn.innerText || '').trim();
+  const html = btn.innerHTML || '';
+  const isFree =
+    /Free|Gratuit|Gratis/i.test(txt) ||
+    /Free|Gratuit|Gratis/i.test(html) ||
+    btn.classList.contains('free') ||
+    btn.classList.contains('btn-free');
+  const hasChakra = /◆|Chakra/i.test(txt) || /◆|Chakra/i.test(html);
+  return isFree && !hasChakra;
+}
+
 export async function fallbackApiOpenBooster(packId: string, packName: string, countToOpen = 1): Promise<{ openedCount: number; newCardsCount: number }> {
   if (state.currentSettings.dryRun) {
     await appendJournal('open', `[SIMULATION] Ouvrirait ${countToOpen}× « ${packName} »`);
@@ -16,61 +56,19 @@ export async function fallbackApiOpenBooster(packId: string, packName: string, c
   let results: any[] = [];
   if (countToOpen <= 1) {
     const single = await kyaraApi(`/packs/${encodeURIComponent(packId)}/open`, {
-      method: 'POST',
-      withPass: true,
-      priority: 'high',
-      extraHeaders: { 'x-request-id': reqId },
-      body: { maxChakra: 0 }
+      method: 'POST', withPass: true, priority: 'high', extraHeaders: { 'x-request-id': reqId }, body: { maxChakra: 0 }
     });
-    if (single) {
-      results = [single];
-
-    }
+    if (single) results = [single];
   } else {
     const many = await kyaraApi(`/packs/${encodeURIComponent(packId)}/open-many`, {
-      method: 'POST',
-      withPass: true,
-      priority: 'high',
-      extraHeaders: { 'x-request-id': reqId },
-      body: { count: Math.min(10, countToOpen), maxChakra: 0 }
+      method: 'POST', withPass: true, priority: 'high', extraHeaders: { 'x-request-id': reqId }, body: { count: Math.min(10, countToOpen), maxChakra: 0 }
     });
     results = Array.isArray(many?.results) ? many.results : [];
-
   }
 
   const pulledCards = results.flatMap((r: any) => r.cards || []);
-  const newCards = pulledCards.filter((c: any) => c.isNew);
-  const highRarity = pulledCards.filter((c: any) => c.rarity === 'L' || c.rarity === 'M');
-
-  if (results.length > 0) {
-    await recordCumulativeMetric({
-      boostersOpenedCount: results.length,
-      newCardsPulledCount: newCards.length,
-      mythicsPulledCount: pulledCards.filter((c: any) => c.rarity === 'M').length,
-      legendariesPulledCount: pulledCards.filter((c: any) => c.rarity === 'L').length
-    });
-
-    const raritySummary = RARITIES.map((r) => {
-      const n = pulledCards.filter((c: any) => c.rarity === r).length;
-      return n > 0 ? `${r}×${n}` : null;
-    })
-      .filter(Boolean)
-      .join(' ');
-
-    await appendJournal(
-      'open',
-      `Booster « ${packName} » ×${results.length} ouvert : ${newCards.length} nouveau(x) perso(s) (${raritySummary})`
-    );
-
-    if (highRarity.length > 0) {
-      const names = highRarity.map((c: any) => `${c.name} [${c.rarity}]`).join(', ');
-      notifyDesktop('Tirage Légendaire / Mythique !', `Obtenu dans ${packName} : ${names}`, 'km-pull');
-    }
-
-    await recordBestPulls(pulledCards, packName);
-  }
-
-  return { openedCount: results.length, newCardsCount: newCards.length };
+  const newCardsCount = results.length > 0 ? await recordOpenedPulls(pulledCards, results.length, packName, false) : 0;
+  return { openedCount: results.length, newCardsCount };
 }
 
 export async function pilotLiveBoosterOpening(
@@ -134,25 +132,11 @@ export async function pilotLiveBoosterOpening(
       }
     }
 
-    const scanCandidateButtons = (): HTMLButtonElement[] => {
-      return (Array.from(
-        document.querySelectorAll('button.btn.btn-open, button.btn-open, button.btn, button')
-      ) as HTMLButtonElement[]).filter((btn) => !btn.disabled && (btn.offsetWidth > 0 || btn.offsetHeight > 0));
-    };
+    const scanCandidateButtons = (): HTMLButtonElement[] =>
+      (Array.from(document.querySelectorAll('button.btn.btn-open, button.btn-open, button.btn, button')) as HTMLButtonElement[])
+        .filter((btn) => !btn.disabled && (btn.offsetWidth > 0 || btn.offsetHeight > 0));
 
-    let candidateButtons = scanCandidateButtons();
-    let openBtn = candidateButtons.find((btn) => {
-      const txt = (btn.innerText || '').trim();
-      const html = btn.innerHTML || '';
-      const isFree =
-        /Free|Gratuit|Gratis/i.test(txt) ||
-        /Free|Gratuit|Gratis/i.test(html) ||
-        btn.classList.contains('free') ||
-        btn.classList.contains('btn-free');
-      const hasChakra = /◆|Chakra/i.test(txt) || /◆|Chakra/i.test(html);
-      return isFree && !hasChakra;
-    });
-
+    let openBtn = scanCandidateButtons().find(isFreeOpenButton);
     if (!openBtn) {
       const force1 = multButtons.find((b) => {
         const txt = (b.textContent || '').trim();
@@ -161,18 +145,7 @@ export async function pilotLiveBoosterOpening(
       if (force1 && !force1.classList.contains('on') && !force1.classList.contains('active')) {
         force1.click();
         await sleep(250);
-        candidateButtons = scanCandidateButtons();
-        openBtn = candidateButtons.find((btn) => {
-          const txt = (btn.innerText || '').trim();
-          const html = btn.innerHTML || '';
-          const isFree =
-            /Free|Gratuit|Gratis/i.test(txt) ||
-            /Free|Gratuit|Gratis/i.test(html) ||
-            btn.classList.contains('free') ||
-            btn.classList.contains('btn-free');
-          const hasChakra = /◆|Chakra/i.test(txt) || /◆|Chakra/i.test(html);
-          return isFree && !hasChakra;
-        });
+        openBtn = scanCandidateButtons().find(isFreeOpenButton);
       }
     }
 
@@ -303,44 +276,16 @@ export async function pilotLiveBoosterOpening(
     const recentPull = state.lastPullEvents.find((e) => e.at >= pullTimestampBefore)?.detail || null;
     const results = Array.isArray(recentPull?.results) ? recentPull.results : recentPull?.cards ? [recentPull] : [];
     const pulledCards = results.flatMap((result: any) => Array.isArray(result.cards) ? result.cards : []);
-    const newCards = pulledCards.filter((c: any) => c.isNew);
-    const highRarity = pulledCards.filter((c: any) => c.rarity === 'L' || c.rarity === 'M');
     const openedCount = results.length;
     if (!openedCount) {
       await appendJournal('warn', 'Ouverture non confirmée par Kyara. Aucun tirage ajouté aux statistiques.');
       return { openedCount: 0, newCardsCount: 0 };
     }
 
-    const raritySummary = RARITIES.map((r) => {
-      const n = pulledCards.filter((c: any) => c.rarity === r).length;
-      return n > 0 ? `${r}×${n}` : null;
-    })
-      .filter(Boolean)
-      .join(' ');
-
-    await recordCumulativeMetric({
-      boostersOpenedCount: openedCount,
-      newCardsPulledCount: newCards.length,
-      mythicsPulledCount: pulledCards.filter((c: any) => c.rarity === 'M').length,
-      legendariesPulledCount: pulledCards.filter((c: any) => c.rarity === 'L').length
-    });
-
-    await appendJournal(
-      'open',
-      `Booster « ${packName} » ouvert en live (×${openedCount}) : ${newCards.length} nouveau(x) perso(s)${
-        raritySummary ? ` (${raritySummary})` : ''
-      }`
-    );
-
-    if (highRarity.length > 0) {
-      const names = highRarity.map((c: any) => `${c.name} [${c.rarity}]`).join(', ');
-      notifyDesktop('Tirage Légendaire / Mythique !', `Obtenu dans ${packName} : ${names}`, 'km-pull');
-    }
-
-    await recordBestPulls(pulledCards, packName);
+    const newCardsCount = await recordOpenedPulls(pulledCards, openedCount, packName, true);
     await refreshDashboardSnapshot({ forcePrices: false }).catch(() => null);
 
-    return { openedCount, newCardsCount: newCards.length };
+    return { openedCount, newCardsCount };
   } catch (err: any) {
     await appendJournal('warn', `Ouverture live « ${packName} » interrompue : ${err.message}`);
     return { openedCount: 0, newCardsCount: 0 };
@@ -370,6 +315,9 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
 
   let targetPack = state.currentSettings.autoBoosterStrategy === 'ev' || state.currentSettings.autoOpenMode === 'recommended_ev'
     ? boosters.recommendedEv : boosters.recommendedNew;
+  if (state.currentSettings.renaissanceFocusEnabled && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
+    targetPack = boosters.recommendedRenaissance || boosters.recommendedNew;
+  }
   if (state.currentSettings.autoOpenMode === 'custom' && state.currentSettings.autoOpenCustomPackId) {
     targetPack = boosters.all.find((p: any) => p.packId === state.currentSettings.autoOpenCustomPackId);
   }

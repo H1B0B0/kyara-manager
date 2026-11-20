@@ -1,21 +1,28 @@
 import React, { useState } from 'react';
-import type { BoosterRecommendations, BoosterPack } from '../../../types/kyara';
+import type { BoosterRecommendations, BoosterPack, RenaissanceSummary } from '../../../types/kyara';
+import type { KyaraSettings } from '../../../types/settings';
 import { t } from '../../../lib/i18n';
 import { sendCommand } from '../../hooks/useDashboard';
 
 export interface BoostersTabProps {
   boosters?: BoosterRecommendations;
+  settings?: KyaraSettings;
+  renaissance?: RenaissanceSummary;
   onToast: (msg: string) => void;
   onRefresh: () => void;
 }
 
-export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, onToast, onRefresh }) => {
+export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, settings, renaissance, onToast, onRefresh }) => {
   const [openingId, setOpeningId] = useState<string | null>(null);
 
   const recNew = boosters?.recommendedNew;
   const recEv = boosters?.recommendedEv;
+  const recRen = boosters?.recommendedRenaissance;
   const isPityNear = boosters?.isPityNear;
   const pityTarget = boosters?.recommendedPity?.name || recNew?.name || 'Booster avec le plus de Mythiques';
+  const focusRarities = renaissance?.focusRarities?.length
+    ? renaissance.focusRarities
+    : (settings?.renaissanceTargetRarities || ['C', 'U', 'R']);
 
   const handleOpenPack = async (pack: BoosterPack, count = 1) => {
     setOpeningId(pack.packId);
@@ -48,6 +55,39 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, onToast, onR
             <p className="pity-banner__desc">
               Cible prioritaire optimisée : <strong>{pityTarget}</strong>. Ouvre ce booster pour maximiser tes chances de nouveau Mythique !
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Renaissance Focus Priority Pack Card */}
+      {settings?.renaissanceFocusEnabled && recRen && (
+        <div className="card card--renaissance-pack" style={{ marginBottom: '12px' }}>
+          <div className="card__header">
+            <div className="tile-head">
+              <span className="kanji-box kanji-box--acc" aria-hidden="true">転</span>
+              <div>
+                <span className="renaissance-badge">FOCUS RENAISSANCE</span>
+                <h3 className="card__title" style={{ marginTop: '4px' }}>
+                  Pack Prioritaire — {recRen.name}
+                </h3>
+                <p className="card__desc">
+                  +{recRen.expectedRenaissanceCards ?? 0} cartes {focusRarities.join('/')} / pack · {recRen.completionPct}% complété
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="booster-progress-track">
+            <div className="booster-progress-bar" style={{ width: `${Math.min(100, recRen.completionPct)}%` }} />
+          </div>
+          <div style={{ display: 'flex', gap: '8px', marginTop: '10px' }}>
+            <button
+              type="button"
+              onClick={() => handleOpenPack(recRen, 1)}
+              disabled={openingId === recRen.packId || !recRen.canOpenNow}
+              className="btn btn--primary btn--sm"
+            >
+              {recRen.canOpenNow ? 'Ouvrir ×1 en live' : t('rechargeNotice')}
+            </button>
           </div>
         </div>
       )}

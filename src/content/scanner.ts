@@ -1,37 +1,71 @@
 import { kyaraApi } from './api';
-import { runtimeCache } from './cache';
+import { ensureCollectionPrices, runtimeCache } from './cache';
 import { state } from './state';
 import { notifyDesktop } from './utils';
 import { evaluateDeal } from '../lib/analytics/deals';
 import { evaluateWishlistMatch } from '../lib/analytics/wishlist';
+import type { Rarity } from '../types/kyara';
 
 let previousTradesCount = 0;
 
 export async function scanMarketDealsInternal(
   ownedSet: Set<number>,
   wishlistMap: Map<number, any> = new Map(),
-  userChakra = 0
+  userChakra = 0,
+  options: { rarity?: string; focusRarities?: Rarity[] } = {}
 ): Promise<any[]> {
-  const [newestPage, cheapPage] = await Promise.all([
-    kyaraApi('/market/listings?sort=newest&pageSize=50&page=1', { auth: true }).catch(() => ({ items: [] })),
-    kyaraApi('/market/listings?type=fixed&sort=price_asc&pageSize=50&page=1', { auth: true }).catch(() => ({
-      items: []
-    }))
-  ]);
+  const queries = [
+    '/market/listings?sort=newest&pageSize=50&page=1',
+    '/market/listings?type=fixed&sort=price_asc&pageSize=50&page=1',
+    '/market/listings?type=fixed&sort=price_asc&pageSize=50&page=2'
+  ];
+
+  if (options.rarity && options.rarity !== 'ALL') {
+    queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(options.rarity)}&pageSize=50&page=1`);
+  } else if (state.currentSettings.renaissanceFocusEnabled || options.focusRarities?.length) {
+    const rawFocus = options.focusRarities?.length
+      ? options.focusRarities
+      : state.currentSettings.renaissanceTargetRarities?.length
+        ? state.currentSettings.renaissanceTargetRarities
+        : (['C', 'U', 'R'] as Rarity[]);
+    for (const r of rawFocus.slice(0, 2)) {
+      queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(r)}&pageSize=50&page=1`);
+    }
+  }
+
+  const pages = await Promise.all(
+    queries.map((q) => kyaraApi(q, { auth: true }).catch(() => ({ items: [] })))
+  );
 
   const seen = new Set<string>();
-  const combined = [
-    ...(Array.isArray(newestPage?.items) ? newestPage.items : []),
-    ...(Array.isArray(cheapPage?.items) ? cheapPage.items : [])
-  ];
+  const combined: any[] = [];
+  for (const page of pages) {
+    const items = Array.isArray(page?.items) ? page.items : [];
+    for (const item of items) {
+      if (!item?.id) continue;
+      const idKey = String(item.id);
+      if (seen.has(idKey)) continue;
+      seen.add(idKey);
+      combined.push(item);
+    }
+  }
+
+  // Hydrate missing collection prices before evaluating deals so missing cards get refMedian
+  const missingPriceIds = new Set<number>();
+  for (const item of combined) {
+    const charId = Number(item.character?.id ?? item.characterId);
+    if (Number.isFinite(charId) && charId > 0 && !runtimeCache.collectionPrices.has(charId)) {
+      missingPriceIds.add(charId);
+    }
+  }
+  if (missingPriceIds.size > 0) {
+    await ensureCollectionPrices(Array.from(missingPriceIds), false);
+  }
 
   const deals: any[] = [];
   const minReserve = Math.max(0, Number(state.currentSettings.autoBuyMinChakraReserve ?? 500));
 
   for (const item of combined) {
-    if (!item?.id || seen.has(item.id)) continue;
-    seen.add(item.id);
-
     const charId = Number(item.character?.id ?? item.characterId);
     const deal: any = evaluateDeal(item, runtimeCache.collectionPrices.get(charId) || {}, ownedSet, state.currentSettings);
     if (!deal) continue;
@@ -49,17 +83,39 @@ export async function scanMarketDealsInternal(
       }
     }
 
-    if (deal.isWishlistMatch || deal.isGoodFlip || deal.isGoodMissingBuy || (deal.discountPct && deal.discountPct >= 15)) {
+    if (
+      deal.isWishlistMatch ||
+      deal.isGoodFlip ||
+      deal.isGoodMissingBuy ||
+      deal.isRenaissanceNeed ||
+      (deal.discountPct && deal.discountPct >= 15) ||
+      (deal.isMissing && deal.buyPrice <= 10)
+    ) {
       deals.push(deal);
     }
   }
 
+  const renaissanceFocus = Boolean(state.currentSettings.renaissanceFocusEnabled);
   deals.sort((a, b) => {
-    if (Number(Boolean(b.isWishlistMatch)) !== Number(Boolean(a.isWishlistMatch))) {
-      return Number(Boolean(b.isWishlistMatch)) - Number(Boolean(a.isWishlistMatch));
+    const wishDiff = Number(Boolean(b.isWishlistMatch)) - Number(Boolean(a.isWishlistMatch));
+    if (wishDiff !== 0) return wishDiff;
+    if (renaissanceFocus) {
+      const renDiff = Number(Boolean(b.isRenaissanceNeed)) - Number(Boolean(a.isRenaissanceNeed));
+      if (renDiff !== 0) return renDiff;
+      if (a.isRenaissanceNeed && b.isRenaissanceNeed) {
+        const renPriceDiff = (a.buyPrice ?? Infinity) - (b.buyPrice ?? Infinity);
+        if (renPriceDiff !== 0) return renPriceDiff;
+      }
     }
-    if (Number(b.isGoodFlip) !== Number(a.isGoodFlip)) return Number(b.isGoodFlip) - Number(a.isGoodFlip);
-    return (b.flipProfit ?? -9999) - (a.flipProfit ?? -9999);
+    const flipDiff = Number(Boolean(b.isGoodFlip)) - Number(Boolean(a.isGoodFlip));
+    if (flipDiff !== 0) return flipDiff;
+    if (a.isGoodFlip && b.isGoodFlip) {
+      const profitDiff = (b.flipProfit ?? -9999) - (a.flipProfit ?? -9999);
+      if (profitDiff !== 0) return profitDiff;
+    }
+    const missDiff = Number(Boolean(b.isMissing)) - Number(Boolean(a.isMissing));
+    if (missDiff !== 0) return missDiff;
+    return (a.buyPrice ?? Infinity) - (b.buyPrice ?? Infinity);
   });
 
   return deals;

@@ -10,9 +10,11 @@ import { scanMarketDealsInternal, scanProfitableTrades } from './scanner';
 import { computeNetProceeds } from '../lib/analytics/fees';
 import { evaluateDuplicate } from '../lib/analytics/duplicates';
 import { rankBoostersForCollection } from '../lib/analytics/boosters';
+import { computeRenaissanceSummary } from '../lib/analytics/renaissance';
 import { generateDailyWishlist } from '../lib/analytics/wishlist';
 import { yieldIfNeeded } from '../lib/analytics/fees';
 import { DEFAULT_RECYCLE_VALUES, RARITIES } from '../lib/analytics/constants';
+import type { Rarity } from '../types/kyara';
 
 export function extractActiveListings(myMarket: any, now = Date.now()): any[] {
   const rawListings = Array.isArray(myMarket?.listings) ? myMarket.listings : [];
@@ -27,23 +29,44 @@ function RARITY_BucketsHas(buckets: Record<string, any>, r: string): boolean {
   return Object.prototype.hasOwnProperty.call(buckets, r);
 }
 
+export interface RefreshSnapshotOptions {
+  forcePrices?: boolean;
+  scanMarketDeals?: boolean;
+  rarity?: string;
+  focusRarities?: Rarity[];
+}
+
 let inFlight: Promise<any> | null = null;
-let inFlightOptions = { forcePrices: false, scanMarketDeals: false };
+let inFlightOptions: RefreshSnapshotOptions = { forcePrices: false, scanMarketDeals: false };
 let accountId: string | null = null;
 
-export function refreshDashboardSnapshot(options: { forcePrices?: boolean; scanMarketDeals?: boolean } = {}): Promise<any> {
+export function refreshDashboardSnapshot(options: RefreshSnapshotOptions = {}): Promise<any> {
   if (inFlight) {
-    if ((options.forcePrices && !inFlightOptions.forcePrices) || (options.scanMarketDeals && !inFlightOptions.scanMarketDeals)) {
+    if (
+      (options.forcePrices && !inFlightOptions.forcePrices) ||
+      (options.scanMarketDeals && !inFlightOptions.scanMarketDeals) ||
+      (options.rarity && options.rarity !== inFlightOptions.rarity)
+    ) {
       return inFlight.then(() => refreshDashboardSnapshot(options));
     }
     return inFlight;
   }
-  inFlightOptions = { forcePrices: !!options.forcePrices, scanMarketDeals: !!options.scanMarketDeals };
+  inFlightOptions = {
+    forcePrices: !!options.forcePrices,
+    scanMarketDeals: !!options.scanMarketDeals,
+    rarity: options.rarity,
+    focusRarities: options.focusRarities
+  };
   inFlight = buildDashboardSnapshot(inFlightOptions).finally(() => { inFlight = null; });
   return inFlight;
 }
 
-async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = false } = {}): Promise<any> {
+async function buildDashboardSnapshot({
+  forcePrices = false,
+  scanMarketDeals = false,
+  rarity,
+  focusRarities
+}: RefreshSnapshotOptions = {}): Promise<any> {
   await loadSettings();
 
   let bootstrap: any = null;
@@ -230,7 +253,10 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
   let trades: any[] = [];
   if (scanMarketDeals) {
     const [dealsRes, tradesRes] = await Promise.all([
-      scanMarketDealsInternal(ownedSet, wishlistMap, me?.chakra ?? 0),
+      scanMarketDealsInternal(ownedSet, wishlistMap, me?.chakra ?? 0, {
+        rarity,
+        focusRarities
+      }),
       scanProfitableTrades(ownedSet, evaluatedDuplicates, wishlistMap)
     ]);
     deals = dealsRes;
@@ -241,6 +267,24 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
     deals = sameAccount ? stored?.kmDashboard?.deals || [] : [];
     trades = sameAccount ? stored?.kmDashboard?.trades || [] : [];
   }
+
+  const renaissance = computeRenaissanceSummary(
+    catalogById,
+    ownedSet,
+    state.currentSettings,
+    runtimeCache.rarityAvgPrices,
+    bootstrap?.rebirth || bootstrap?.renaissance || config?.rebirth || null
+  );
+  const rarityBreakdown = Object.fromEntries(
+    RARITIES.map((r) => [
+      r,
+      {
+        owned: renaissance.byRarity[r].owned,
+        total: renaissance.byRarity[r].total,
+        missing: renaissance.byRarity[r].missing
+      }
+    ])
+  ) as Record<Rarity, { owned: number; total: number; missing: number }>;
 
   const sellCandidates = evaluatedDuplicates.filter((d) => d.verdict === 'VENDRE' && d.spare > 0);
   const recycleCandidates = evaluatedDuplicates.filter((d) => d.canAutoRecycle && (d.recyclableSpare ?? d.spare) > 0);
@@ -269,8 +313,10 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
       sellableDuplicatesCount: sellCandidates.reduce((s, d) => s + d.spare, 0),
       sellableNetTotal: sellCandidates.reduce((s, d) => s + d.spare * d.fees.netProceeds, 0),
       recyclableDuplicatesCount: recycleCandidates.reduce((s, d) => s + (d.recyclableSpare ?? d.spare), 0),
-      recyclableChakraTotal: recycleCandidates.reduce((s, d) => s + (d.recyclableSpare ?? d.spare) * d.recycleValue, 0)
+      recyclableChakraTotal: recycleCandidates.reduce((s, d) => s + (d.recyclableSpare ?? d.spare) * d.recycleValue, 0),
+      rarityBreakdown
     },
+    renaissance,
     activeListings: activeListings.map((l: any) => ({
       id: l.id,
       characterId: Number(l.character?.id ?? l.characterId),
@@ -284,7 +330,7 @@ async function buildDashboardSnapshot({ forcePrices = false, scanMarketDeals = f
     })),
     duplicates: evaluatedDuplicates.slice(0, 1000),
     boosters: boosterRankings,
-    deals: deals.slice(0, 50),
+    deals: deals.slice(0, 100),
     trades: trades.slice(0, 30),
     wishlist: Array.isArray(kmWishlist) ? kmWishlist : [],
     wishlistSuggestions: dailyWishlistSuggestions,

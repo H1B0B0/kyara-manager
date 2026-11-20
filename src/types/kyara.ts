@@ -108,6 +108,7 @@ export interface MarketDeal {
   discountPct: number;
   sales7d: number;
   isGoodMissingBuy?: boolean;
+  isRenaissanceNeed?: boolean;
   isWishlistMatch?: boolean;
   wishlistMatch?: any;
   autoBuyWish?: boolean;
@@ -145,6 +146,7 @@ export interface BoosterPack {
   completionPct: number;
   probAtLeastOneNewPct: number;
   expectedNewCards: number;
+  expectedRenaissanceCards?: number;
   expectedChakraValue: number;
   openableFreeCount: number;
   canOpenNow: boolean;
@@ -159,6 +161,7 @@ export interface BoosterRecommendations {
   recommendedNew: BoosterPack | null;
   recommendedEv: BoosterPack | null;
   recommendedPity: BoosterPack | null;
+  recommendedRenaissance?: BoosterPack | null;
   isPityNear: boolean;
   all: BoosterPack[];
 }
@@ -172,6 +175,51 @@ export interface CollectionStats {
   sellableNetTotal: number;
   recyclableDuplicatesCount: number;
   recyclableChakraTotal: number;
+  rarityBreakdown?: Record<Rarity, { owned: number; total: number; missing: number }>;
+}
+
+export interface RarityProgress {
+  rarity: Rarity;
+  owned: number;
+  total: number;
+  missing: number;
+  target: number;
+  remainingForTarget: number;
+  pct: number;
+  targetPct: number;
+  estimatedCostChakra: number;
+}
+
+export interface RenaissanceSummary {
+  enabled: boolean;
+  focusRarities: Rarity[];
+  totalOwned: number;
+  totalTarget: number;
+  overallPct: number;
+  ready: boolean;
+  byRarity: Record<Rarity, RarityProgress>;
+  priorityRarities: Rarity[];
+  estimatedRemainingCost: number;
+}
+
+export interface BatchMissingPreviewItem {
+  listingId: string;
+  characterId: number;
+  name: string;
+  series: string;
+  rarity: Rarity;
+  price: number;
+  median7d: number | null;
+}
+
+export interface BatchMissingPreview {
+  rarity: Rarity | 'RENAISSANCE';
+  maxUnitPrice: number;
+  requestedQty: number;
+  items: BatchMissingPreviewItem[];
+  totalCost: number;
+  avgPrice: number;
+  totalFound: number;
 }
 
 export interface UserProfile {
@@ -198,6 +246,7 @@ export interface DashboardState {
   wishlistSuggestions?: WishlistSuggestion[];
   pinnedCards?: number[];
   bestPulls?: AutopilotPullRecord[];
+  renaissance?: RenaissanceSummary;
   updatedAt?: number;
 }
 

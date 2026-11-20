@@ -1,3 +1,5 @@
+import type { Rarity } from './kyara';
+
 export type Language = 'fr' | 'en' | 'es' | 'auto';
 
 export type PricingStrategy =
@@ -67,7 +69,13 @@ export interface KyaraSettings {
   soundEnabled: boolean;
   dryRun: boolean;
   language: Language;
+  renaissanceFocusEnabled?: boolean;
+  renaissanceTargetRarities?: Rarity[];
+  renaissanceTargets?: Partial<Record<Rarity, number>>;
+  batchBuyDefaultMaxPrice?: Partial<Record<Rarity, number>>;
 }
+
+const VALID_RARITIES: Rarity[] = ['C', 'U', 'R', 'E', 'L', 'M'];
 
 export const DEFAULT_SETTINGS: KyaraSettings = {
   masterEnabled: true,
@@ -116,7 +124,11 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   notificationsEnabled: true,
   soundEnabled: false,
   dryRun: false,
-  language: 'fr'
+  language: 'fr',
+  renaissanceFocusEnabled: false,
+  renaissanceTargetRarities: ['C', 'U', 'R'],
+  renaissanceTargets: {},
+  batchBuyDefaultMaxPrice: { C: 3, U: 4, R: 6, E: 18, L: 90, M: 500 }
 };
 
 // Public UI keys are canonical; legacy keys remain synchronized for compatibility.
@@ -147,6 +159,41 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   } else {
     settings.autoRecycleRarities = ['C', 'U', 'R'];
   }
+  settings.renaissanceFocusEnabled = Boolean(settings.renaissanceFocusEnabled ?? false);
+  const rawFocus = Array.isArray(settings.renaissanceTargetRarities)
+    ? settings.renaissanceTargetRarities.filter((r): r is Rarity => VALID_RARITIES.includes(r))
+    : [];
+  settings.renaissanceTargetRarities = rawFocus.length > 0 ? Array.from(new Set(rawFocus)) : [...(DEFAULT_SETTINGS.renaissanceTargetRarities as Rarity[])];
+
+  const rawTargets =
+    settings.renaissanceTargets && typeof settings.renaissanceTargets === 'object' && !Array.isArray(settings.renaissanceTargets)
+      ? settings.renaissanceTargets
+      : {};
+  const cleanTargets: Partial<Record<Rarity, number>> = {};
+  for (const r of VALID_RARITIES) {
+    const rawVal = (rawTargets as Record<string, unknown>)[r];
+    if (rawVal === undefined || rawVal === null || rawVal === '') continue;
+    const val = Number(rawVal);
+    if (Number.isFinite(val) && val >= 0) {
+      cleanTargets[r] = Math.floor(val);
+    }
+  }
+  settings.renaissanceTargets = cleanTargets;
+
+  const rawMaxPrices =
+    settings.batchBuyDefaultMaxPrice && typeof settings.batchBuyDefaultMaxPrice === 'object' && !Array.isArray(settings.batchBuyDefaultMaxPrice)
+      ? settings.batchBuyDefaultMaxPrice
+      : {};
+  const mergedMaxPrices: Partial<Record<Rarity, number>> = { ...DEFAULT_SETTINGS.batchBuyDefaultMaxPrice };
+  for (const r of VALID_RARITIES) {
+    const rawVal = (rawMaxPrices as Record<string, unknown>)[r];
+    if (rawVal === undefined || rawVal === null || rawVal === '') continue;
+    const val = Number(rawVal);
+    if (Number.isFinite(val) && val >= 0) {
+      mergedMaxPrices[r] = Math.round(val);
+    }
+  }
+  settings.batchBuyDefaultMaxPrice = mergedMaxPrices;
   return settings;
 }
 

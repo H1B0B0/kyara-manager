@@ -27,11 +27,21 @@ export function evaluateDeal(
   const settings: Partial<KyaraSettings> = (isDirectCall ? arg3 : arg4) || DEFAULT_SETTINGS;
 
   const char = listing.character || {};
-  const characterId = Number(char.id ?? listing.characterId);
+  const rawCharId = Number(char.id ?? listing.characterId);
+  const characterId = Number.isFinite(rawCharId) ? rawCharId : 0;
+  const rarity = (char.rarity || 'C') as Rarity;
+  const focusRarities =
+    Array.isArray(settings.renaissanceTargetRarities) && settings.renaissanceTargetRarities.length
+      ? settings.renaissanceTargetRarities
+      : (['C', 'U', 'R'] as Rarity[]);
   const isMissing = Boolean(
     ownedSet &&
     (ownedSet instanceof Set ? !ownedSet.has(characterId) : Array.isArray(ownedSet) && !ownedSet.includes(characterId))
   );
+  const isRenaissanceNeed = Boolean(isMissing && focusRarities.includes(rarity));
+  const missingMaxPrice = Number.isFinite(Number(settings.autoBuyMissingMaxPrice))
+    ? Number(settings.autoBuyMissingMaxPrice)
+    : 25;
 
   const prices = { ...(listing.prices || {}), ...marketStats };
   const median7d = Number.isFinite(prices.median7d) && prices.median7d > 0 ? Number(prices.median7d) : null;
@@ -45,7 +55,7 @@ export function evaluateDeal(
       characterId,
       name: char.name || `Carte #${characterId}`,
       series: char.series || '',
-      rarity: (char.rarity || 'C') as Rarity,
+      rarity,
       type: listing.type,
       buyPrice,
       refMedian: null,
@@ -56,8 +66,9 @@ export function evaluateDeal(
       flipProfit: null,
       roiPct: null,
       isMissing,
+      isRenaissanceNeed,
       isGoodFlip: false,
-      isGoodMissingBuy: Boolean(isMissing && buyPrice <= Number(settings.autoBuyMissingMaxPrice ?? 25))
+      isGoodMissingBuy: Boolean(isMissing && buyPrice <= missingMaxPrice)
     };
   }
 
@@ -67,11 +78,20 @@ export function evaluateDeal(
   const flipProfit = netResale - buyPrice;
   const roiPct = Math.round((flipProfit / buyPrice) * 100);
 
-  const minDiscount = Number(settings.autoBuyMinDiscountPct ?? 28);
-  const minProfit = Number(settings.autoMarketMinProfit ?? settings.autoBuyMinFlipProfit ?? 15);
-  const minMargin = Number(settings.autoMarketMinMarginPct ?? 0);
-  const minSales = Number(settings.autoBuyMinSales7d ?? 4);
-  const maxUnit = Number(settings.autoBuyMaxUnitPrice ?? 400);
+  const minDiscount = Number.isFinite(Number(settings.autoBuyMinDiscountPct))
+    ? Number(settings.autoBuyMinDiscountPct)
+    : 28;
+  const rawMinProfit = settings.autoMarketMinProfit ?? settings.autoBuyMinFlipProfit;
+  const minProfit = Number.isFinite(Number(rawMinProfit)) ? Number(rawMinProfit) : 15;
+  const minMargin = Number.isFinite(Number(settings.autoMarketMinMarginPct))
+    ? Number(settings.autoMarketMinMarginPct)
+    : 0;
+  const minSales = Number.isFinite(Number(settings.autoBuyMinSales7d))
+    ? Number(settings.autoBuyMinSales7d)
+    : 4;
+  const maxUnit = Number.isFinite(Number(settings.autoBuyMaxUnitPrice))
+    ? Number(settings.autoBuyMaxUnitPrice)
+    : 400;
 
   const isGoodFlip =
     discountPct >= minDiscount &&
@@ -80,17 +100,18 @@ export function evaluateDeal(
     sales7d >= minSales &&
     buyPrice <= maxUnit;
 
-  const isGoodMissingBuy =
+  const isGoodMissingBuy = Boolean(
     isMissing &&
-    buyPrice <= Number(settings.autoBuyMissingMaxPrice ?? 25) &&
-    discountPct >= 0;
+    buyPrice <= missingMaxPrice &&
+    discountPct >= 0
+  );
 
   return {
     listingId: String(listing.id),
     characterId,
     name: char.name || `Carte #${characterId}`,
     series: char.series || '',
-    rarity: (char.rarity || 'C') as Rarity,
+    rarity,
     type: listing.type,
     buyPrice,
     refMedian,
@@ -101,6 +122,7 @@ export function evaluateDeal(
     flipProfit,
     roiPct,
     isMissing,
+    isRenaissanceNeed,
     isGoodFlip,
     isGoodMissingBuy
   };

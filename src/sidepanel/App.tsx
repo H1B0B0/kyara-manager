@@ -139,6 +139,9 @@ export const App: React.FC = () => {
             <MarketTab
               deals={deals}
               trades={trades}
+              dashboard={dashboard}
+              settings={settings}
+              onUpdateSettings={(partial) => { void updateSettings(partial).catch((err) => showToast(err.message)); }}
               onToast={showToast}
               onRefresh={() => refresh(true)}
               onScanDeals={scanDeals}
@@ -184,6 +187,8 @@ export const App: React.FC = () => {
           >
             <BoostersTab
               boosters={dashboard?.boosters}
+              settings={settings}
+              renaissance={dashboard?.renaissance}
               onToast={showToast}
               onRefresh={() => refresh(false)}
             />

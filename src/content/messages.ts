@@ -6,6 +6,7 @@ import { runAutomationCycle } from './automation/cycle';
 import { executeAutoSell } from './automation/auto-sell';
 import { executeAutoRecycle, recycleCopies } from './automation/auto-recycle';
 import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/live-opening';
+import { executeBatchMissingBuy, previewBatchMissingBuy } from './automation/batch-buy';
 import { runExclusive } from './operations';
 import { getCardAvailability, isInterrupted, loadCardLedger, positiveInteger } from './safety';
 import { fulfilled, mapLimit } from '../lib/concurrency';
@@ -84,8 +85,37 @@ export function setupMessageListener(): () => void {
         }
 
         if (message.type === 'km:cmd:scan-deals') {
-          const dashboard = await refreshDashboardSnapshot({ forcePrices: false, scanMarketDeals: true });
+          const dashboard = await refreshDashboardSnapshot({
+            forcePrices: false,
+            scanMarketDeals: true,
+            rarity: typeof message.rarity === 'string' ? message.rarity : undefined,
+            focusRarities: Array.isArray(message.focusRarities) ? message.focusRarities : undefined
+          });
           sendResponse({ ok: true, dashboard });
+          return;
+        }
+
+        if (message.type === 'km:cmd:preview-batch-buy') {
+          const preview = await previewBatchMissingBuy({
+            rarity: message.rarity,
+            maxUnitPrice: Number(message.maxUnitPrice),
+            qty: Number(message.qty),
+            maxTotalBudget: message.maxTotalBudget !== undefined ? Number(message.maxTotalBudget) : undefined
+          });
+          sendResponse({ ok: true, preview });
+          return;
+        }
+
+        if (message.type === 'km:cmd:execute-batch-buy') {
+          const result = await executeBatchMissingBuy({
+            rarity: message.rarity,
+            maxUnitPrice: Number(message.maxUnitPrice),
+            qty: Number(message.qty),
+            maxTotalBudget: message.maxTotalBudget !== undefined ? Number(message.maxTotalBudget) : undefined,
+            listingIds: Array.isArray(message.listingIds) ? message.listingIds.map(String) : undefined
+          });
+          const dashboard = await refreshAfterAction({ forcePrices: false });
+          sendResponse({ ok: true, result, dashboard });
           return;
         }
 
@@ -284,7 +314,14 @@ export function setupMessageListener(): () => void {
         sendResponse({ ok: false, error: String(err?.message || err) });
       }
     };
-    const readOnly = ['km:cmd:refresh', 'km:cmd:scan-deals', 'km:alarm-tick', 'km:cmd:run-cycle', 'km:save-settings'].includes(message?.type);
+    const readOnly = [
+      'km:cmd:refresh',
+      'km:cmd:scan-deals',
+      'km:cmd:preview-batch-buy',
+      'km:alarm-tick',
+      'km:cmd:run-cycle',
+      'km:save-settings'
+    ].includes(message?.type);
     void (readOnly ? handle() : runExclusive(handle)).catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   };
