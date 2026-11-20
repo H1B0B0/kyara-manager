@@ -2,8 +2,8 @@ import { KyaraApiOptions } from './types';
 import { sleep, randomJitter, readSiteAuth } from './utils';
 import { state } from './state';
 
-const WRITE_GAP_MS = 300;
-const WRITE_JITTER_MS = 100;
+const WRITE_GAP_MS = 180;
+const WRITE_JITTER_MS = 60;
 let lastWriteAt = 0;
 let rushMultiplier = 1;
 let cooldownUntil = 0;

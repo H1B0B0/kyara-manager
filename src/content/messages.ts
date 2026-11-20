@@ -9,7 +9,7 @@ import { executeAutoRecycle, recycleCopies } from './automation/auto-recycle';
 import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/live-opening';
 import { executeBatchMissingBuy, previewBatchMissingBuy } from './automation/batch-buy';
 import { placeBatchBuyOrders, placeBuyOrder, scanBuyOrderOpportunities } from './automation/buy-orders';
-import { runExclusive } from './operations';
+import { runDomainTask, type TaskDomain } from './operations';
 import { getCardAvailability, isInterrupted, loadCardLedger, positiveInteger } from './safety';
 import { fulfilled, mapLimit } from '../lib/concurrency';
 import { mergeSettings } from '../types/settings';
@@ -123,7 +123,8 @@ export function setupMessageListener(): () => void {
             qty: Number(message.qty),
             maxTotalBudget: message.maxTotalBudget !== undefined ? Number(message.maxTotalBudget) : undefined,
             listingIds: Array.isArray(message.listingIds) ? message.listingIds.map(String) : undefined,
-            characterIds: Array.isArray(message.characterIds) ? message.characterIds.map(Number) : undefined
+            characterIds: Array.isArray(message.characterIds) ? message.characterIds.map(Number) : undefined,
+            ignoreReserve: Boolean(message.ignoreReserve)
           });
           const dashboard = await refreshAfterAction({ forcePrices: false });
           sendResponse({ ok: true, result, dashboard });
@@ -194,7 +195,8 @@ export function setupMessageListener(): () => void {
           positiveInteger(characterId, 'Carte');
           positiveInteger(qty, 'Quantité');
           const available = await getCardAvailability(Number(characterId));
-          if (Number(qty) > available.recyclable) throw new Error('Quantité indisponible ou carte protégée. Actualise les doublons.');
+          const recyclable = available.recyclable ?? available.spare ?? 0;
+          if (Number(qty) > recyclable) throw new Error('Quantité indisponible ou carte protégée. Actualise les doublons.');
           const res = await kyaraApi(`/me/collection/${Number(characterId)}/recycle`, { method: 'POST', body: { qty: Number(qty) } });
           await appendJournal('recycle', `Recyclage direct : ${name} ×${qty} (+${res?.gained ?? '?'} ◆)`);
           await recordCumulativeMetric({ cardsRecycled: Number(qty), chakraFromRecycle: Number(res?.gained) || 0 });
@@ -354,9 +356,19 @@ export function setupMessageListener(): () => void {
     };
     const readOnly = [
       'km:cmd:refresh', 'km:cmd:scan-deals', 'km:cmd:preview-batch-buy',
-      'km:cmd:scan-buy-orders', 'km:alarm-tick', 'km:cmd:run-cycle', 'km:cmd:run-market-watch', 'km:save-settings'
+      'km:cmd:scan-buy-orders', 'km:alarm-tick', 'km:cmd:run-cycle', 'km:cmd:run-market-watch', 'km:save-settings',
+      'km:cmd:reset-roi', 'km:cmd:toggle-pin', 'km:cmd:wishlist-add', 'km:cmd:wishlist-remove'
     ].includes(message?.type);
-    void (readOnly ? handle() : runExclusive(handle)).catch((err) => sendResponse({ ok: false, error: err.message }));
+    const resolveDomain = (type?: string): TaskDomain => {
+      if (type === 'km:cmd:buy-listing' || type === 'km:cmd:execute-batch-buy' || type === 'km:cmd:place-buy-order' || type === 'km:cmd:place-batch-buy-orders') {
+        return 'market-buy';
+      }
+      if (type === 'km:cmd:open-pack' || type === 'km:cmd:open-recommended') {
+        return 'boosters';
+      }
+      return 'inventory';
+    };
+    void (readOnly ? handle() : runDomainTask(resolveDomain(message?.type), handle)).catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
   };
   chrome.runtime.onMessage.addListener(listener);

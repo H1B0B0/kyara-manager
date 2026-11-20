@@ -23,4 +23,42 @@ describe('whole-operation exclusion', () => {
     await expect(runExclusive(action)).rejects.toThrow('Mise à jour');
     expect(action).not.toHaveBeenCalled();
   });
+
+  it('runs different domain tasks in parallel and queues tasks in the same domain without BUSY rejection', async () => {
+    const { runDomainTask } = await import('../src/content/operations');
+    const order: string[] = [];
+    let releaseBuy1!: () => void;
+    let releaseInv!: () => void;
+
+    const buy1 = runDomainTask('market-buy', async () => {
+      order.push('buy1:start');
+      await new Promise<void>((r) => { releaseBuy1 = r; });
+      order.push('buy1:end');
+      return 'buy1';
+    });
+    await vi.waitFor(() => expect(releaseBuy1).toBeTypeOf('function'));
+
+    // Different domain runs immediately while market-buy is still active
+    const inv = runDomainTask('inventory', async () => {
+      order.push('inv:start');
+      await new Promise<void>((r) => { releaseInv = r; });
+      order.push('inv:end');
+      return 'inv';
+    });
+    await vi.waitFor(() => expect(releaseInv).toBeTypeOf('function'));
+    expect(order).toEqual(['buy1:start', 'inv:start']);
+
+    // Same domain queues instead of throwing BUSY
+    const buy2 = runDomainTask('market-buy', async () => {
+      order.push('buy2:run');
+      return 'buy2';
+    });
+
+    releaseInv();
+    expect(await inv).toBe('inv');
+    releaseBuy1();
+    expect(await buy1).toBe('buy1');
+    expect(await buy2).toBe('buy2');
+    expect(order).toEqual(['buy1:start', 'inv:start', 'inv:end', 'buy1:end', 'buy2:run']);
+  });
 });

@@ -59,14 +59,22 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
   const [rarity, setRarity] = useState<Rarity | 'RENAISSANCE'>(initialRarity || 'RENAISSANCE');
   const [qty, setQty] = useState<number>(initialQty || 25);
   const [maxUnitPrice, setMaxUnitPrice] = useState<number>(() => getDefaultMaxPrice(initialRarity || 'RENAISSANCE', settings));
+  const [customPriceEdited, setCustomPriceEdited] = useState(false);
   const [maxTotalBudget, setMaxTotalBudget] = useState<string>('');
   const [preview, setPreview] = useState<BatchMissingPreview | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [buying, setBuying] = useState(false);
 
   useEffect(() => {
+    if (!customPriceEdited) {
+      setMaxUnitPrice(getDefaultMaxPrice(rarity, settings));
+    }
+  }, [rarity, settings.batchBuyDefaultMaxPrice, settings.renaissanceTargetRarities, customPriceEdited]);
+
+  useEffect(() => {
     if (initialRarity) {
       setRarity(initialRarity);
+      setCustomPriceEdited(false);
       setMaxUnitPrice(getDefaultMaxPrice(initialRarity, settings));
       setPreview(null);
     }
@@ -93,6 +101,7 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
 
   const handleSelectRarity = (next: Rarity | 'RENAISSANCE') => {
     setRarity(next);
+    setCustomPriceEdited(false);
     setMaxUnitPrice(getDefaultMaxPrice(next, settings));
     setPreview(null);
   };
@@ -110,7 +119,7 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
       } as any) as Promise<any>);
       if (res?.ok && res.preview) {
         setPreview(res.preview as BatchMissingPreview);
-        if (res.preview.totalFound === 0) onToast('Aucune carte manquante trouvée sous ce prix max.');
+        if (res.preview.totalFound === 0) onToast(`Aucune carte manquante trouvée ≤ ${maxUnitPrice} ◆ (augmente le prix max).`);
       } else onToast(res?.error || 'Erreur lors de la prévisualisation du lot');
     } finally { setPreviewing(false); }
   };
@@ -126,12 +135,18 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
         qty,
         maxTotalBudget: parsedBudget,
         listingIds: preview?.items.map((item) => item.listingId),
+        ignoreReserve: true,
         ...(seriesContext?.characterIds?.length ? { characterIds: seriesContext.characterIds } : {})
       } as any) as Promise<any>);
       if (res?.ok) {
-        const boughtCount = res.result?.boughtCount ?? res.boughtCount ?? preview?.items.length ?? 0;
-        const totalSpent = res.result?.totalSpent ?? res.totalSpent ?? preview?.totalCost ?? 0;
-        onToast(`Lot acheté : ${boughtCount} carte(s) manquante(s) pour ${totalSpent} ◆`);
+        const boughtCount = res.result?.boughtCount ?? res.boughtCount ?? 0;
+        const totalSpent = res.result?.totalSpent ?? res.totalSpent ?? 0;
+        const stoppedReason = res.result?.stoppedReason;
+        if (boughtCount > 0) {
+          onToast(`Lot acheté : ${boughtCount} carte(s) manquante(s) pour ${totalSpent} ◆${stoppedReason ? ` (${stoppedReason})` : ''}`);
+        } else {
+          onToast(`Aucun achat effectué : ${stoppedReason || `aucune carte manquante en vente ≤ ${maxUnitPrice} ◆`}`);
+        }
         setPreview(null);
         onRefresh();
       } else onToast(res?.error || "Erreur lors de l'achat par lot");
@@ -207,7 +222,7 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
           <span className="batch-label">Prix max / carte (◆)</span>
           <input
             type="number" min={1} max={5000} value={maxUnitPrice}
-            onChange={(e) => { setMaxUnitPrice(Math.max(1, Number(e.target.value) || 1)); setPreview(null); }}
+            onChange={(e) => { setCustomPriceEdited(true); setMaxUnitPrice(Math.max(1, Number(e.target.value) || 1)); setPreview(null); }}
             className="input input--num batch-field__input"
           />
         </label>

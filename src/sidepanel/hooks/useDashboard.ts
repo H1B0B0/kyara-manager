@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import type { DashboardState } from '../../types/kyara';
 import type { ExtensionCommand, CommandResponse } from '../../types/messages';
 
-let mutationPending = false;
+const pendingCommandKeys = new Set<string>();
 
 const READ_ONLY_COMMANDS = new Set([
   'km:cmd:refresh',
@@ -11,10 +11,19 @@ const READ_ONLY_COMMANDS = new Set([
   'km:cmd:scan-buy-orders'
 ]);
 
+function getCommandLockKey(cmd: ExtensionCommand): string {
+  const c = cmd as any;
+  const target = c.listingId ?? c.characterId ?? c.packId ?? c.rarity ?? '';
+  return `${cmd.type}:${target}`;
+}
+
 export function sendCommand(cmd: ExtensionCommand): Promise<CommandResponse> {
   const mutation = cmd.type.startsWith('km:cmd:') && !READ_ONLY_COMMANDS.has(cmd.type);
-  if (mutation && mutationPending) return Promise.resolve({ ok: false, error: 'Une action est déjà en cours. Patiente jusqu’à sa confirmation.' });
-  if (mutation) mutationPending = true;
+  const lockKey = getCommandLockKey(cmd);
+  if (mutation && pendingCommandKeys.has(lockKey)) {
+    return Promise.resolve({ ok: false, error: 'Cette action est déjà en cours. Patiente jusqu’à sa confirmation.' });
+  }
+  if (mutation) pendingCommandKeys.add(lockKey);
   return new Promise<CommandResponse>((resolve) => {
     try { chrome.runtime.sendMessage(cmd, (response) => {
       if (chrome.runtime.lastError) {
@@ -23,7 +32,7 @@ export function sendCommand(cmd: ExtensionCommand): Promise<CommandResponse> {
         resolve(response || { ok: false, error: 'Réponse vide' });
       }
     }); } catch (err: any) { resolve({ ok: false, error: String(err?.message || err) }); }
-  }).finally(() => { if (mutation) mutationPending = false; });
+  }).finally(() => { if (mutation) pendingCommandKeys.delete(lockKey); });
 }
 
 export function useDashboard() {

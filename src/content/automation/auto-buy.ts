@@ -177,14 +177,17 @@ export async function executeAutoBuy(
     }
 
     try {
-      const freshListing = await kyaraApi(`/market/listings/${encodeURIComponent(deal.listingId)}`, { auth: true });
+      const [freshListing, bootstrap] = await Promise.all([
+        kyaraApi(`/market/listings/${encodeURIComponent(deal.listingId)}`, { auth: true }),
+        kyaraApi('/me/bootstrap').catch(() => null)
+      ]);
       if (!freshListing || freshListing.status !== 'active' || freshListing.isMine) continue;
       const freshPrice = freshListing.type === 'fixed' ? freshListing.price : freshListing.buyoutPrice;
       if (!Number.isFinite(freshPrice) || freshPrice <= 0 || freshPrice > deal.buyPrice) continue;
-      const bootstrap = await kyaraApi('/me/bootstrap');
       const balance = Number((bootstrap?.me || bootstrap)?.chakra);
-      if (!Number.isFinite(balance)) continue;
-      currentChakra = Math.min(currentChakra, balance);
+      if (Number.isFinite(balance)) {
+        currentChakra = Math.min(currentChakra, balance);
+      }
       if (currentChakra - freshPrice < minReserve) continue;
 
       if (s.dryRun) {
@@ -205,7 +208,8 @@ export async function executeAutoBuy(
 
       const buyRes = await kyaraApi(`/market/listings/${encodeURIComponent(deal.listingId)}/buy`, {
         method: 'POST',
-        withPass: true
+        withPass: true,
+        priority: 'high'
       });
       boughtCount += 1;
       currentChakra = Number(buyRes?.user?.chakra ?? currentChakra - freshPrice);

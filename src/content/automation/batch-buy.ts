@@ -4,6 +4,7 @@ import { appendJournal } from '../journal';
 import { isInterrupted } from '../safety';
 import { state } from '../state';
 import { fulfilled, mapLimit } from '../../lib/concurrency';
+import { OFFICIAL_REBIRTH_1_TARGETS } from '../../lib/analytics/renaissance';
 import type { BatchMissingPreview, BatchMissingPreviewItem, Rarity } from '../../types/kyara';
 
 export interface BatchBuyRequest {
@@ -13,6 +14,7 @@ export interface BatchBuyRequest {
   maxTotalBudget?: number;
   listingIds?: string[];
   characterIds?: number[];
+  ignoreReserve?: boolean;
 }
 
 export interface BatchBuyResult {
@@ -82,40 +84,80 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
     uniqueMissing = (fulfilled(settled).filter(Boolean) as BatchMissingPreviewItem[]).sort((a, b) => a.price - b.price);
   } else {
     const targetRarities = state.currentSettings.renaissanceTargetRarities;
-    const allowedRarities: Rarity[] =
-      req.rarity === 'RENAISSANCE'
-        ? (Array.isArray(targetRarities) && targetRarities.length ? targetRarities : ['C', 'U', 'R'])
-        : [req.rarity];
+    let configuredFocus: Rarity[] =
+      Array.isArray(targetRarities) && targetRarities.length ? [...targetRarities] : ['C', 'U', 'R', 'E'];
+    if (
+      configuredFocus.length === 3 &&
+      configuredFocus.includes('C') &&
+      configuredFocus.includes('U') &&
+      configuredFocus.includes('R') &&
+      !configuredFocus.includes('E')
+    ) {
+      configuredFocus.push('E');
+    }
+    if (req.rarity === 'RENAISSANCE' && runtimeCache.catalogById && runtimeCache.catalogById.size > 0) {
+      const ownedByRarity: Record<Rarity, number> = { C: 0, U: 0, R: 0, E: 0, L: 0, M: 0 };
+      for (const [cid, ch] of runtimeCache.catalogById.entries()) {
+        const r = (ch?.rarity || 'C') as Rarity;
+        if (VALID_RARITIES.has(r) && ownedSet.has(Number(cid))) ownedByRarity[r] += 1;
+      }
+      const neededFocus = configuredFocus.filter((r) => {
+        const target = Number(state.currentSettings.renaissanceTargets?.[r]) || OFFICIAL_REBIRTH_1_TARGETS[r];
+        return ownedByRarity[r] < target;
+      });
+      if (neededFocus.length > 0) {
+        configuredFocus = neededFocus;
+      } else {
+        const anyIncomplete = (['C', 'U', 'R', 'E', 'L'] as Rarity[]).filter((r) => {
+          const target = Number(state.currentSettings.renaissanceTargets?.[r]) || OFFICIAL_REBIRTH_1_TARGETS[r];
+          return ownedByRarity[r] < target;
+        });
+        if (anyIncomplete.length > 0) configuredFocus = anyIncomplete;
+      }
+    }
+
+    const allowedRarities: Rarity[] = req.rarity === 'RENAISSANCE' ? configuredFocus : [req.rarity];
     const allowedSet = new Set<Rarity>(allowedRarities);
-    const maxPagesPerRarity = allowedRarities.length > 1 ? 4 : 6;
+    const pricePages = allowedRarities.length > 1 ? [1, 2, 3, 4, 5] : [1, 2, 3, 4, 5, 6];
+    const newestPages = [1, 2];
     const rawMatches: BatchMissingPreviewItem[] = [];
 
     const scanRarity = async (rarityFilter: Rarity): Promise<BatchMissingPreviewItem[]> => {
-      const found: BatchMissingPreviewItem[] = [];
       const rarityParam = `&rarity=${encodeURIComponent(rarityFilter)}`;
-      for (let page = 1; page <= maxPagesPerRarity; page += 1) {
-        const res = await kyaraApi(`/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${page}${rarityParam}`, { auth: true }).catch(() => ({ items: [] }));
+      const urls = [
+        ...pricePages.map((p) => `/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${p}${rarityParam}`),
+        ...newestPages.map((p) => `/market/listings?type=fixed&sort=newest&pageSize=50&page=${p}${rarityParam}`)
+      ];
+      const pages = await Promise.all(
+        urls.map((u) => kyaraApi(u, { auth: true }).catch(() => ({ items: [] })))
+      );
+      const seenListings = new Set<string>();
+      const found: BatchMissingPreviewItem[] = [];
+      for (const res of pages) {
         const items = Array.isArray(res?.items) ? res.items : [];
-        if (!items.length) break;
-
-        let highestPagePrice = 0;
         for (const item of items) {
-          const price = Number(item?.price);
-          if (Number.isFinite(price) && price > highestPagePrice) highestPagePrice = price;
           if (!item?.id || item.status !== 'active' || item.isMine) continue;
+          const lid = String(item.id);
+          if (seenListings.has(lid)) continue;
+          seenListings.add(lid);
           if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
+          const price = Number(item?.price);
+          if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
           const char = item.character || {};
           const characterId = Number(char.id ?? item.characterId);
           const rarity = (char.rarity || rarityFilter) as Rarity;
           if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
           if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
-          if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
           found.push({
-            listingId: String(item.id), characterId, name: char.name || `Carte #${characterId}`,
-            series: char.series || '', rarity, price, median7d: null
+            listingId: lid,
+            characterId,
+            name: char.name || `Carte #${characterId}`,
+            series: char.series || '',
+            rarity,
+            price,
+            median7d: null
           });
         }
-        if (highestPagePrice > maxUnitPrice || found.length >= qty * 2) break;
       }
       return found;
     };
@@ -152,9 +194,12 @@ export async function executeBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
   const [bootstrap, rawColl] = await Promise.all([kyaraApi('/me/bootstrap'), kyaraApi('/me/collection?lean=1')]);
   let currentChakra = Number((bootstrap?.me || bootstrap)?.chakra ?? 0);
   const ownedSet = buildOwnedSet(rawColl);
-  const minReserve = Math.max(0, Number(state.currentSettings.autoBuyMinChakraReserve ?? 200));
+  const minReserve = req.ignoreReserve
+    ? 0
+    : Math.max(0, Number(state.currentSettings.autoBuyMinChakraReserve ?? 200));
 
-  const preview = await previewBatchMissingBuy({ ...req, qty, maxUnitPrice, maxTotalBudget });
+  const poolQty = Math.min(150, Math.max(qty * 2, 30));
+  const preview = await previewBatchMissingBuy({ ...req, qty: poolQty, maxUnitPrice, maxTotalBudget: undefined });
   let candidates = preview.items;
   if (Array.isArray(req.listingIds) && req.listingIds.length > 0) {
     const orderMap = new Map(req.listingIds.map((id, idx) => [String(id), idx]));
@@ -170,9 +215,15 @@ export async function executeBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
   let failedCount = 0;
   const boughtNames: string[] = [];
   let stoppedReason: string | undefined;
+  let lastErrorMsg: string | undefined;
+  if (candidates.length === 0) {
+    stoppedReason = `Aucune carte manquante en vente ≤ ${maxUnitPrice} ◆`;
+  }
   const checkBudget = (price: number): string | undefined => {
     if (maxTotalBudget && totalSpent + price > maxTotalBudget) return 'Budget max atteint';
-    if (currentChakra - price < minReserve) return `Réserve Chakra (${minReserve} ◆) atteinte`;
+    if (currentChakra - price < minReserve) {
+      return minReserve > 0 ? `Réserve Chakra (${minReserve} ◆) atteinte` : `Solde Chakra insuffisant (${currentChakra} ◆)`;
+    }
     return undefined;
   };
 
@@ -185,12 +236,23 @@ export async function executeBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
     let freshPrice = item.price;
     try {
       const fresh = await kyaraApi(`/market/listings/${encodeURIComponent(item.listingId)}`, { auth: true });
-      freshPrice = Number(fresh?.type === 'fixed' ? fresh.price : fresh?.buyoutPrice);
-      if (!fresh || fresh.status !== 'active' || fresh.isMine || !Number.isFinite(freshPrice) || freshPrice <= 0 || freshPrice > maxUnitPrice) {
+      const rawFreshPrice = fresh?.type === 'auction' ? fresh?.buyoutPrice : (fresh?.price ?? fresh?.buyoutPrice);
+      freshPrice = Number(rawFreshPrice);
+      if (
+        !fresh ||
+        (fresh.status && fresh.status !== 'active') ||
+        fresh.isMine ||
+        !Number.isFinite(freshPrice) ||
+        freshPrice <= 0 ||
+        freshPrice > maxUnitPrice
+      ) {
         failedCount += 1;
         continue;
       }
-    } catch { failedCount += 1; continue; }
+    } catch {
+      failedCount += 1;
+      continue;
+    }
 
     if ((stoppedReason = checkBudget(freshPrice))) break;
     if (state.currentSettings.dryRun) {
@@ -206,10 +268,21 @@ export async function executeBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
       boughtCount += 1; totalSpent += freshPrice;
       currentChakra = Number(res?.user?.chakra ?? currentChakra - freshPrice);
       ownedSet.add(item.characterId); boughtNames.push(item.name);
-    } catch { failedCount += 1; }
+    } catch (err: any) {
+      failedCount += 1;
+      lastErrorMsg = err?.message || String(err);
+      if (err?.code === 'pass_required' || err?.code === 'market_locked') {
+        stoppedReason = lastErrorMsg;
+        break;
+      }
+    }
+  }
+
+  if (boughtCount === 0 && !stoppedReason && lastErrorMsg) {
+    stoppedReason = lastErrorMsg;
   }
 
   const prefix = state.currentSettings.dryRun ? '[SIMULATION] ' : '';
-  await appendJournal('buy', `${prefix}Achat par lot [${req.rarity}] : ${boughtCount} carte(s) manquante(s) achetée(s) pour ${totalSpent} ◆`);
+  await appendJournal('buy', `${prefix}Achat par lot [${req.rarity}] : ${boughtCount} carte(s) manquante(s) achetée(s) pour ${totalSpent} ◆${stoppedReason ? ` (${stoppedReason})` : ''}`);
   return { boughtCount, totalSpent, failedCount, remainingChakra: currentChakra, boughtNames, stoppedReason };
 }

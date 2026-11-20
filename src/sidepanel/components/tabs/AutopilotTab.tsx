@@ -197,7 +197,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
     settings.wishlistAutoBuyEnabled && 'Envies', settings.renaissanceFocusEnabled && 'Renaissance'
   ].filter(Boolean);
   const marketSummary = mw?.active
-    ? `Radar actif (20s) · ${radarDeals} deal(s)`
+    ? `Radar actif (6s) · ${radarDeals} deal(s)`
     : `${marketModes.length ? marketModes.join(' · ') : 'Veille'} · ${dealsCount} offres`;
 
   return (
@@ -404,7 +404,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 />
               </div>
               <div className="module-card__footer">
-                <span className="mono-stat">{mw?.active ? `Radar actif (20s) · ${radarDeals} deal(s)` : `${dealsCount} deal(s) · ${tradesCount} trade(s)`}</span>
+                <span className="mono-stat">{mw?.active ? `Radar actif (6s) · ${radarDeals} deal(s)` : `${dealsCount} deal(s) · ${tradesCount} trade(s)`}</span>
                 <button type="button" onClick={handleRunMarketWatch} disabled={actingWatch} className="btn btn--xs btn--ghost">
                   {actingWatch ? 'Scan…' : 'Observer & Acheter'}
                 </button>

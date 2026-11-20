@@ -180,6 +180,37 @@ describe('v2.1.0 Renaissance & Batch Missing Buy', () => {
       expect(res.boughtNames).toEqual(['Card 31', 'Card 33']);
       expect(res.stoppedReason).toContain('Réserve Chakra (200');
     });
+
+    it('includes rarity E in RENAISSANCE batch buy, scans deep pages in parallel, and ignores reserve on manual click', async () => {
+      state.currentSettings.autoBuyMinChakraReserve = 200;
+      state.currentSettings.renaissanceTargetRarities = ['C', 'U', 'R'];
+
+      mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+        if (path === '/me/bootstrap') return { me: { chakra: 50 } };
+        if (path === '/me/collection?lean=1') return [];
+        if (path.includes('rarity=E') && path.includes('page=4')) {
+          return {
+            items: [{ id: 'l-epic-deep', status: 'active', price: 15, character: { id: 99, name: 'Deep Epic', rarity: 'E' } }]
+          };
+        }
+        if (path.startsWith('/market/listings?')) {
+          return {
+            items: [{ id: 'l-expensive', status: 'active', price: 999, character: { id: 88, name: 'Expensive', rarity: 'C' } }]
+          };
+        }
+        if (path.startsWith('/me/collection/prices?ids=')) return [];
+        if (path === '/market/listings/l-epic-deep') return { id: 'l-epic-deep', status: 'active', type: 'fixed', price: 15 };
+        if (opts.method === 'POST' && path === '/market/listings/l-epic-deep/buy') {
+          return { ok: true, user: { chakra: 35 } };
+        }
+        return {};
+      });
+
+      const res = await executeBatchMissingBuy({ rarity: 'RENAISSANCE', maxUnitPrice: 20, qty: 5, ignoreReserve: true });
+      expect(res.boughtCount).toBe(1);
+      expect(res.boughtNames).toEqual(['Deep Epic']);
+      expect(res.totalSpent).toBe(15);
+    });
   });
 
   describe('scanMarketDealsInternal', () => {

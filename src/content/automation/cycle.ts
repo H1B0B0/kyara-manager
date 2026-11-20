@@ -6,12 +6,18 @@ import { executeAutoClaimMissions } from './missions';
 import { executeAutoRecycle } from './auto-recycle';
 import { executeAutoSell } from './auto-sell';
 import { executeAutoBuy } from './auto-buy';
-import { runExclusive } from '../operations';
 import { loadCardLedger } from '../safety';
 
 export async function runAutomationCycle({ manual = false } = {}): Promise<any> {
   try {
-    return await runExclusive(async () => {
+    if (state.updatePending) return { ok: false, error: 'Mise à jour en cours. Les nouvelles actions sont suspendues.' };
+    return await navigator.locks.request('kyara-manager-cycle', { ifAvailable: true }, async (lock) => {
+      if (!lock || state.isCycleRunning) {
+        return manual
+          ? { ok: false, error: "Un cycle d'automatisation est déjà en cours." }
+          : { ok: true, skipped: true };
+      }
+      await loadSettings();
       const { kmLastAutoCycleAt } = await chrome.storage.local.get('kmLastAutoCycleAt');
       const interval = Math.max(20, Number(state.currentSettings.loopIntervalSec) || 45) * 1000;
       if (!manual && Date.now() - (Number(kmLastAutoCycleAt) || 0) < interval) return { ok: true, skipped: true };
