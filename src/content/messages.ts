@@ -194,7 +194,7 @@ export function setupMessageListener(): () => void {
           positiveInteger(characterId, 'Carte');
           positiveInteger(qty, 'Quantité');
           const available = await getCardAvailability(Number(characterId));
-          if (Number(qty) > available.spare) throw new Error('Quantité indisponible ou carte protégée. Actualise les doublons.');
+          if (Number(qty) > available.recyclable) throw new Error('Quantité indisponible ou carte protégée. Actualise les doublons.');
           const res = await kyaraApi(`/me/collection/${Number(characterId)}/recycle`, { method: 'POST', body: { qty: Number(qty) } });
           await appendJournal('recycle', `Recyclage direct : ${name} ×${qty} (+${res?.gained ?? '?'} ◆)`);
           await recordCumulativeMetric({ cardsRecycled: Number(qty), chakraFromRecycle: Number(res?.gained) || 0 });

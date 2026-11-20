@@ -61,7 +61,18 @@ export async function scanBuyOrderOpportunities(
   dashboard: any,
   options: { limit?: number; discountPct?: number } = {}
 ): Promise<BuyOrderOpportunity[]> {
-  const candidates = collectCandidates(dashboard, Math.max(1, Math.min(20, Number(options.limit) || 16)));
+  const rawColl = await kyaraApi('/me/collection?lean=1').catch(() => null);
+  const ownedSet = new Set<number>();
+  if (Array.isArray(rawColl)) {
+    for (const e of rawColl) {
+      const cid = Number(e?.characterId ?? e?.id);
+      if (Number.isFinite(cid) && Number(e?.qty) > 0) ownedSet.add(cid);
+    }
+  }
+  const cap = Math.max(1, Math.min(20, Number(options.limit) || 16));
+  const candidates = collectCandidates(dashboard, cap * 2)
+    .filter((c) => !ownedSet.has(c.characterId))
+    .slice(0, cap);
   if (candidates.length === 0) return [];
 
   const discountPct = Number(options.discountPct ?? state.currentSettings.buyOrderDiscountPct ?? 25);

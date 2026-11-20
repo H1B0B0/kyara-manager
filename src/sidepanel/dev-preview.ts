@@ -190,7 +190,7 @@ const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.3.1' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.3.2' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -359,14 +359,14 @@ function handleMessage(cmd: any): any {
     return { ok: true, boughtCount: 1, dealsFound: nextMw.dealsFound, marketWatch: nextMw };
   }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
-  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.3.1' } }); return { ok: true }; }
+  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.3.2' } }); return { ok: true }; }
   return { ok: true, data: {} };
 }
 
 function installChromeMock() {
   (globalThis as any).chrome = {
     runtime: {
-      lastError: null, getManifest: () => ({ version: '2.3.1', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
+      lastError: null, getManifest: () => ({ version: '2.3.2', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
       sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },

@@ -356,7 +356,21 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                 <label htmlFor="sw-autopilot-renaissance" className="module-card__sublabel">
                   Focus Renaissance (auto-achat ciblé) <span className="mono-stat">({(settings.renaissanceTargetRarities || ['C', 'U', 'R']).join(', ')})</span>
                 </label>
-                <input type="checkbox" role="switch" id="sw-autopilot-renaissance" className="switch switch--sm" checked={Boolean(settings.renaissanceFocusEnabled)} onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })} />
+                <input
+                  type="checkbox"
+                  role="switch"
+                  id="sw-autopilot-renaissance"
+                  className="switch switch--sm"
+                  checked={Boolean(settings.renaissanceFocusEnabled)}
+                  onChange={(e) =>
+                    onUpdateSettings({
+                      renaissanceFocusEnabled: e.target.checked,
+                      ...(e.target.checked && !settings.autoBuyMissingEnabled && !settings.autoMarketEnabled
+                        ? { autoBuyMissingEnabled: true }
+                        : {})
+                    })
+                  }
+                />
               </div>
               <div className="module-card__footer">
                 <span className="mono-stat">{mw?.active ? `Radar actif (20s) · ${radarDeals} deal(s)` : `${dealsCount} deal(s) · ${tradesCount} trade(s)`}</span>

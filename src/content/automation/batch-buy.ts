@@ -87,33 +87,41 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
         ? (Array.isArray(targetRarities) && targetRarities.length ? targetRarities : ['C', 'U', 'R'])
         : [req.rarity];
     const allowedSet = new Set<Rarity>(allowedRarities);
-    const rarityParam = allowedRarities.length === 1 ? `&rarity=${encodeURIComponent(allowedRarities[0])}` : '';
-
+    const maxPagesPerRarity = allowedRarities.length > 1 ? 4 : 6;
     const rawMatches: BatchMissingPreviewItem[] = [];
-    for (let page = 1; page <= 6; page += 1) {
-      const res = await kyaraApi(`/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${page}${rarityParam}`, { auth: true }).catch(() => ({ items: [] }));
-      const items = Array.isArray(res?.items) ? res.items : [];
-      if (!items.length) break;
 
-      let highestPagePrice = 0;
-      for (const item of items) {
-        const price = Number(item?.price);
-        if (Number.isFinite(price) && price > highestPagePrice) highestPagePrice = price;
-        if (!item?.id || item.status !== 'active' || item.isMine) continue;
-        if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
-        const char = item.character || {};
-        const characterId = Number(char.id ?? item.characterId);
-        const rarity = (char.rarity || 'C') as Rarity;
-        if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
-        if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
-        if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
-        rawMatches.push({
-          listingId: String(item.id), characterId, name: char.name || `Carte #${characterId}`,
-          series: char.series || '', rarity, price, median7d: null
-        });
+    const scanRarity = async (rarityFilter: Rarity): Promise<BatchMissingPreviewItem[]> => {
+      const found: BatchMissingPreviewItem[] = [];
+      const rarityParam = `&rarity=${encodeURIComponent(rarityFilter)}`;
+      for (let page = 1; page <= maxPagesPerRarity; page += 1) {
+        const res = await kyaraApi(`/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${page}${rarityParam}`, { auth: true }).catch(() => ({ items: [] }));
+        const items = Array.isArray(res?.items) ? res.items : [];
+        if (!items.length) break;
+
+        let highestPagePrice = 0;
+        for (const item of items) {
+          const price = Number(item?.price);
+          if (Number.isFinite(price) && price > highestPagePrice) highestPagePrice = price;
+          if (!item?.id || item.status !== 'active' || item.isMine) continue;
+          if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
+          const char = item.character || {};
+          const characterId = Number(char.id ?? item.characterId);
+          const rarity = (char.rarity || rarityFilter) as Rarity;
+          if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
+          if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
+          if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
+          found.push({
+            listingId: String(item.id), characterId, name: char.name || `Carte #${characterId}`,
+            series: char.series || '', rarity, price, median7d: null
+          });
+        }
+        if (highestPagePrice > maxUnitPrice || found.length >= qty * 2) break;
       }
-      if (highestPagePrice > maxUnitPrice || rawMatches.length >= qty * 2) break;
-    }
+      return found;
+    };
+
+    const perRarityLists = await Promise.all(allowedRarities.map((r) => scanRarity(r)));
+    for (const list of perRarityLists) rawMatches.push(...list);
 
     rawMatches.sort((a, b) => a.price - b.price);
     const seenCharIds = new Set<number>();

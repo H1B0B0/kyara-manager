@@ -72,7 +72,7 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
   let slots = Math.max(0, maxSlots - book.listings.length);
   result.slotsAvailable = slots;
 
-  const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U'];
+  const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U', 'R'];
   // With a forced mode, verdicts computed under the saved mode are not trusted: live data decides.
   const eligible = (d: any) =>
     !d.pinned && d.spare > 0 && (options.mode ? d.verdict !== 'PROTÉGÉ' : Boolean(d.canAutoSell));
@@ -121,8 +121,9 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
       const canRecycle = settings.autoRecycleEnabled && recycleRarities.includes(cand.rarity);
 
       if (ev.canAutoRecycle && canRecycle && ev.sellProfile?.turbo) {
-        if (!book.reserve(cand.characterId, avail.spare, 'recycle')) continue;
-        const done = await recycleCopies(book, cand, avail.spare, 'Recyclage Turbo');
+        const recQty = avail.recyclable ?? avail.spare;
+        if (recQty <= 0 || !book.reserve(cand.characterId, recQty, 'recycle')) continue;
+        const done = await recycleCopies(book, cand, recQty, 'Recyclage Turbo');
         if (done) result.recycledCopies += done.qty;
         continue;
       }

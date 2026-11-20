@@ -16,7 +16,7 @@ export function mockChrome(initial: Record<string, any> = {}) {
   const chromeMock = {
     runtime: {
       id: 'test-extension',
-      getManifest: vi.fn(() => ({ version: '2.3.1', content_scripts: [], side_panel: { default_path: 'sidepanel/index.html' } })),
+      getManifest: vi.fn(() => ({ version: '2.3.2', content_scripts: [], side_panel: { default_path: 'sidepanel/index.html' } })),
       getURL: vi.fn((path = '') => `chrome-extension://test-extension/${path}`),
       reload: vi.fn(),
       requestUpdateCheck: vi.fn(async () => ({ status: 'no_update' })),
