@@ -1,44 +1,421 @@
 /* ==========================================================================
-   Full-Screen Cockpit Mode (?mode=full)
+   Playstyle Presets Bar, Daily Checklist & Collapsible Modules (365px-safe)
    ========================================================================== */
-html.km-mode-full body {
-  max-width: 1380px;
-  margin: 0 auto;
-  padding: 16px 28px;
-  font-size: 13px;
-  background-color: #0c0b10;
-}
-
-html.km-mode-full .kpi-bar {
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-}
-
-html.km-mode-full .card {
-  padding: 14px 18px;
-}
-
-html.km-mode-full .data-table {
-  font-size: 13px;
-}
-
-html.km-mode-full .data-table th,
-html.km-mode-full .data-table td {
-  padding: 10px 12px;
-}
-
-html.km-mode-full .tab-nav {
-  grid-template-columns: repeat(6, 1fr);
+.autopilot-cockpit-grid,
+.cockpit-col {
+  display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin: 12px 0 16px;
+  min-width: 0;
 }
 
-html.km-mode-full .tab-btn {
-  padding: 8px 18px;
-  font-size: 13px;
+.presets-bar {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 11px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
 }
 
-html.km-mode-full .best-pulls-grid {
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  max-height: none;
+.presets-bar__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.presets-bar__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--fg2);
+  letter-spacing: 0.02em;
+}
+
+.presets-bar__badge {
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--acc-soft);
+  color: var(--acc2);
+  border: 1px solid rgba(255, 77, 46, 0.38);
+}
+
+.presets-bar__pills {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.presets-bar__pill {
+  appearance: none;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  color: var(--fg2);
+  font-family: var(--body);
+  font-size: 10.5px;
+  font-weight: 600;
+  padding: 5px 6px;
+  border-radius: 999px;
+  cursor: pointer;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: border-color 0.15s ease, background-color 0.15s ease, color 0.15s ease;
+}
+
+.presets-bar__pill:hover {
+  border-color: var(--line3);
+  color: var(--fg);
+  background: var(--raise);
+}
+
+.presets-bar__pill.is-active {
+  border-color: rgba(255, 77, 46, 0.5);
+  background: var(--acc-soft);
+  color: var(--fg);
+  font-weight: 700;
+}
+
+.presets-bar__desc {
+  margin: 0;
+  font-size: 10.5px;
+  color: var(--mut);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.daily-checklist-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 9px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.checklist-pill {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 9px;
+  border-radius: 999px;
+  font-family: var(--body);
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  border: 1px solid var(--line2);
+  background: var(--raise);
+  color: var(--fg);
+  white-space: nowrap;
+  transition: transform 0.12s ease, border-color 0.15s ease, background-color 0.15s ease;
+}
+
+.checklist-pill:hover {
+  transform: translateY(-1px);
+}
+
+.checklist-pill--acc {
+  background: var(--acc-soft);
+  border-color: rgba(255, 77, 46, 0.45);
+  color: #ff8c75;
+}
+
+.checklist-pill--gold {
+  background: var(--gold-soft);
+  border-color: rgba(245, 197, 24, 0.45);
+  color: var(--gold);
+}
+
+.checklist-pill--purple {
+  background: rgba(176, 114, 255, 0.12);
+  border-color: rgba(176, 114, 255, 0.45);
+  color: var(--purple);
+}
+
+.checklist-pill--warn {
+  background: rgba(255, 179, 71, 0.12);
+  border-color: rgba(255, 179, 71, 0.45);
+  color: var(--warn);
+}
+
+/* Collapsible Autopilot Modules */
+.module-card__head {
+  gap: 8px;
+}
+
+.module-card__toggle {
+  appearance: none;
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+}
+
+.module-card__titles {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  flex: 1;
+  gap: 1px;
+}
+
+.module-card__title {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.module-card__summary {
+  font-size: 10px;
+  color: var(--mut);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.module-card__controls {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+}
+
+.module-card__toggle-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  background: var(--bg2);
+  border: 1px solid var(--line2);
+  color: var(--fg2);
+  font-family: var(--body);
+  font-size: 10px;
+  font-weight: 600;
+  padding: 3px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background-color 0.15s ease;
+}
+
+.module-card__toggle-btn:hover {
+  border-color: var(--line3);
+  color: var(--fg);
+  background: var(--raise);
+}
+
+.module-card__toggle-btn svg {
+  transition: transform 0.18s ease;
+}
+
+.module-card__toggle-btn.is-open {
+  border-color: rgba(255, 77, 46, 0.45);
+  color: var(--fg);
+  background: var(--acc-soft);
+}
+
+.module-card__toggle-btn.is-open svg {
+  transform: rotate(180deg);
+}
+
+.module-card__body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--line);
+}
+
+.icon-btn--close {
+  border-color: rgba(255, 77, 46, 0.42);
+  background: rgba(255, 77, 46, 0.12);
+  color: #ff8c75;
+}
+
+.icon-btn--close:hover {
+  background: rgba(255, 77, 46, 0.22);
+  border-color: var(--acc);
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   Narrow Fallback for Full / Overlay Mode (< 860px)
+   ========================================================================== */
+@media (max-width: 859px) {
+  :is(html.km-mode-full, html.km-mode-overlay) body {
+    background-color: #0c0b10;
+  }
+}
+
+/* ==========================================================================
+   True Desktop Sidebar Cockpit Layout (>= 860px)
+   ========================================================================== */
+@media (min-width: 860px) {
+  :is(html.km-mode-full, html.km-mode-overlay) body {
+    margin: 0;
+    padding: 0;
+    max-width: none;
+    height: 100vh;
+    overflow: hidden;
+    font-size: 13px;
+    background-color: #0c0b10;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) #root {
+    width: 100% !important;
+    max-width: none !important;
+    height: 100vh;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .app-shell {
+    display: grid;
+    grid-template-columns: 268px minmax(0, 1fr);
+    height: 100vh;
+    overflow: hidden;
+    max-width: 1440px;
+    margin: 0 auto;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .app-header {
+    position: static;
+    height: 100vh;
+    overflow-y: auto;
+    border-right: 1px solid var(--line);
+    border-bottom: none;
+    padding: 16px 14px;
+    background: #100f15;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .brand-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .header-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+    width: 100%;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .header-actions .icon-btn {
+    justify-content: center;
+    width: 100%;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .kpi-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+    margin-bottom: 0;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .tab-nav {
+    grid-template-columns: 1fr;
+    gap: 5px;
+    margin: 12px 0 0;
+    padding: 0;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .tab-btn {
+    justify-content: flex-start;
+    padding: 8px 11px;
+    border-radius: 9px;
+    font-size: 12px;
+    gap: 8px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .tab-btn .tab-label {
+    font-size: 12px;
+    letter-spacing: 0;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .tab-btn .tab-badge {
+    margin-left: auto;
+    font-size: 10px;
+    padding: 2px 7px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .app-main {
+    height: 100vh;
+    overflow-y: auto;
+    padding: 18px 22px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .autopilot-cockpit-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .market-cockpit-layout {
+    display: grid;
+    grid-template-columns: 330px minmax(0, 1fr);
+    gap: 16px;
+    align-items: start;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .market-cockpit-layout .renaissance-panel {
+    position: sticky;
+    top: 0;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .duplicates-cockpit-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1.25fr) 310px;
+    gap: 16px;
+    align-items: start;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) :is(.deal-card-list, .inventory-card-list, .wishlist-card-list) {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 10px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .best-pulls-grid {
+    grid-template-columns: repeat(auto-fill, minmax(175px, 1fr));
+    max-height: none;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .journal-list {
+    max-height: 360px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .card {
+    padding: 13px 16px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .data-table {
+    font-size: 12.5px;
+  }
+
+  :is(html.km-mode-full, html.km-mode-overlay) .data-table th,
+  :is(html.km-mode-full, html.km-mode-overlay) .data-table td {
+    padding: 9px 11px;
+  }
 }

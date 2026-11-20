@@ -210,6 +210,32 @@
 }
 .roi-stat-box--chakra .roi-stat-box__val { color: var(--gold); text-shadow: 0 0 10px rgba(245, 197, 24, 0.3); }
 .roi-stat-box__sub { font-family: var(--mono); font-size: 10px; color: var(--mut); margin-top: 1px; }
+.roi-yield-strip {
+  margin-top: 8px; padding: 7px 9px; border-radius: 8px;
+  background: var(--panel2); border: 1px solid rgba(245, 197, 24, 0.22);
+  display: flex; flex-direction: column; gap: 5px; font-size: 10px; color: var(--fg2);
+}
+.roi-yield-strip__proj { color: var(--gold); }
+.roi-sparkline { width: 100%; height: 34px; display: block; }
+
+/* Golden KPI Sub & Booster Sniper Banner */
+.kpi-card__sub--gold { color: var(--gold); font-weight: 700; }
+.golden-banner {
+  background: linear-gradient(135deg, rgba(245, 197, 24, 0.16), rgba(255, 77, 46, 0.08));
+  border: 1px solid rgba(245, 197, 24, 0.48); border-radius: 10px;
+  padding: 9px 11px; margin-bottom: 10px;
+  display: flex; align-items: center; gap: 9px;
+}
+.golden-banner__content { flex: 1; min-width: 0; }
+.golden-banner__title { display: block; font-size: 12px; font-weight: 700; color: var(--gold); }
+.golden-banner__desc {
+  margin: 1px 0 0; font-size: 10.5px; color: var(--fg2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.golden-banner__btn {
+  flex-shrink: 0; background: var(--gold); border-color: var(--gold); color: #0e0d12; font-weight: 700;
+}
+.golden-banner__btn:hover:not(:disabled) { background: #ffd53d; border-color: #ffd53d; }
 
 /* Pity Sniper Alert Banner */
 .pity-banner {

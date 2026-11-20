@@ -124,7 +124,9 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
 
   return (
     <section className="tab-panel is-active">
-      <div className="summary-strip">
+      <div className="duplicates-cockpit-layout">
+        <div className="duplicates-cockpit-main">
+          <div className="summary-strip">
         <div className="summary-pill summary-pill--sell">
           <span className="summary-pill__label">{t('dupSummarySell')}</span>
           <strong className="summary-pill__val">
@@ -354,9 +356,11 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
           </table>
         </div>
       )}
+        </div>
 
       {/* Active Listings Section with 10-Segment Slot Rack & Age Telemetry */}
-      <div className="card card--compact" style={{ marginTop: '14px' }}>
+      <aside className="duplicates-cockpit-aside">
+        <div className="card card--compact">
         <div className="card__header">
           <h3 className="card__title">{t('activeListingsTitle')}</h3>
           <span className="badge font-mono">{activeListings.length} / {maxSlots}</span>
@@ -412,6 +416,8 @@ export const DuplicatesTab: React.FC<DuplicatesTabProps> = ({
             })}
           </div>
         )}
+        </div>
+      </aside>
       </div>
     </section>
   );

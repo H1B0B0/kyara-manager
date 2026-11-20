@@ -17,8 +17,10 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, settings, re
 
   const recNew = boosters?.recommendedNew;
   const recEv = boosters?.recommendedEv;
+  const recGolden = boosters?.recommendedGolden;
   const recRen = boosters?.recommendedRenaissance;
   const isPityNear = boosters?.isPityNear;
+  const isGoldenNext = Boolean(boosters?.isGoldenNext && recGolden);
   const pityTarget = boosters?.recommendedPity?.name || recNew?.name || 'Booster avec le plus de Mythiques';
   const focusRarities = renaissance?.focusRarities?.length
     ? renaissance.focusRarities
@@ -44,6 +46,27 @@ export const BoostersTab: React.FC<BoostersTabProps> = ({ boosters, settings, re
 
   return (
     <section className="tab-panel is-active">
+      {/* Golden Pack Sniper Banner */}
+      {isGoldenNext && recGolden && (
+        <div className="golden-banner" role="status">
+          <span className="kanji-box kanji-box--gold" aria-hidden="true">金</span>
+          <div className="golden-banner__content">
+            <strong className="golden-banner__title">Pack Doré Prêt !</strong>
+            <p className="golden-banner__desc">
+              {recGolden.name} <span className="font-mono">(EV ~{recGolden.expectedChakraValue} ◆)</span>
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => handleOpenPack(recGolden, 1)}
+            disabled={openingId === recGolden.packId || !recGolden.canOpenNow}
+            className="btn btn--primary btn--xs golden-banner__btn"
+          >
+            {openingId === recGolden.packId ? 'Ouverture…' : 'Ouvrir le Pack Doré'}
+          </button>
+        </div>
+      )}
+
       {/* Pity Sniper Alert */}
       {isPityNear && (
         <div className="pity-banner">

@@ -1,9 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import type { DashboardState, MarketDeal, ProfitableTrade, Rarity } from '../../../types/kyara';
+import type { DashboardState, MarketDeal, ProfitableTrade, Rarity, SeriesProgress } from '../../../types/kyara';
 import { DEFAULT_SETTINGS, type KyaraSettings } from '../../../types/settings';
 import { RarityPill } from '../common/RarityPill';
 import { RenaissancePanel } from '../market/RenaissancePanel';
 import { BatchBuyPanel } from '../market/BatchBuyPanel';
+import { SeriesSniperPanel } from '../market/SeriesSniperPanel';
+import { BuyOrdersPanel } from '../market/BuyOrdersPanel';
 import { t } from '../../../lib/i18n';
 import { sendCommand } from '../../hooks/useDashboard';
 
@@ -18,7 +20,8 @@ export interface MarketTabProps {
   onScanDeals?: () => Promise<any>;
 }
 
-type MarketSubTab = 'deals' | 'batch' | 'trades';
+type MarketSubTab = 'deals' | 'batch' | 'series' | 'orders';
+type OffersView = 'listings' | 'trades';
 type DealCategory = 'ALL' | 'RENAISSANCE' | 'MISSING' | 'FLIP' | 'WISHLIST';
 type DealSort = 'profit' | 'price_asc' | 'discount' | 'missing';
 
@@ -43,6 +46,13 @@ const ScanIcon: React.FC = () => (
   </svg>
 );
 
+const ExternalIcon: React.FC = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+    <polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" />
+  </svg>
+);
+
 const formatChakra = (val: number | null | undefined, signed = false): string => {
   if (val === null || val === undefined || !Number.isFinite(val)) return '—';
   const prefix = signed && val > 0 ? '+' : '';
@@ -53,6 +63,7 @@ export const MarketTab: React.FC<MarketTabProps> = ({
   deals, trades, dashboard, settings, onUpdateSettings, onToast, onRefresh, onScanDeals
 }) => {
   const [subTab, setSubTab] = useState<MarketSubTab>('deals');
+  const [offersView, setOffersView] = useState<OffersView>('listings');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<DealSort>('profit');
   const [rarityFilter, setRarityFilter] = useState<'ALL' | Rarity>('ALL');
@@ -61,8 +72,11 @@ export const MarketTab: React.FC<MarketTabProps> = ({
   const [buyingId, setBuyingId] = useState<string | null>(null);
   const [scanning, setScanning] = useState(false);
   const [batchSeed, setBatchSeed] = useState<{ rarity?: Rarity | 'RENAISSANCE'; qty?: number }>({});
+  const [seriesContext, setSeriesContext] = useState<{ series: string; characterIds: number[] } | null>(null);
 
   const effectiveSettings = settings || DEFAULT_SETTINGS;
+  const seriesProgress = dashboard?.seriesProgress || [];
+  const seriesCount = seriesProgress.length;
 
   useEffect(() => {
     if (deals.length === 0 && onScanDeals) void onScanDeals();
@@ -77,8 +91,34 @@ export const MarketTab: React.FC<MarketTabProps> = ({
   };
 
   const handleQuickBatchForRarity = (rarity: Rarity, missingCount: number) => {
+    setSeriesContext(null);
     setBatchSeed({ rarity, qty: Math.max(1, Math.min(50, missingCount)) });
     setSubTab('batch');
+  };
+
+  const handleCompleteSeries = (s: SeriesProgress) => {
+    const characterIds = s.missingCards.map((c) => c.characterId);
+    setSeriesContext({ series: s.series, characterIds });
+    setBatchSeed({ qty: Math.max(1, Math.min(150, characterIds.length || s.missingCount)) });
+    setSubTab('batch');
+  };
+
+  const handleAddSeriesToWishlist = async (s: SeriesProgress) => {
+    if (s.missingCards.length === 0) return;
+    let added = 0;
+    for (const card of s.missingCards) {
+      const res = await sendCommand({
+        type: 'km:cmd:wishlist-add',
+        characterId: card.characterId,
+        name: card.name,
+        series: s.series,
+        rarity: card.rarity,
+        budgetChakra: Math.max(2, Math.round(card.estimatedPrice || 10))
+      });
+      if (res?.ok) added += 1;
+    }
+    onToast(`${added} carte(s) de ${s.series} ajoutée(s) aux envies`);
+    onRefresh();
   };
 
   const filteredDeals = useMemo(() => {
@@ -121,28 +161,40 @@ export const MarketTab: React.FC<MarketTabProps> = ({
 
   return (
     <section className="tab-panel is-active market-pro-container">
-      <RenaissancePanel
-        renaissance={dashboard?.renaissance}
-        settings={effectiveSettings}
-        onUpdateSettings={handleUpdateSettings}
-        onQuickBatchForRarity={handleQuickBatchForRarity}
-      />
+      <div className="market-cockpit-layout">
+        <RenaissancePanel
+          renaissance={dashboard?.renaissance}
+          settings={effectiveSettings}
+          onUpdateSettings={handleUpdateSettings}
+          onQuickBatchForRarity={handleQuickBatchForRarity}
+          onToast={onToast}
+          onRefresh={onRefresh}
+        />
 
-      <div className="market-subtabs" role="tablist" aria-label="Vues du marché">
-        <button type="button" role="tab" aria-selected={subTab === 'deals'} className={`market-subtab ${subTab === 'deals' ? 'is-active' : ''}`} onClick={() => setSubTab('deals')}>
-          Opportunités ({deals.length})
-        </button>
-        <button type="button" role="tab" aria-selected={subTab === 'batch'} className={`market-subtab ${subTab === 'batch' ? 'is-active' : ''}`} onClick={() => setSubTab('batch')}>
-          Achat par lot
-        </button>
-        <button type="button" role="tab" aria-selected={subTab === 'trades'} className={`market-subtab ${subTab === 'trades' ? 'is-active' : ''}`} onClick={() => setSubTab('trades')}>
-          Échanges ({trades.length})
-        </button>
+        <div className="market-cockpit-main">
+          <div className="market-subtabs" role="tablist" aria-label="Vues du marché">
+        {([
+          ['deals', `Offres (${deals.length})`],
+          ['batch', 'Lots'],
+          ['series', `Séries (${seriesCount})`],
+          ['orders', 'Ordres']
+        ] as Array<[MarketSubTab, string]>).map(([key, label]) => (
+          <button key={key} type="button" role="tab" aria-selected={subTab === key} className={`market-subtab ${subTab === key ? 'is-active' : ''}`} onClick={() => setSubTab(key)}>
+            {label}
+          </button>
+        ))}
       </div>
 
       {subTab === 'deals' && (
         <>
-          <div className="card card--compact">
+          <div className="offers-subswitch" role="group" aria-label="Type d'offres">
+            <button type="button" className={`offers-subswitch__pill ${offersView === 'listings' ? 'is-active' : ''}`} onClick={() => setOffersView('listings')}>Annonces ({deals.length})</button>
+            <button type="button" className={`offers-subswitch__pill ${offersView === 'trades' ? 'is-active' : ''}`} onClick={() => setOffersView('trades')}>Échanges ({trades.length})</button>
+          </div>
+
+          {offersView === 'listings' ? (
+            <>
+              <div className="card card--compact">
             <div className="card__header">
               <div className="tile-head tile-head--sm">
                 <span className="kanji-box kanji-box--sm kanji-box--acc" aria-hidden="true">市</span>
@@ -227,7 +279,7 @@ export const MarketTab: React.FC<MarketTabProps> = ({
                     <div className="deal-card__badge-stack">
                       {d.discountPct > 0 && <span className="discount-pill">-{d.discountPct}%</span>}
                       {d.isRenaissanceNeed && <span className="renaissance-badge">Renaissance</span>}
-                      {d.isMissing && <span className="missing-badge">Manquante</span>}
+                      {d.isMissing && !d.isRenaissanceNeed && <span className="missing-badge">Manquante</span>}
                     </div>
                   </div>
 
@@ -279,7 +331,7 @@ export const MarketTab: React.FC<MarketTabProps> = ({
                         <RarityPill rarity={d.rarity} />
                         <strong>{d.name}</strong>
                         {d.isRenaissanceNeed && <span className="renaissance-badge" style={{ marginLeft: '4px' }}>Ren.</span>}
-                        {d.isMissing && <span className="missing-badge" style={{ marginLeft: '4px' }}>Manq.</span>}
+                        {d.isMissing && !d.isRenaissanceNeed && <span className="missing-badge" style={{ marginLeft: '4px' }}>Manq.</span>}
                       </td>
                       <td data-label={t('thBuy')} className="num font-mono">{d.buyPrice} ◆</td>
                       <td data-label={t('thMedian7d')} className="num font-mono">{formatChakra(d.refMedian)}</td>
@@ -298,59 +350,77 @@ export const MarketTab: React.FC<MarketTabProps> = ({
               </table>
             </div>
           )}
+            </>
+          ) : (
+            <div className="card card--compact">
+              <div className="card__header">
+                <div className="tile-head tile-head--sm">
+                  <span className="kanji-box kanji-box--sm kanji-box--cyan" aria-hidden="true">換</span>
+                  <div>
+                    <h3 className="card__title">Échanges Rentables</h3>
+                    <p className="card__desc">Propositions d&apos;échange du marché où vous gagnez de la valeur.</p>
+                  </div>
+                </div>
+                <span className="badge font-mono">{trades.length}</span>
+              </div>
+              {trades.length === 0 ? (
+                <div className="empty-state-box">
+                  <span className="empty-state-box__icon">換</span>
+                  <p className="empty-state-box__text">Aucun échange avantageux disponible sur le marché pour l&apos;instant.</p>
+                </div>
+              ) : (
+                <div className="trades-list">
+                  {trades.map((tr) => (
+                    <div key={tr.listingId} className="trade-item trade-item--pro">
+                      <div className="trade-item__row">
+                        <div className="trade-item__col">
+                          <span className="trade-item__label">
+                            Offert {tr.offered.isMissing && <span className="missing-badge" style={{ marginLeft: '4px' }}>Manquante</span>}
+                          </span>
+                          <strong><RarityPill rarity={tr.offered.rarity} />{tr.offered.name}</strong>
+                          <span className="trade-item__val font-mono">{tr.offered.median7d} ◆</span>
+                        </div>
+                        <div className="trade-item__arrow"><SwapArrow /></div>
+                        <div className="trade-item__col">
+                          <span className="trade-item__label">Demandé</span>
+                          <strong><RarityPill rarity={tr.wanted.rarity} />{tr.wanted.name}</strong>
+                          <span className="trade-item__val font-mono">{tr.wanted.median7d} ◆</span>
+                        </div>
+                        <div className="trade-item__gain text-gain font-mono">+{tr.profit} ◆</div>
+                      </div>
+                      <div className="trade-item__actions">
+                        <button type="button" className="btn btn--ghost btn--xs" onClick={() => void chrome.tabs?.create({ url: 'https://kyara.games/marche?onglet=echanges' })}>
+                          <ExternalIcon />
+                          <span>Voir sur Kyara</span>
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </>
       )}
 
       {subTab === 'batch' && (
         <BatchBuyPanel
-          userChakra={dashboard?.me?.chakra ?? 0}
-          settings={effectiveSettings}
-          initialRarity={batchSeed.rarity}
-          initialQty={batchSeed.qty}
-          onToast={onToast}
-          onRefresh={onRefresh}
+          userChakra={dashboard?.me?.chakra ?? 0} settings={effectiveSettings}
+          initialRarity={batchSeed.rarity} initialQty={batchSeed.qty}
+          seriesContext={seriesContext} onClearSeriesContext={() => setSeriesContext(null)}
+          onToast={onToast} onRefresh={onRefresh}
         />
       )}
 
-      {subTab === 'trades' && (
-        <div className="card card--compact">
-          <div className="card__header">
-            <div className="tile-head tile-head--sm">
-              <span className="kanji-box kanji-box--sm kanji-box--cyan" aria-hidden="true">換</span>
-              <div>
-                <h3 className="card__title">Échanges Rentables (Trades)</h3>
-                <p className="card__desc">Propositions d'échange du marché où vous gagnez de la valeur.</p>
-              </div>
-            </div>
-            <span className="badge font-mono">{trades.length}</span>
-          </div>
-          {trades.length === 0 ? (
-            <div className="empty-state-box">
-              <span className="empty-state-box__icon">換</span>
-              <p className="empty-state-box__text">Aucun échange avantageux disponible sur le marché pour l'instant.</p>
-            </div>
-          ) : (
-            <div className="trades-list">
-              {trades.map((tr) => (
-                <div key={tr.listingId} className="trade-item">
-                  <div className="trade-item__col">
-                    <span className="trade-item__label">Offert</span>
-                    <strong><RarityPill rarity={tr.offered.rarity} />{tr.offered.name}</strong>
-                    <span className="trade-item__val font-mono">{tr.offered.median7d} ◆</span>
-                  </div>
-                  <div className="trade-item__arrow"><SwapArrow /></div>
-                  <div className="trade-item__col">
-                    <span className="trade-item__label">Demandé</span>
-                    <strong><RarityPill rarity={tr.wanted.rarity} />{tr.wanted.name}</strong>
-                    <span className="trade-item__val font-mono">{tr.wanted.median7d} ◆</span>
-                  </div>
-                  <div className="trade-item__gain text-gain font-mono">+{tr.profit} ◆</div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+      {subTab === 'series' && (
+        <SeriesSniperPanel seriesProgress={seriesProgress} onCompleteSeries={handleCompleteSeries} onAddSeriesToWishlist={handleAddSeriesToWishlist} />
       )}
+
+      {subTab === 'orders' && (
+        <BuyOrdersPanel userChakra={dashboard?.me?.chakra ?? 0} settings={effectiveSettings} onUpdateSettings={handleUpdateSettings} onToast={onToast} onRefresh={onRefresh} />
+      )}
+        </div>
+      </div>
     </section>
   );
 };

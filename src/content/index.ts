@@ -4,6 +4,7 @@ import { setupAntiAfkObserver } from './automation/anti-afk';
 import { runAutomationCycle } from './automation/cycle';
 import { refreshDashboardSnapshot } from './snapshot';
 import { setupMessageListener } from './messages';
+import { setupOverlayListeners } from './overlay';
 import { recordBestPulls } from './journal';
 import { normalizeSettings } from '../types/settings';
 import { setLanguage } from '../lib/i18n';
@@ -60,6 +61,7 @@ function initKyaraManager(): void {
     await loadSettings();
     if (disposed) return;
     mountFloatingHud();
+    cleanups.push(setupOverlayListeners());
     cleanups.push(setupAntiAfkObserver());
     restartLoopTimer(() => runAutomationCycle({ manual: false }));
     const dashboard = await refreshDashboardSnapshot({

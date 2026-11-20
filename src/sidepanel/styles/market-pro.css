@@ -3,9 +3,9 @@
    ========================================================================== */
 .market-pro-container { container-type: inline-size; container-name: market-pro; min-width: 0; }
 
-/* Sub-tab switcher (single-row 365px safe, accessible underline via ::after) */
+/* Sub-tab switcher (single-row 4-column 365px safe, accessible underline via ::after) */
 .market-subtabs {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 3px;
   padding: 3px; background: var(--bg2); border: 1px solid var(--line2); border-radius: 9px;
 }
 .market-subtab {
@@ -150,6 +150,143 @@
 .card--renaissance-pack {
   border-color: rgba(255, 77, 46, 0.45);
   background: linear-gradient(145deg, rgba(255, 77, 46, 0.08), var(--panel));
+}
+
+/* Rebirth Telemetry Strip */
+.ren-telemetry {
+  display: flex; flex-direction: column; gap: 6px; padding: 7px 8px;
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+}
+.ren-telemetry__row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.ren-telemetry__label { font-size: 10px; color: var(--mut); }
+.ren-telemetry__val { font-size: 10.5px; font-weight: 700; color: var(--fg2); }
+.ren-progress-fill--gold { background: linear-gradient(90deg, var(--gold), var(--acc)); }
+.ren-telemetry__metrics {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px; flex-wrap: wrap;
+}
+.ren-telemetry__metric { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ren-telemetry__gold { font-size: 11px; color: var(--gold); }
+.ren-telemetry__pts { font-size: 11px; color: var(--fg); }
+.ren-cond-pill {
+  font-size: 9.5px; font-weight: 700; padding: 2px 6px; border-radius: 5px;
+  background: var(--raise); border: 1px solid var(--line2); color: var(--fg2); white-space: nowrap;
+}
+.ren-cond-pill.is-ready { background: rgba(63, 191, 127, 0.14); border-color: rgba(63, 191, 127, 0.45); color: var(--ok); }
+.ren-blocking-alert {
+  display: flex; align-items: center; justify-content: space-between; gap: 6px;
+  padding: 5px 7px; border-radius: 6px; background: rgba(255, 179, 71, 0.11);
+  border: 1px solid rgba(255, 179, 71, 0.4); font-size: 10.5px; color: var(--warn);
+}
+.ren-blocking-alert__text { min-width: 0; }
+.ren-blocking-btn {
+  flex-shrink: 0; background: rgba(255, 179, 71, 0.18); border-color: rgba(255, 179, 71, 0.5); color: var(--warn);
+}
+.ren-telemetry__actions { display: flex; justify-content: flex-end; }
+.ren-open-btn { font-size: 10.5px; padding: 3px 8px; }
+
+/* Offers Inner Switcher & Trades Pro */
+.offers-subswitch {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+  padding: 2px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+}
+.offers-subswitch__pill {
+  appearance: none; border: 1px solid transparent; background: transparent; color: var(--mut);
+  font-family: var(--body); font-size: 10.5px; font-weight: 600; padding: 4px 6px;
+  border-radius: 6px; cursor: pointer; transition: all 0.15s ease; white-space: nowrap;
+}
+.offers-subswitch__pill:hover { color: var(--fg); }
+.offers-subswitch__pill.is-active {
+  background: var(--raise); color: var(--fg); border-color: var(--line2);
+}
+.trade-item--pro { flex-direction: column; align-items: stretch; gap: 6px; }
+.trade-item__row { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.trade-item__actions { display: flex; justify-content: flex-end; border-top: 1px dashed var(--line); padding-top: 5px; }
+
+/* Batch Series Targeting Banner */
+.batch-series-banner {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 6px 9px; border-radius: 7px; font-size: 11px; color: var(--cyan);
+  background: rgba(77, 214, 255, 0.1); border: 1px solid rgba(77, 214, 255, 0.35);
+}
+.batch-series-banner__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.batch-series-banner__close {
+  appearance: none; background: transparent; border: none; color: var(--cyan);
+  display: inline-flex; align-items: center; justify-content: center; padding: 2px; cursor: pointer; flex-shrink: 0;
+}
+
+/* Series Sniper Panel (系) */
+.series-sniper-panel { display: flex; flex-direction: column; gap: 8px; }
+.series-search-wrap { display: flex; }
+.series-search { width: 100%; min-width: 0; font-size: 11.5px; }
+.series-list { display: flex; flex-direction: column; gap: 7px; }
+.series-card {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 9px; display: flex; flex-direction: column; gap: 6px; min-width: 0;
+}
+.series-card__toggle {
+  appearance: none; background: transparent; border: none; padding: 0; width: 100%;
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  color: inherit; text-align: left; cursor: pointer;
+}
+.series-card__identity { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.series-card__name { font-size: 12px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.series-card__stats { font-size: 10px; color: var(--mut); }
+.series-card__right { display: flex; align-items: center; gap: 5px; flex-shrink: 0; color: var(--fg2); }
+.series-card__cost { font-size: 10.5px; font-weight: 700; color: var(--gold); }
+.series-progress-track { height: 3px; width: 100%; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
+.series-progress-fill { height: 100%; border-radius: 999px; background: linear-gradient(90deg, var(--cyan), var(--ok)); }
+.series-missing-list {
+  display: flex; flex-direction: column; gap: 4px; padding: 6px 7px;
+  background: var(--bg2); border: 1px solid var(--line); border-radius: 6px;
+}
+.series-missing-row { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 11px; }
+.series-missing-row__left { display: flex; align-items: center; gap: 4px; min-width: 0; }
+.series-missing-row__left .rarity-pill { margin-right: 0; flex-shrink: 0; }
+.series-missing-row__name { color: var(--fg2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.series-missing-row__price { font-size: 10px; color: var(--gold); flex-shrink: 0; }
+.series-card__actions { display: flex; align-items: center; gap: 6px; }
+
+/* Buy Orders Panel (註) */
+.buy-orders-panel { display: flex; flex-direction: column; gap: 9px; }
+.bo-balance-badge { white-space: nowrap; flex-shrink: 0; }
+.bo-controls { display: flex; flex-direction: column; gap: 6px; }
+.bo-controls__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.bo-controls__slider-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bo-pills { margin-top: 0; flex-wrap: nowrap; }
+.bo-scan-btn { flex-shrink: 0; white-space: nowrap; }
+.bo-slider-label { font-size: 10.5px; color: var(--mut); flex-shrink: 0; }
+.bo-slider { flex: 1 1 auto; min-width: 0; accent-color: var(--purple); cursor: pointer; }
+.bo-discount-val { font-size: 10.5px; font-weight: 700; color: var(--purple); flex-shrink: 0; min-width: 32px; text-align: right; }
+.bo-list { display: flex; flex-direction: column; gap: 6px; }
+.bo-row {
+  background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 9px; display: flex; flex-direction: column; gap: 5px; min-width: 0;
+}
+.bo-row__head { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.bo-row__identity { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.bo-row__identity .rarity-pill { margin-right: 0; flex-shrink: 0; }
+.bo-row__name { font-size: 11.5px; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bo-source-pill {
+  font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 5px; border-radius: 4px; flex-shrink: 0;
+  border: 1px solid var(--line2); background: var(--raise); color: var(--fg2);
+}
+.bo-source-pill--wishlist { color: var(--gold); border-color: rgba(245, 197, 24, 0.4); background: rgba(245, 197, 24, 0.12); }
+.bo-source-pill--renaissance { color: var(--acc2); border-color: rgba(255, 77, 46, 0.4); background: var(--acc-soft); }
+.bo-source-pill--series { color: var(--cyan); border-color: rgba(77, 214, 255, 0.4); background: rgba(77, 214, 255, 0.12); }
+.bo-metrics { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; font-size: 10px; color: var(--mut); }
+.bo-metrics__bid { color: var(--ok); font-weight: 700; }
+.bo-actions { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.bo-batch-btn { width: 100%; }
+
+/* Cockpit Layout Containers (vertical stack in 365px, 2-col grid in fullscreen.css >= 860px) */
+.market-cockpit-layout,
+.duplicates-cockpit-layout {
+  display: flex; flex-direction: column; gap: 10px; min-width: 0;
+}
+.market-cockpit-main,
+.duplicates-cockpit-main,
+.duplicates-cockpit-aside {
+  display: flex; flex-direction: column; gap: 8px; min-width: 0;
 }
 
 /* Container Responsive Upgrades (>= 420px / Fullscreen) */

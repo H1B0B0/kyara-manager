@@ -30,10 +30,27 @@ export const App: React.FC = () => {
   const { bestPulls, clearBestPulls } = useBestPulls();
 
   useEffect(() => {
-    if (window.location.search.includes('mode=full')) {
+    const search = window.location.search;
+    const isOverlay = search.includes('mode=overlay');
+    if (isOverlay) {
+      document.documentElement.classList.add('km-mode-overlay', 'km-mode-full');
+    } else if (search.includes('mode=full')) {
       document.documentElement.classList.add('km-mode-full');
     }
+    if (!isOverlay) return;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        window.parent.postMessage({ type: 'km:close-overlay' }, '*');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
   }, []);
+
+  const handleTabChange = (tab: TabId) => {
+    setVisitedTabs((visited) => new Set([...visited, tab]));
+    setActiveTab(tab);
+  };
 
   const showToast = (msg: string) => {
     setToastMessage(msg);
@@ -63,7 +80,7 @@ export const App: React.FC = () => {
 
         <Navigation
           activeTab={activeTab}
-          onTabChange={(tab) => { setVisitedTabs((visited) => new Set([...visited, tab])); setActiveTab(tab); }}
+          onTabChange={handleTabChange}
           duplicatesCount={duplicates.length}
           dealsCount={deals.length}
           wishlistCount={wishlist.length}
@@ -97,6 +114,7 @@ export const App: React.FC = () => {
               onResetRoi={resetRoi}
               onClearJournal={clearJournal}
               onClearBestPulls={clearBestPulls}
+              onNavigateTab={handleTabChange}
               onToast={showToast}
             />
           </div>

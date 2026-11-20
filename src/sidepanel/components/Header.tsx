@@ -22,10 +22,21 @@ export const Header: React.FC<HeaderProps> = ({ dashboard, loading, onRefresh })
         })
       : t('accountStatusDefault');
 
+  const isOverlay =
+    window.location.search.includes('mode=overlay') ||
+    document.documentElement.classList.contains('km-mode-overlay');
+
   const openFullscreen = () => {
     const manifest = chrome.runtime?.getManifest?.();
     const defaultPath = manifest?.side_panel?.default_path || 'sidepanel/index.html';
     chrome.tabs.create({ url: chrome.runtime.getURL(`${defaultPath}?mode=full`) });
+  };
+
+  const closeOverlay = () => {
+    window.parent.postMessage({ type: 'km:close-overlay' }, '*');
+    if (window.parent === window) {
+      document.documentElement.classList.remove('km-mode-overlay', 'km-mode-full');
+    }
   };
 
   return (
@@ -43,17 +54,33 @@ export const Header: React.FC<HeaderProps> = ({ dashboard, loading, onRefresh })
         </div>
 
         <div className="header-actions">
-          <button
-            type="button"
-            onClick={openFullscreen}
-            className="icon-btn icon-btn--square"
-            aria-label="Ouvrir en plein écran"
-            title="Ouvrir le cockpit plein écran dans un onglet dédié"
-          >
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-            </svg>
-          </button>
+          {isOverlay ? (
+            <button
+              type="button"
+              onClick={closeOverlay}
+              className="icon-btn icon-btn--close"
+              aria-label="Fermer le Cockpit"
+              title="Fermer le Cockpit (Échap)"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              <span className="icon-btn__text">Fermer</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={openFullscreen}
+              className="icon-btn icon-btn--square"
+              aria-label="Ouvrir en plein écran"
+              title="Ouvrir le cockpit plein écran dans un onglet dédié"
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+              </svg>
+            </button>
+          )}
 
           <button
             type="button"

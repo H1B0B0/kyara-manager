@@ -95,6 +95,12 @@ manifestSrc.content_scripts = manifestSrc.content_scripts.map((script) => ({
   js: script.js?.map((file) => file.replace(/^dist\//, '')),
   css: script.css?.map((file) => file.replace(/^dist\//, ''))
 }));
+if (Array.isArray(manifestSrc.web_accessible_resources)) {
+  manifestSrc.web_accessible_resources = manifestSrc.web_accessible_resources.map((entry) => ({
+    ...entry,
+    resources: entry.resources?.map((file) => file.replace(/^dist\//, ''))
+  }));
+}
 
 fs.writeFileSync(path.join(distDir, 'manifest.json'), JSON.stringify(manifestSrc, null, 2));
 

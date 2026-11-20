@@ -40,6 +40,7 @@ export function evaluateDuplicate(
     : Number.isFinite(marketStats.highestFixed) && marketStats.highestFixed > 0
       ? marketStats.highestFixed
       : null;
+  const liveTop5 = Number.isFinite(liveDepth?.top5Median) ? liveDepth!.top5Median : null;
   const liveMedian20 = Number.isFinite(liveDepth?.liveMedian20) ? liveDepth!.liveMedian20 : lowestFixed;
   const liveAvg20 = Number.isFinite(liveDepth?.liveAvg20) ? liveDepth!.liveAvg20 : lowestFixed;
 
@@ -73,9 +74,13 @@ export function evaluateDuplicate(
   const profile = resolveSellProfile(settings, referenceMedian ?? lowestFixed);
   const medianFloorPct = Math.max(30, Math.min(100, profile.medianFloorPct));
   const baseMedianGuardFloor = referenceMedian ? Math.ceil((referenceMedian * medianFloorPct) / 100) : 0;
-  const liveGuardFloor = liveMedian20 ? Math.ceil(liveMedian20 * 0.85) : lowestFixed || 0;
+  const liveAnchor = liveTop5 ?? (liveDepth ? liveMedian20 : null);
+  const liveGuardFloor = liveAnchor ? Math.ceil(liveAnchor * 0.85) : 0;
+  const isLiveFarBelowMedian = Boolean(
+    liveAnchor && referenceMedian && liveAnchor <= referenceMedian * 0.75
+  );
   const effectiveGuardFloor =
-    isCrash && settings?.autoSellCrashProtection !== false && liveGuardFloor > 0
+    liveGuardFloor > 0 && (isLiveFarBelowMedian || (isCrash && settings?.autoSellCrashProtection !== false))
       ? Math.min(baseMedianGuardFloor, liveGuardFloor)
       : baseMedianGuardFloor;
 
@@ -91,15 +96,17 @@ export function evaluateDuplicate(
   }
   const quickPrice = Math.max(minSafePrice, Math.round(rawQuick));
 
-  let rawRecent20Median =
-    liveMedian20 !== null
-      ? Math.max(rarityFloor, lowestFixed !== null ? Math.min(liveMedian20, lowestFixed - 1) : liveMedian20)
+  const medianSource = liveTop5 ?? liveMedian20;
+  const rawRecent20Median =
+    medianSource !== null
+      ? Math.max(rarityFloor, lowestFixed !== null ? Math.min(medianSource, lowestFixed - 1) : medianSource)
       : rawQuick;
   const recent20MedianPrice = Math.max(minSafePrice, Math.round(rawRecent20Median));
 
-  let rawRecent20Avg =
-    liveAvg20 !== null
-      ? Math.max(rarityFloor, lowestFixed !== null ? Math.min(Math.round(liveAvg20), lowestFixed - 1) : Math.round(liveAvg20))
+  const avgSource = liveTop5 !== null && liveAvg20 !== null ? Math.min(liveAvg20, liveTop5) : (liveTop5 ?? liveAvg20);
+  const rawRecent20Avg =
+    avgSource !== null
+      ? Math.max(rarityFloor, lowestFixed !== null ? Math.min(Math.round(avgSource), lowestFixed - 1) : Math.round(avgSource))
       : rawQuick;
   const recent20AvgPrice = Math.max(minSafePrice, Math.round(rawRecent20Avg));
 
@@ -122,7 +129,7 @@ export function evaluateDuplicate(
     lowestFixed !== null ? Math.min(balancedPrice, Math.ceil(lowestFixed * 1.05)) : balancedPrice
   );
   const strategy: PricingStrategy = profile.strategy;
-  const recommendedPrice =
+  const uncappedRecommended =
     profile.tier === 'patient'
       ? patientPrice
       : strategy === 'recent20_median'
@@ -136,6 +143,10 @@ export function evaluateDuplicate(
             : strategy === 'balanced'
               ? balancedPrice
               : quickPrice;
+  const recommendedPrice =
+    lowestFixed !== null && liveAnchor !== null && liveAnchor <= (referenceMedian || Infinity) * 0.75
+      ? Math.min(uncappedRecommended, Math.max(minSafePrice, lowestFixed))
+      : uncappedRecommended;
 
   const netProceeds = computeNetProceeds(recommendedPrice);
   const listingFee = computeListingFee(recommendedPrice);

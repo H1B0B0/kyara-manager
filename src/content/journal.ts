@@ -1,9 +1,28 @@
-import { CumulativeStats } from './types';
+import type { CumulativeStats, HourlyChakraBucket } from '../types/journal';
 import { runtimeCache } from './cache';
 import { RARITY_PRICE_FLOORS } from '../lib/analytics/constants';
 import { computeNetProceeds } from '../lib/analytics/fees';
 
 export const JOURNAL_MAX = 80;
+
+function updateHourlyHistory(
+  existing: HourlyChakraBucket[] | undefined,
+  deltaSales: number,
+  deltaRecycle: number
+): HourlyChakraBucket[] {
+  const list = Array.isArray(existing) ? existing.map((b) => ({ ...b })) : [];
+  if (deltaSales <= 0 && deltaRecycle <= 0) return list;
+  const hourTs = Math.floor(Date.now() / 3600000) * 3600000;
+  const idx = list.findIndex((b) => b.hourTs === hourTs);
+  if (idx >= 0) {
+    list[idx].salesChakra = (list[idx].salesChakra || 0) + deltaSales;
+    list[idx].recycleChakra = (list[idx].recycleChakra || 0) + deltaRecycle;
+    list[idx].totalChakra = list[idx].salesChakra + list[idx].recycleChakra;
+  } else {
+    list.push({ hourTs, salesChakra: deltaSales, recycleChakra: deltaRecycle, totalChakra: deltaSales + deltaRecycle });
+  }
+  return list.sort((a, b) => a.hourTs - b.hourTs).slice(-24);
+}
 
 export async function recordConfirmedSale(id: string, info: { name: string; price: number }): Promise<boolean> {
   return navigator.locks.request('kyara-manager-sales', async () => {
@@ -14,9 +33,10 @@ export async function recordConfirmedSale(id: string, info: { name: string; pric
     await navigator.locks.request('kyara-manager-metrics', async () => {
       const { kmCumulativeStats } = await chrome.storage.local.get('kmCumulativeStats');
       const current = { ...DEFAULT_CUMULATIVE_STATS, ...(kmCumulativeStats as Partial<CumulativeStats> || {}) };
+      const hourlyHistory = updateHourlyHistory(current.hourlyHistory, net, 0);
       await chrome.storage.local.set({
         kmRecordedSales: [id, ...seen].slice(0, 1000),
-        kmCumulativeStats: { ...current, cardsSold: current.cardsSold + 1, chakraFromSales: current.chakraFromSales + net }
+        kmCumulativeStats: { ...current, cardsSold: current.cardsSold + 1, chakraFromSales: current.chakraFromSales + net, hourlyHistory }
       });
     });
     await appendJournal('sold', `Carte vendue : ${info.name} pour ${info.price} ◆ (net +${net} ◆)`);
@@ -33,7 +53,8 @@ export const DEFAULT_CUMULATIVE_STATS: CumulativeStats = {
   newCardsPulledCount: 0,
   mythicsPulledCount: 0,
   legendariesPulledCount: 0,
-  startedAt: Date.now()
+  startedAt: Date.now(),
+  hourlyHistory: []
 };
 
 export async function recordCumulativeMetric(deltas: Partial<CumulativeStats> = {}): Promise<CumulativeStats | null> {
@@ -41,16 +62,20 @@ export async function recordCumulativeMetric(deltas: Partial<CumulativeStats> = 
     try {
       const { kmCumulativeStats } = (await chrome.storage.local.get('kmCumulativeStats')) as { kmCumulativeStats?: any };
       const current = { ...DEFAULT_CUMULATIVE_STATS, ...(kmCumulativeStats || {}) };
+      const deltaSales = deltas.chakraFromSales || 0;
+      const deltaRecycle = deltas.chakraFromRecycle || 0;
+      const hourlyHistory = updateHourlyHistory(current.hourlyHistory, deltaSales, deltaRecycle);
       const updated: CumulativeStats = {
-        chakraFromSales: (current.chakraFromSales || 0) + (deltas.chakraFromSales || 0),
-        chakraFromRecycle: (current.chakraFromRecycle || 0) + (deltas.chakraFromRecycle || 0),
+        chakraFromSales: (current.chakraFromSales || 0) + deltaSales,
+        chakraFromRecycle: (current.chakraFromRecycle || 0) + deltaRecycle,
         cardsSold: (current.cardsSold || 0) + (deltas.cardsSold || 0),
         cardsRecycled: (current.cardsRecycled || 0) + (deltas.cardsRecycled || 0),
         boostersOpenedCount: (current.boostersOpenedCount || 0) + (deltas.boostersOpenedCount || 0),
         newCardsPulledCount: (current.newCardsPulledCount || 0) + (deltas.newCardsPulledCount || 0),
         mythicsPulledCount: (current.mythicsPulledCount || 0) + (deltas.mythicsPulledCount || 0),
         legendariesPulledCount: (current.legendariesPulledCount || 0) + (deltas.legendariesPulledCount || 0),
-        startedAt: current.startedAt || Date.now()
+        startedAt: current.startedAt || Date.now(),
+        hourlyHistory
       };
       await chrome.storage.local.set({ kmCumulativeStats: updated });
       return updated;

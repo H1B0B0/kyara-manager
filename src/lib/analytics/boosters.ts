@@ -166,7 +166,8 @@ export function evaluateBoosterPack(
   const inSchedule = !pack?.schedule || (now >= Date.parse(pack.schedule.start) && now < Date.parse(pack.schedule.end));
   const granted = Number(me?.grants?.[packId] ?? 0);
   const usesFreePacks = Boolean(pack?.usesFreePacks ?? pack?.price === 0);
-  const freeLeft = usesFreePacks ? Number(me?.freePacks ?? 0) + Number(me?.bonusPacks ?? 0) : 0;
+  const regularFreeOnly = usesFreePacks ? Number(me?.freePacks ?? 0) : 0;
+  const freeLeft = usesFreePacks ? regularFreeOnly + Number(me?.bonusPacks ?? 0) : 0;
   const dailyLeft = pack?.limit ? Number(packState?.limits?.[packId]?.left ?? pack.limit.perDay) : null;
   const chakraPrice = Number(pack?.chakraPrice ?? (pack?.price || 150));
 
@@ -180,6 +181,21 @@ export function evaluateBoosterPack(
         : dailyLeft !== null
           ? Math.min(dailyLeft, granted + freeLeft)
           : granted + freeLeft;
+  }
+
+  let autoOpenableFreeCount = 0;
+  if (!inSchedule || (dailyLeft !== null && dailyLeft <= 0)) {
+    autoOpenableFreeCount = 0;
+  } else if (packId === 'daily' || settings?.autoOpenUseBonusPacks === true) {
+    autoOpenableFreeCount = openableFreeCount;
+  } else if (pack?.grantOnly) {
+    autoOpenableFreeCount = 0;
+  } else if (isSimpleTest && me === null) {
+    autoOpenableFreeCount = openableFreeCount;
+  } else if (!usesFreePacks) {
+    autoOpenableFreeCount = 0;
+  } else {
+    autoOpenableFreeCount = dailyLeft !== null ? Math.min(dailyLeft, regularFreeOnly) : regularFreeOnly;
   }
 
   const canOpenNow = inSchedule && (!pack?.grantOnly || granted > 0) && (dailyLeft === null || dailyLeft > 0) && openableFreeCount > 0;
@@ -197,12 +213,15 @@ export function evaluateBoosterPack(
     expectedRenaissanceCards,
     expectedChakraValue,
     openableFreeCount,
+    autoOpenableFreeCount,
     canOpenNow,
     usesFreePacks,
+    grantOnly: Boolean(pack?.grantOnly),
     chakraPrice,
     cardsByRarity: pack?.cardsByRarity || totalByRarity,
     missingByRarity,
-    totalByRarity
+    totalByRarity,
+    goldenEligible: pack?.goldenEligible !== false
   };
 }
 
@@ -246,31 +265,40 @@ export function rankBoostersForCollection(
     );
   }
 
+  const canAutoOpen = (p: BoosterPack) =>
+    settings?.autoOpenUseBonusPacks === true
+      ? p.canOpenNow
+      : p.canOpenNow && (p.autoOpenableFreeCount ?? p.openableFreeCount) > 0;
+
   const isPityNear = userPity >= 240;
   let recommendedPity: BoosterPack | null = null;
   if (isPityNear) {
     const candidates = evaluated.filter((p) => (p.missingByRarity?.M || 0) > 0);
     candidates.sort((a, b) => {
+      if (Number(canAutoOpen(b)) !== Number(canAutoOpen(a))) return Number(canAutoOpen(b)) - Number(canAutoOpen(a));
       if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
       return (b.missingByRarity?.M || 0) - (a.missingByRarity?.M || 0);
     });
     recommendedPity = candidates[0] || null;
   }
 
-  // Sort packs prioritizing: 1. canOpenNow, 2. usesFreePacks, 3. expectedNewCards, 4. expectedChakraValue
+  // Sort packs prioritizing: 1. autoOpenable, 2. canOpenNow, 3. usesFreePacks, 4. expectedNewCards, 5. expectedChakraValue
   const sortedNew = [...evaluated].sort((a, b) => {
+    if (Number(canAutoOpen(b)) !== Number(canAutoOpen(a))) return Number(canAutoOpen(b)) - Number(canAutoOpen(a));
     if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
     if (Number(b.usesFreePacks) !== Number(a.usesFreePacks)) return Number(b.usesFreePacks) - Number(a.usesFreePacks);
     return b.expectedNewCards - a.expectedNewCards || b.probAtLeastOneNewPct - a.probAtLeastOneNewPct;
   });
 
   const sortedEv = [...evaluated].sort((a, b) => {
+    if (Number(canAutoOpen(b)) !== Number(canAutoOpen(a))) return Number(canAutoOpen(b)) - Number(canAutoOpen(a));
     if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
     if (Number(b.usesFreePacks) !== Number(a.usesFreePacks)) return Number(b.usesFreePacks) - Number(a.usesFreePacks);
     return b.expectedChakraValue - a.expectedChakraValue;
   });
 
   const sortedRenaissance = [...evaluated].sort((a, b) => {
+    if (Number(canAutoOpen(b)) !== Number(canAutoOpen(a))) return Number(canAutoOpen(b)) - Number(canAutoOpen(a));
     if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
     if (Number(b.usesFreePacks) !== Number(a.usesFreePacks)) return Number(b.usesFreePacks) - Number(a.usesFreePacks);
     return (
@@ -280,19 +308,44 @@ export function rankBoostersForCollection(
   });
 
   const recommendedRenaissance = sortedRenaissance[0] || null;
+
+  const rawGoldenIn = me?.goldenIn;
+  const goldenIn =
+    rawGoldenIn !== undefined && rawGoldenIn !== null && rawGoldenIn !== '' ? Number(rawGoldenIn) : null;
+  const isGoldenNext = goldenIn !== null && Number.isFinite(goldenIn) && goldenIn <= 1;
+
+  const sortedGolden = evaluated
+    .filter((p) => p.goldenEligible !== false)
+    .sort((a, b) => {
+      if (Number(canAutoOpen(b)) !== Number(canAutoOpen(a))) return Number(canAutoOpen(b)) - Number(canAutoOpen(a));
+      if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
+      if (b.expectedChakraValue !== a.expectedChakraValue) return b.expectedChakraValue - a.expectedChakraValue;
+      const highA = (a.missingByRarity?.M || 0) + (a.missingByRarity?.L || 0);
+      const highB = (b.missingByRarity?.M || 0) + (b.missingByRarity?.L || 0);
+      return highB - highA;
+    });
+  const recommendedGolden = sortedGolden[0] || sortedEv[0] || null;
+
   const isPityOverride = Boolean(isPityNear && recommendedPity && settings?.autoOpenPitySniper !== false);
+  const isGoldenOverride = Boolean(
+    !isPityOverride && isGoldenNext && recommendedGolden && settings?.autoOpenGoldenSniper !== false
+  );
   const activeRecommendedNew = isPityOverride
     ? recommendedPity
-    : settings?.renaissanceFocusEnabled
-      ? recommendedRenaissance || sortedNew[0] || null
-      : sortedNew[0] || null;
+    : isGoldenOverride
+      ? recommendedGolden
+      : settings?.renaissanceFocusEnabled
+        ? recommendedRenaissance || sortedNew[0] || null
+        : sortedNew[0] || null;
 
   return {
     recommendedNew: activeRecommendedNew,
     recommendedEv: sortedEv[0] || null,
     recommendedPity,
+    recommendedGolden,
     recommendedRenaissance,
     isPityNear,
+    isGoldenNext,
     all: sortedNew
   };
 }

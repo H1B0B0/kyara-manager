@@ -46,6 +46,9 @@ export interface KyaraSettings {
   autoOpenCustomPackId?: string;
   autoOpenMinBatch?: number;
   autoOpenPitySniper?: boolean;
+  autoOpenGoldenSniper?: boolean;
+  autoOpenUseBonusPacks?: boolean;
+  buyOrderDiscountPct?: number;
   autoMarketEnabled: boolean;
   autoMarketMinMarginPct: number;
   autoMarketMinProfit: number;
@@ -109,6 +112,9 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   autoOpenCustomPackId: '',
   autoOpenMinBatch: 1,
   autoOpenPitySniper: true,
+  autoOpenGoldenSniper: true,
+  autoOpenUseBonusPacks: false,
+  buyOrderDiscountPct: 25,
   autoMarketEnabled: false,
   autoMarketMinMarginPct: 20,
   autoMarketMinProfit: 5,
@@ -194,6 +200,16 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
     }
   }
   settings.batchBuyDefaultMaxPrice = mergedMaxPrices;
+  settings.autoOpenGoldenSniper = raw.autoOpenGoldenSniper !== false;
+  settings.autoOpenUseBonusPacks = Boolean(raw.autoOpenUseBonusPacks ?? false);
+  const rawDiscount = settings.buyOrderDiscountPct;
+  const parsedDiscount =
+    rawDiscount === undefined || rawDiscount === null || (rawDiscount as unknown) === ''
+      ? NaN
+      : Number(rawDiscount);
+  settings.buyOrderDiscountPct = Number.isFinite(parsedDiscount)
+    ? Math.max(10, Math.min(60, Math.round(parsedDiscount)))
+    : DEFAULT_SETTINGS.buyOrderDiscountPct;
   return settings;
 }
 

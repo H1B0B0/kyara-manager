@@ -50,8 +50,10 @@ export const KpiGrid: React.FC<KpiGridProps> = ({ dashboard, maxListings }) => {
           <span className="kpi-card__icon" aria-hidden="true">札</span>
         </div>
         <strong className="kpi-card__value">{freePacks} / {freeMax}{bonus}</strong>
-        <span className="kpi-card__sub">
-          {freePacks >= freeMax ? 'Stock plein' : 'Ouverture auto prête'}
+        <span className={`kpi-card__sub ${me?.goldenIn !== null && me?.goldenIn !== undefined && me.goldenIn <= 1 ? 'kpi-card__sub--gold' : ''}`}>
+          {me?.goldenIn !== null && me?.goldenIn !== undefined
+            ? (me.goldenIn <= 1 ? 'Pack Doré prêt !' : `Doré dans ${me.goldenIn}`)
+            : (freePacks >= freeMax ? 'Stock plein' : 'Ouverture auto prête')}
         </span>
         <div className="kpi-progress" aria-hidden="true">
           <div className="kpi-progress__bar kpi-progress__bar--packs" style={{ width: `${boosterPct}%` }} />

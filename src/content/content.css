@@ -167,3 +167,39 @@
 .km-hud__btn--icon:hover {
   color: #edeae4;
 }
+
+/* In-page Cockpit Overlay */
+.km-overlay-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483640;
+  background: rgba(9, 8, 13, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  box-sizing: border-box;
+}
+
+.km-overlay-backdrop.is-hidden {
+  display: none;
+}
+
+.km-overlay-shell {
+  width: min(1160px, 94vw);
+  height: min(860px, 88vh);
+  border-radius: 16px;
+  border: 1px solid rgba(255, 77, 46, 0.35);
+  background: #0e0d12;
+  box-shadow: 0 28px 80px rgba(0, 0, 0, 0.85);
+  overflow: hidden;
+}
+
+.km-overlay-iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}

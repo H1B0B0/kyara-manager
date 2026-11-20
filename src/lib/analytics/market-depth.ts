@@ -3,10 +3,19 @@ export interface LiveMarketDepth {
   lowestFixed: number | null;
   highestFixed: number | null;
   liveMedian20: number | null;
+  top5Median: number | null;
   liveAvg20: number | null;
   isCrashDetected: boolean;
   crashDiscountPct: number;
   activePrices: number[];
+}
+
+function computeSortedMedian(sorted: number[]): number | null {
+  if (sorted.length === 0) return null;
+  const mid = Math.floor(sorted.length / 2);
+  return sorted.length % 2 !== 0
+    ? sorted[mid]
+    : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 }
 
 export function computeLiveMarketDepth(
@@ -25,6 +34,7 @@ export function computeLiveMarketDepth(
       lowestFixed: null,
       highestFixed: null,
       liveMedian20: null,
+      top5Median: null,
       liveAvg20: null,
       isCrashDetected: false,
       crashDiscountPct: 0,
@@ -36,11 +46,9 @@ export function computeLiveMarketDepth(
   const lowestFixed = activePrices[0];
   const highestFixed = activePrices[count - 1];
 
-  const mid = Math.floor(count / 2);
-  const liveMedian20 =
-    count % 2 !== 0
-      ? activePrices[mid]
-      : Math.round((activePrices[mid - 1] + activePrices[mid]) / 2);
+  const liveMedian20 = computeSortedMedian(activePrices);
+  const top5 = activePrices.slice(0, Math.min(5, count));
+  const top5Median = computeSortedMedian(top5);
 
   const sum = activePrices.reduce((acc, p) => acc + p, 0);
   const liveAvg20 = Math.round((sum / count) * 10) / 10;
@@ -48,13 +56,14 @@ export function computeLiveMarketDepth(
   const isCrashDetected = Boolean(
     referenceMedian &&
     referenceMedian > 0 &&
-    count >= 2 &&
-    liveMedian20 <= referenceMedian * 0.70
+    ((count >= 2 && top5Median !== null && top5Median <= referenceMedian * 0.75) ||
+     (count === 1 && lowestFixed <= referenceMedian * 0.6))
   );
 
+  const crashAnchor = top5Median ?? liveMedian20;
   const crashDiscountPct =
-    referenceMedian && referenceMedian > 0
-      ? Math.max(0, Math.round(((referenceMedian - liveMedian20) / referenceMedian) * 100))
+    referenceMedian && referenceMedian > 0 && crashAnchor !== null
+      ? Math.max(0, Math.round(((referenceMedian - crashAnchor) / referenceMedian) * 100))
       : 0;
 
   return {
@@ -62,6 +71,7 @@ export function computeLiveMarketDepth(
     lowestFixed,
     highestFixed,
     liveMedian20,
+    top5Median,
     liveAvg20,
     isCrashDetected,
     crashDiscountPct,

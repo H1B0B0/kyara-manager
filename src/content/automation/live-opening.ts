@@ -318,14 +318,29 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
   if (state.currentSettings.renaissanceFocusEnabled && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
     targetPack = boosters.recommendedRenaissance || boosters.recommendedNew;
   }
+  if (boosters.isGoldenNext && boosters.recommendedGolden && state.currentSettings.autoOpenGoldenSniper !== false && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
+    targetPack = boosters.recommendedGolden;
+  }
   if (state.currentSettings.autoOpenMode === 'custom' && state.currentSettings.autoOpenCustomPackId) {
     targetPack = boosters.all.find((p: any) => p.packId === state.currentSettings.autoOpenCustomPackId);
   }
   if (!targetPack?.canOpenNow || (targetPack.packId === 'daily' && openedCount > 0)) return { openedCount, newCardsCount };
 
+  const useBonusPacks = state.currentSettings.autoOpenUseBonusPacks === true;
+  if (!useBonusPacks && targetPack.packId !== 'daily' && (targetPack.grantOnly || !targetPack.usesFreePacks)) {
+    return { openedCount, newCardsCount, targetPack };
+  }
+
+  const regularFree = Math.max(0, Number(dashboard?.me?.freePacks) || 0);
   const reserve = targetPack.usesFreePacks
-    ? Math.min(Number(dashboard?.me?.freePacks) || 0, Math.max(0, Number(state.currentSettings.autoBoosterReserveFree) || 0)) : 0;
-  const freeAvailable = Math.max(0, (Number(targetPack.openableFreeCount) || 0) - reserve);
+    ? Math.min(regularFree, Math.max(0, Number(state.currentSettings.autoBoosterReserveFree) || 0))
+    : 0;
+  const baseAvailable = useBonusPacks
+    ? Math.max(0, Number(targetPack.openableFreeCount) || 0)
+    : targetPack.packId === 'daily'
+      ? Math.max(0, Number(targetPack.openableFreeCount) || 0)
+      : Math.min(regularFree, Number(targetPack.autoOpenableFreeCount ?? regularFree));
+  const freeAvailable = Math.max(0, baseAvailable - reserve);
   const minBatch = Math.max(1, Math.min(10, Number(state.currentSettings.autoOpenMinBatch) || 1));
   const isGaugeFull = Number(dashboard?.me?.freePacks) >= Number(dashboard?.me?.freePacksMax ?? 10);
   if (!freeAvailable || (freeAvailable < minBatch && !isGaugeFull)) return { openedCount, newCardsCount, targetPack };

@@ -149,20 +149,25 @@ export interface BoosterPack {
   expectedRenaissanceCards?: number;
   expectedChakraValue: number;
   openableFreeCount: number;
+  autoOpenableFreeCount?: number;
   canOpenNow: boolean;
   usesFreePacks?: boolean;
+  grantOnly?: boolean;
   chakraPrice?: number;
   cardsByRarity?: Record<Rarity, number>;
   missingByRarity?: Record<Rarity, number>;
   totalByRarity?: Record<Rarity, number>;
+  goldenEligible?: boolean;
 }
 
 export interface BoosterRecommendations {
   recommendedNew: BoosterPack | null;
   recommendedEv: BoosterPack | null;
   recommendedPity: BoosterPack | null;
+  recommendedGolden?: BoosterPack | null;
   recommendedRenaissance?: BoosterPack | null;
   isPityNear: boolean;
+  isGoldenNext?: boolean;
   all: BoosterPack[];
 }
 
@@ -200,6 +205,13 @@ export interface RenaissanceSummary {
   byRarity: Record<Rarity, RarityProgress>;
   priorityRarities: Rarity[];
   estimatedRemainingCost: number;
+  boostersOpened?: number;
+  boostersTarget?: number;
+  blockingListingsCount?: number;
+  rebirthPayoutChakra?: number;
+  estimatedRenown?: number;
+  conditionsMet?: number;
+  conditionsTotal?: number;
 }
 
 export interface BatchMissingPreviewItem {
@@ -226,10 +238,12 @@ export interface UserProfile {
   id?: number | string;
   pseudo?: string;
   chakra: number;
+  chakraHeld?: number;
   freePacks: number;
   freePacksMax: number;
   bonusPacks?: number;
   pity: number;
+  goldenIn?: number | null;
 }
 
 export interface DashboardState {
@@ -247,6 +261,7 @@ export interface DashboardState {
   pinnedCards?: number[];
   bestPulls?: AutopilotPullRecord[];
   renaissance?: RenaissanceSummary;
+  seriesProgress?: SeriesProgress[];
   updatedAt?: number;
 }
 
@@ -283,4 +298,34 @@ export interface WishlistSuggestion {
   seriesCompletionPct?: number;
   refMedian: number;
   priorityScore: number;
+}
+
+export interface SeriesMissingCard {
+  characterId: number;
+  name: string;
+  rarity: Rarity;
+  estimatedPrice: number;
+}
+
+export interface SeriesProgress {
+  series: string;
+  owned: number;
+  total: number;
+  missingCount: number;
+  completionPct: number;
+  estimatedCostToComplete: number;
+  missingCards: SeriesMissingCard[];
+}
+
+export interface BuyOrderOpportunity {
+  characterId: number;
+  name: string;
+  series: string;
+  rarity: Rarity;
+  median7d: number | null;
+  lowestFixed: number | null;
+  bestExistingBid: number | null;
+  suggestedBid: number;
+  savingsPct: number;
+  source: 'wishlist' | 'renaissance' | 'series';
 }

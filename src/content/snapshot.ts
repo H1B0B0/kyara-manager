@@ -11,6 +11,7 @@ import { computeNetProceeds } from '../lib/analytics/fees';
 import { evaluateDuplicate } from '../lib/analytics/duplicates';
 import { rankBoostersForCollection } from '../lib/analytics/boosters';
 import { computeRenaissanceSummary } from '../lib/analytics/renaissance';
+import { computeSeriesProgress } from '../lib/analytics/series';
 import { generateDailyWishlist } from '../lib/analytics/wishlist';
 import { yieldIfNeeded } from '../lib/analytics/fees';
 import { DEFAULT_RECYCLE_VALUES, RARITIES } from '../lib/analytics/constants';
@@ -273,8 +274,10 @@ async function buildDashboardSnapshot({
     ownedSet,
     state.currentSettings,
     runtimeCache.rarityAvgPrices,
-    bootstrap?.rebirth || bootstrap?.renaissance || config?.rebirth || null
+    bootstrap?.rebirth || bootstrap?.renaissance || config?.rebirth || null,
+    { boostersOpened: me.boostersOpened ?? 0, activeListings, collection, recycleMap }
   );
+  const seriesProgress = computeSeriesProgress(catalogById, ownedSet, runtimeCache.collectionPrices, 25);
   const rarityBreakdown = Object.fromEntries(
     RARITIES.map((r) => [
       r,
@@ -317,6 +320,7 @@ async function buildDashboardSnapshot({
       rarityBreakdown
     },
     renaissance,
+    seriesProgress,
     activeListings: activeListings.map((l: any) => ({
       id: l.id,
       characterId: Number(l.character?.id ?? l.characterId),

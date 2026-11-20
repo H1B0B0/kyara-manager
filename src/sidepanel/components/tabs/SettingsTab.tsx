@@ -1,12 +1,64 @@
 import React, { useRef, useState } from 'react';
+import type { WishlistItem } from '../../../types/kyara';
 import type { KyaraSettings, Language, PricingStrategy, SellMode } from '../../../types/settings';
-import { DEFAULT_SETTINGS } from '../../../types/settings';
+import { DEFAULT_SETTINGS, normalizeSettings } from '../../../types/settings';
 import { t } from '../../../lib/i18n';
 
 export interface SettingsTabProps {
   settings: KyaraSettings;
   onUpdateSettings: (partial: Partial<KyaraSettings>) => Promise<void>;
   onToast: (msg: string) => void;
+}
+
+export interface KyaraConfigBackup {
+  version: string;
+  exportedAt: string;
+  settings: KyaraSettings;
+  wishlist?: WishlistItem[];
+  pinnedCards?: number[];
+}
+
+export function buildSettingsBackup(
+  settings: KyaraSettings,
+  wishlist: WishlistItem[] = [],
+  pinnedCards: number[] = []
+): KyaraConfigBackup {
+  return {
+    version: '2.3.0',
+    exportedAt: new Date().toISOString(),
+    settings: normalizeSettings(settings),
+    wishlist,
+    pinnedCards
+  };
+}
+
+export function parseSettingsBackup(raw: unknown): {
+  settings: KyaraSettings;
+  wishlist?: WishlistItem[];
+  pinnedCards?: number[];
+} {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new Error('Format JSON invalide : objet attendu.');
+  }
+  const obj = raw as Record<string, unknown>;
+  if (!obj.settings || typeof obj.settings !== 'object' || Array.isArray(obj.settings)) {
+    throw new Error('Fichier invalide : section "settings" manquante.');
+  }
+  const settings = normalizeSettings(obj.settings as Partial<KyaraSettings>);
+  const wishlist = Array.isArray(obj.wishlist)
+    ? obj.wishlist.filter(
+        (item): item is WishlistItem =>
+          Boolean(item) &&
+          typeof item === 'object' &&
+          typeof (item as any).characterId === 'number' &&
+          Number.isFinite((item as any).characterId) &&
+          typeof (item as any).name === 'string'
+      )
+    : undefined;
+  const pinnedCards = Array.isArray(obj.pinnedCards)
+    ? Array.from(new Set(obj.pinnedCards.map(Number).filter((id) => Number.isFinite(id) && id > 0)))
+    : undefined;
+  return { settings, wishlist, pinnedCards };
 }
 
 const BoltIcon: React.FC = () => (
@@ -18,6 +70,7 @@ const BoltIcon: React.FC = () => (
 export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSettings, onToast }) => {
   const [form, setForm] = useState<KyaraSettings>(settings);
   const edits = useRef<Partial<KyaraSettings>>({});
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
     setForm({ ...settings, ...edits.current });
@@ -44,6 +97,49 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
       await onUpdateSettings(DEFAULT_SETTINGS);
       onToast(t('toastSettingsReset'));
     } catch (err: any) { onToast(err.message); }
+  };
+
+  const handleExportBackup = async () => {
+    try {
+      const stored = (await chrome.storage?.local?.get?.(['kmWishlist', 'kmPinnedCards'])) || {};
+      const wishlist = Array.isArray(stored.kmWishlist) ? stored.kmWishlist : [];
+      const pinnedCards = Array.isArray(stored.kmPinnedCards) ? stored.kmPinnedCards : [];
+      const backup = buildSettingsBackup(form, wishlist, pinnedCards);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'kyara-manager-backup.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+      onToast('Configuration exportée (kyara-manager-backup.json)');
+    } catch (err: any) {
+      onToast(err?.message || 'Erreur lors de l’export');
+    }
+  };
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    try {
+      const parsed = JSON.parse(await file.text());
+      const restored = parseSettingsBackup(parsed);
+      setForm(restored.settings);
+      edits.current = {};
+      await onUpdateSettings(restored.settings);
+      const storagePatch: Record<string, unknown> = {};
+      if (restored.wishlist !== undefined) storagePatch.kmWishlist = restored.wishlist;
+      if (restored.pinnedCards !== undefined) storagePatch.kmPinnedCards = restored.pinnedCards;
+      if (Object.keys(storagePatch).length > 0 && chrome.storage?.local?.set) {
+        await chrome.storage.local.set(storagePatch);
+      }
+      onToast('Sauvegarde importée et appliquée !');
+    } catch (err: any) {
+      onToast(err?.message || 'Fichier JSON invalide');
+    }
   };
 
   return (
@@ -191,24 +287,75 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
         <div className="card card--compact">
           <h3 className="card__title">Mes Envies &amp; Marché</h3>
 
-          <label className="check-row" style={{ marginTop: '8px' }}>
-            <input
-              type="checkbox"
-              checked={form.wishlistAutoBuyEnabled}
-              onChange={(e) => handleChange('wishlistAutoBuyEnabled', e.target.checked)}
-            />
-            <span>Auto-achat des cartes en wishlist dès qu'une offre respecte le budget</span>
-          </label>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+            <label className="check-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <input
+                type="checkbox"
+                checked={form.wishlistAutoBuyEnabled}
+                onChange={(e) => handleChange('wishlistAutoBuyEnabled', e.target.checked)}
+              />
+              <span>Auto-achat des cartes en wishlist dès qu'une offre respecte le budget</span>
+            </label>
 
-          <label className="check-row" style={{ marginTop: '8px' }}>
+            <label className="check-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
+              <input
+                type="checkbox"
+                checked={form.autoSellVelocityFirst}
+                onChange={(e) => handleChange('autoSellVelocityFirst', e.target.checked)}
+              />
+              <span>Prioriser la vélocité de vente (ne lister que les cartes fluides)</span>
+            </label>
+          </div>
+        </div>
+
+        {/* Boosters */}
+        <div className="card card--compact">
+          <h3 className="card__title">Boosters &amp; Ouverture Auto</h3>
+          <label
+            className="check-row"
+            style={{ marginTop: '8px' }}
+            title="Désactivé : garde tes boosters bonus et tickets de côté pour les drops d'Éveil"
+          >
             <input
               type="checkbox"
-              checked={form.autoSellVelocityFirst}
-              onChange={(e) => handleChange('autoSellVelocityFirst', e.target.checked)}
+              checked={Boolean(form.autoOpenUseBonusPacks)}
+              onChange={(e) => handleChange('autoOpenUseBonusPacks', e.target.checked)}
             />
-            <span>Prioriser la vélocité de vente (ne lister que les cartes fluides)</span>
+            <span>Utiliser les boosters bonus / tickets en réserve</span>
           </label>
+          <p className="form-hint" style={{ marginTop: '4px' }}>
+            Désactivé : garde tes boosters bonus et tickets de côté pour les drops d'Éveil
+          </p>
         </div>
+
+        {/* JSON Backup Export / Import */}
+        <fieldset className="settings-group">
+          <legend className="settings-group__legend">Sauvegarde &amp; Profil (JSON)</legend>
+          <p className="form-hint" style={{ margin: 0 }}>
+            Exportez ou restaurez vos réglages, votre wishlist et vos cartes protégées.
+          </p>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button type="button" onClick={handleExportBackup} className="btn btn--ghost" style={{ flex: 1 }}>
+              Exporter la config
+            </button>
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="btn btn--ghost"
+              style={{ flex: 1 }}
+            >
+              Importer un fichier
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="application/json"
+              style={{ display: 'none' }}
+              aria-label="Importer un fichier de configuration JSON"
+              onChange={handleImportBackup}
+            />
+          </div>
+        </fieldset>
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>

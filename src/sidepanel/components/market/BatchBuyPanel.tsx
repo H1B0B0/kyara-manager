@@ -9,6 +9,8 @@ export interface BatchBuyPanelProps {
   settings: KyaraSettings;
   initialRarity?: Rarity | 'RENAISSANCE';
   initialQty?: number;
+  seriesContext?: { series: string; characterIds: number[] } | null;
+  onClearSeriesContext?: () => void;
   onToast: (msg: string) => void;
   onRefresh: () => void;
 }
@@ -45,8 +47,14 @@ const BagIcon: React.FC = () => (
   </svg>
 );
 
+const CloseIcon: React.FC = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+  </svg>
+);
+
 export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
-  userChakra, settings, initialRarity, initialQty, onToast, onRefresh
+  userChakra, settings, initialRarity, initialQty, seriesContext, onClearSeriesContext, onToast, onRefresh
 }) => {
   const [rarity, setRarity] = useState<Rarity | 'RENAISSANCE'>(initialRarity || 'RENAISSANCE');
   const [qty, setQty] = useState<number>(initialQty || 25);
@@ -68,6 +76,13 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
     }
   }, [initialRarity, initialQty]);
 
+  useEffect(() => {
+    if (seriesContext) {
+      setQty(Math.max(1, Math.min(150, seriesContext.characterIds.length || 1)));
+      setPreview(null);
+    }
+  }, [seriesContext]);
+
   const minReserve = settings.autoBuyMinChakraReserve ?? settings.autoMarketReserveChakra ?? 200;
   const spendable = Math.max(0, userChakra - minReserve);
 
@@ -85,7 +100,14 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
   const handlePreview = async () => {
     setPreviewing(true);
     try {
-      const res = await (sendCommand({ type: 'km:cmd:preview-batch-buy', rarity, maxUnitPrice, qty, maxTotalBudget: parsedBudget } as any) as Promise<any>);
+      const res = await (sendCommand({
+        type: 'km:cmd:preview-batch-buy',
+        rarity,
+        maxUnitPrice,
+        qty,
+        maxTotalBudget: parsedBudget,
+        ...(seriesContext?.characterIds?.length ? { characterIds: seriesContext.characterIds } : {})
+      } as any) as Promise<any>);
       if (res?.ok && res.preview) {
         setPreview(res.preview as BatchMissingPreview);
         if (res.preview.totalFound === 0) onToast('Aucune carte manquante trouvée sous ce prix max.');
@@ -98,11 +120,18 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
     onToast('Exécution de l’achat par lot en cours…');
     try {
       const res = await (sendCommand({
-        type: 'km:cmd:execute-batch-buy', rarity, maxUnitPrice, qty, maxTotalBudget: parsedBudget,
-        listingIds: preview?.items.map((item) => item.listingId)
+        type: 'km:cmd:execute-batch-buy',
+        rarity,
+        maxUnitPrice,
+        qty,
+        maxTotalBudget: parsedBudget,
+        listingIds: preview?.items.map((item) => item.listingId),
+        ...(seriesContext?.characterIds?.length ? { characterIds: seriesContext.characterIds } : {})
       } as any) as Promise<any>);
       if (res?.ok) {
-        onToast(`Lot acheté : ${res.boughtCount ?? preview?.items.length ?? 0} carte(s) manquante(s) pour ${res.totalSpent ?? preview?.totalCost ?? 0} ◆`);
+        const boughtCount = res.result?.boughtCount ?? res.boughtCount ?? preview?.items.length ?? 0;
+        const totalSpent = res.result?.totalSpent ?? res.totalSpent ?? preview?.totalCost ?? 0;
+        onToast(`Lot acheté : ${boughtCount} carte(s) manquante(s) pour ${totalSpent} ◆`);
         setPreview(null);
         onRefresh();
       } else onToast(res?.error || "Erreur lors de l'achat par lot");
@@ -122,6 +151,25 @@ export const BatchBuyPanel: React.FC<BatchBuyPanelProps> = ({
           </div>
         </div>
       </div>
+
+      {seriesContext && (
+        <div className="batch-series-banner" role="status">
+          <span className="batch-series-banner__text">
+            Série ciblée : <strong>{seriesContext.series}</strong>{' '}
+            <span className="font-mono">({seriesContext.characterIds.length} manquantes)</span>
+          </span>
+          {onClearSeriesContext && (
+            <button
+              type="button"
+              className="batch-series-banner__close"
+              onClick={() => { setPreview(null); onClearSeriesContext(); }}
+              aria-label="Retirer le ciblage de série"
+            >
+              <CloseIcon />
+            </button>
+          )}
+        </div>
+      )}
 
       <div className="batch-section">
         <span className="batch-label">Rareté cible</span>

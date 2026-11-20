@@ -3,6 +3,7 @@ import { ensureCollectionPrices, runtimeCache } from '../cache';
 import { appendJournal } from '../journal';
 import { isInterrupted } from '../safety';
 import { state } from '../state';
+import { fulfilled, mapLimit } from '../../lib/concurrency';
 import type { BatchMissingPreview, BatchMissingPreviewItem, Rarity } from '../../types/kyara';
 
 export interface BatchBuyRequest {
@@ -11,6 +12,7 @@ export interface BatchBuyRequest {
   qty: number;
   maxTotalBudget?: number;
   listingIds?: string[];
+  characterIds?: number[];
 }
 
 export interface BatchBuyResult {
@@ -45,44 +47,78 @@ function buildOwnedSet(rawColl: unknown): Set<number> {
 export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<BatchMissingPreview> {
   const { qty, maxUnitPrice, maxTotalBudget } = clampParams(req);
   const ownedSet = buildOwnedSet(await kyaraApi('/me/collection?lean=1'));
-  const targetRarities = state.currentSettings.renaissanceTargetRarities;
-  const allowedRarities: Rarity[] =
-    req.rarity === 'RENAISSANCE'
-      ? (Array.isArray(targetRarities) && targetRarities.length ? targetRarities : ['C', 'U', 'R'])
-      : [req.rarity];
-  const allowedSet = new Set<Rarity>(allowedRarities);
-  const rarityParam = allowedRarities.length === 1 ? `&rarity=${encodeURIComponent(allowedRarities[0])}` : '';
-
-  const rawMatches: BatchMissingPreviewItem[] = [];
   const now = Date.now();
-  for (let page = 1; page <= 6; page += 1) {
-    const res = await kyaraApi(`/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${page}${rarityParam}`, { auth: true }).catch(() => ({ items: [] }));
-    const items = Array.isArray(res?.items) ? res.items : [];
-    if (!items.length) break;
+  let uniqueMissing: BatchMissingPreviewItem[] = [];
 
-    let highestPagePrice = 0;
-    for (const item of items) {
-      const price = Number(item?.price);
-      if (Number.isFinite(price) && price > highestPagePrice) highestPagePrice = price;
-      if (!item?.id || item.status !== 'active' || item.isMine) continue;
-      if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
-      const char = item.character || {};
-      const characterId = Number(char.id ?? item.characterId);
-      const rarity = (char.rarity || 'C') as Rarity;
-      if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
-      if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
-      if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
-      rawMatches.push({
-        listingId: String(item.id), characterId, name: char.name || `Carte #${characterId}`,
-        series: char.series || '', rarity, price, median7d: null
-      });
+  if (Array.isArray(req.characterIds) && req.characterIds.length > 0) {
+    const missingTargetIds = Array.from(
+      new Set(req.characterIds.map(Number).filter((id) => Number.isFinite(id) && id > 0 && !ownedSet.has(id)))
+    );
+    const settled = await mapLimit(missingTargetIds, 5, async (id): Promise<BatchMissingPreviewItem | null> => {
+      const res = await kyaraApi(`/market/listings?characterId=${id}&type=fixed&sort=price_asc&pageSize=3`, { auth: true }).catch(() => ({ items: [] }));
+      const items = Array.isArray(res?.items) ? res.items : [];
+      let best: BatchMissingPreviewItem | null = null;
+      for (const item of items) {
+        const price = Number(item?.price);
+        if (!item?.id || item.status !== 'active' || item.isMine) continue;
+        if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
+        if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
+        const char = item.character || {};
+        const rarity: Rarity = VALID_RARITIES.has(char.rarity) ? char.rarity : 'C';
+        if (!best || price < best.price) {
+          best = {
+            listingId: String(item.id),
+            characterId: Number(char.id ?? item.characterId ?? id),
+            name: char.name || `Carte #${id}`,
+            series: char.series || '',
+            rarity,
+            price,
+            median7d: null
+          };
+        }
+      }
+      return best;
+    });
+    uniqueMissing = (fulfilled(settled).filter(Boolean) as BatchMissingPreviewItem[]).sort((a, b) => a.price - b.price);
+  } else {
+    const targetRarities = state.currentSettings.renaissanceTargetRarities;
+    const allowedRarities: Rarity[] =
+      req.rarity === 'RENAISSANCE'
+        ? (Array.isArray(targetRarities) && targetRarities.length ? targetRarities : ['C', 'U', 'R'])
+        : [req.rarity];
+    const allowedSet = new Set<Rarity>(allowedRarities);
+    const rarityParam = allowedRarities.length === 1 ? `&rarity=${encodeURIComponent(allowedRarities[0])}` : '';
+
+    const rawMatches: BatchMissingPreviewItem[] = [];
+    for (let page = 1; page <= 6; page += 1) {
+      const res = await kyaraApi(`/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${page}${rarityParam}`, { auth: true }).catch(() => ({ items: [] }));
+      const items = Array.isArray(res?.items) ? res.items : [];
+      if (!items.length) break;
+
+      let highestPagePrice = 0;
+      for (const item of items) {
+        const price = Number(item?.price);
+        if (Number.isFinite(price) && price > highestPagePrice) highestPagePrice = price;
+        if (!item?.id || item.status !== 'active' || item.isMine) continue;
+        if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
+        const char = item.character || {};
+        const characterId = Number(char.id ?? item.characterId);
+        const rarity = (char.rarity || 'C') as Rarity;
+        if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
+        if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
+        if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
+        rawMatches.push({
+          listingId: String(item.id), characterId, name: char.name || `Carte #${characterId}`,
+          series: char.series || '', rarity, price, median7d: null
+        });
+      }
+      if (highestPagePrice > maxUnitPrice || rawMatches.length >= qty * 2) break;
     }
-    if (highestPagePrice > maxUnitPrice || rawMatches.length >= qty * 2) break;
-  }
 
-  rawMatches.sort((a, b) => a.price - b.price);
-  const seenCharIds = new Set<number>();
-  const uniqueMissing = rawMatches.filter((item) => !seenCharIds.has(item.characterId) && Boolean(seenCharIds.add(item.characterId)));
+    rawMatches.sort((a, b) => a.price - b.price);
+    const seenCharIds = new Set<number>();
+    uniqueMissing = rawMatches.filter((item) => !seenCharIds.has(item.characterId) && Boolean(seenCharIds.add(item.characterId)));
+  }
 
   const picked: BatchMissingPreviewItem[] = [];
   let runningCost = 0;

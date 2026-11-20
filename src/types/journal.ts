@@ -6,6 +6,13 @@ export interface JournalItem {
   message: string;
 }
 
+export interface HourlyChakraBucket {
+  hourTs: number; // UTC hour start timestamp (Math.floor(ts / 3600000) * 3600000)
+  salesChakra: number;
+  recycleChakra: number;
+  totalChakra: number;
+}
+
 export interface CumulativeStats {
   chakraFromSales: number;
   chakraFromRecycle: number;
@@ -16,4 +23,5 @@ export interface CumulativeStats {
   mythicsPulledCount: number;
   legendariesPulledCount: number;
   startedAt: number;
+  hourlyHistory?: HourlyChakraBucket[];
 }

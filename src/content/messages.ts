@@ -7,6 +7,7 @@ import { executeAutoSell } from './automation/auto-sell';
 import { executeAutoRecycle, recycleCopies } from './automation/auto-recycle';
 import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/live-opening';
 import { executeBatchMissingBuy, previewBatchMissingBuy } from './automation/batch-buy';
+import { placeBatchBuyOrders, placeBuyOrder, scanBuyOrderOpportunities } from './automation/buy-orders';
 import { runExclusive } from './operations';
 import { getCardAvailability, isInterrupted, loadCardLedger, positiveInteger } from './safety';
 import { fulfilled, mapLimit } from '../lib/concurrency';
@@ -100,7 +101,8 @@ export function setupMessageListener(): () => void {
             rarity: message.rarity,
             maxUnitPrice: Number(message.maxUnitPrice),
             qty: Number(message.qty),
-            maxTotalBudget: message.maxTotalBudget !== undefined ? Number(message.maxTotalBudget) : undefined
+            maxTotalBudget: message.maxTotalBudget !== undefined ? Number(message.maxTotalBudget) : undefined,
+            characterIds: Array.isArray(message.characterIds) ? message.characterIds.map(Number) : undefined
           });
           sendResponse({ ok: true, preview });
           return;
@@ -112,10 +114,53 @@ export function setupMessageListener(): () => void {
             maxUnitPrice: Number(message.maxUnitPrice),
             qty: Number(message.qty),
             maxTotalBudget: message.maxTotalBudget !== undefined ? Number(message.maxTotalBudget) : undefined,
-            listingIds: Array.isArray(message.listingIds) ? message.listingIds.map(String) : undefined
+            listingIds: Array.isArray(message.listingIds) ? message.listingIds.map(String) : undefined,
+            characterIds: Array.isArray(message.characterIds) ? message.characterIds.map(Number) : undefined
           });
           const dashboard = await refreshAfterAction({ forcePrices: false });
           sendResponse({ ok: true, result, dashboard });
+          return;
+        }
+
+        if (message.type === 'km:cmd:scan-buy-orders') {
+          const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
+          const opportunities = await scanBuyOrderOpportunities(dashboard, { limit: message.limit, discountPct: message.discountPct });
+          sendResponse({ ok: true, opportunities });
+          return;
+        }
+
+        if (message.type === 'km:cmd:place-buy-order') {
+          const res = await placeBuyOrder(message.characterId, message.price, message.name);
+          const dashboard = await refreshAfterAction({ forcePrices: false });
+          sendResponse({ ok: res.ok, error: res.error, dashboard });
+          return;
+        }
+
+        if (message.type === 'km:cmd:place-batch-buy-orders') {
+          const result = await placeBatchBuyOrders(message.orders || []);
+          const dashboard = await refreshAfterAction({ forcePrices: false });
+          sendResponse({ ok: true, result, dashboard });
+          return;
+        }
+
+        if (message.type === 'km:cmd:cancel-rebirth-blocking-listings') {
+          const market = await kyaraApi('/me/market');
+          const now = Date.now();
+          const blocking = (Array.isArray(market?.listings) ? market.listings : []).filter((l: any) =>
+            l && (l.status === 'active' || l.status === 'pending') &&
+            (!l.endsAt || Date.parse(l.endsAt) > now) &&
+            ['C', 'U', 'R', 'E'].includes(l.character?.rarity || l.rarity || 'C')
+          );
+          const res = await mapLimit(blocking, 3, async (l: any) => {
+            if (isInterrupted()) return false;
+            await kyaraApi(`/market/listings/${encodeURIComponent(l.id)}/cancel`, { method: 'POST' });
+            state.previousActiveListings.delete(String(l.id));
+            return true;
+          });
+          const cancelledCount = fulfilled(res).filter(Boolean).length;
+          await appendJournal('info', `Renaissance : ${cancelledCount} annonce(s) bloquante(s) (C/U/R/E) retirée(s)`);
+          const dashboard = await refreshAfterAction({ forcePrices: false });
+          sendResponse({ ok: true, cancelledCount, dashboard });
           return;
         }
 
@@ -127,15 +172,8 @@ export function setupMessageListener(): () => void {
           const available = await getCardAvailability(Number(characterId));
           if (available.spare < 1) throw new Error('Aucun exemplaire disponible ou carte protégée.');
           await kyaraApi('/market/listings', {
-            method: 'POST',
-            withPass: true,
-            body: {
-              characterId: Number(characterId),
-              type: 'fixed',
-              price: Number(price),
-              buyoutPrice: null,
-              durationHours: Number(durationHours)
-            }
+            method: 'POST', withPass: true,
+            body: { characterId: Number(characterId), type: 'fixed', price: Number(price), buyoutPrice: null, durationHours: Number(durationHours) }
           });
           await appendJournal('sell', `Vente directe : Carte #${characterId} mise en vente à ${price} ◆`);
           const dashboard = await refreshAfterAction({ forcePrices: false });
@@ -149,10 +187,7 @@ export function setupMessageListener(): () => void {
           positiveInteger(qty, 'Quantité');
           const available = await getCardAvailability(Number(characterId));
           if (Number(qty) > available.spare) throw new Error('Quantité indisponible ou carte protégée. Actualise les doublons.');
-          const res = await kyaraApi(`/me/collection/${Number(characterId)}/recycle`, {
-            method: 'POST',
-            body: { qty: Number(qty) }
-          });
+          const res = await kyaraApi(`/me/collection/${Number(characterId)}/recycle`, { method: 'POST', body: { qty: Number(qty) } });
           await appendJournal('recycle', `Recyclage direct : ${name} ×${qty} (+${res?.gained ?? '?'} ◆)`);
           await recordCumulativeMetric({ cardsRecycled: Number(qty), chakraFromRecycle: Number(res?.gained) || 0 });
           const dashboard = await refreshAfterAction({ forcePrices: false });
@@ -168,10 +203,7 @@ export function setupMessageListener(): () => void {
           if (listing?.status !== 'active' || listing?.isMine || !Number.isFinite(actualPrice) || actualPrice <= 0 || actualPrice > Number(price)) {
             throw new Error('Annonce indisponible ou prix modifié. Actualise le marché.');
           }
-          await kyaraApi(`/market/listings/${encodeURIComponent(listingId)}/buy`, {
-            method: 'POST',
-            withPass: true
-          });
+          await kyaraApi(`/market/listings/${encodeURIComponent(listingId)}/buy`, { method: 'POST', withPass: true });
           await appendJournal('buy', `Achat direct : ${name} achetée pour ${price} ◆`);
           const dashboard = await refreshAfterAction({ forcePrices: false, scanMarketDeals: true });
           sendResponse({ ok: true, dashboard });
@@ -180,9 +212,7 @@ export function setupMessageListener(): () => void {
 
         if (message.type === 'km:cmd:cancel-listing') {
           const { listingId, name = 'Annonce' } = message;
-          await kyaraApi(`/market/listings/${encodeURIComponent(listingId)}/cancel`, {
-            method: 'POST'
-          });
+          await kyaraApi(`/market/listings/${encodeURIComponent(listingId)}/cancel`, { method: 'POST' });
           state.previousActiveListings.delete(String(listingId));
           await appendJournal('info', `Annonce retirée : ${name}`);
           const dashboard = await refreshAfterAction({ forcePrices: false });
@@ -315,12 +345,8 @@ export function setupMessageListener(): () => void {
       }
     };
     const readOnly = [
-      'km:cmd:refresh',
-      'km:cmd:scan-deals',
-      'km:cmd:preview-batch-buy',
-      'km:alarm-tick',
-      'km:cmd:run-cycle',
-      'km:save-settings'
+      'km:cmd:refresh', 'km:cmd:scan-deals', 'km:cmd:preview-batch-buy',
+      'km:cmd:scan-buy-orders', 'km:alarm-tick', 'km:cmd:run-cycle', 'km:save-settings'
     ].includes(message?.type);
     void (readOnly ? handle() : runExclusive(handle)).catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;
