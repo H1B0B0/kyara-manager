@@ -82,10 +82,17 @@ export async function ensurePackPools(packs: any[], force = false): Promise<Reco
     await Promise.all(
       batch.map(async (pack) => {
         try {
-          const ids = await kyaraApi(`/packs/${encodeURIComponent(pack.id)}/characters`, { auth: false });
-          if (Array.isArray(ids)) {
-            pools[pack.id] = ids.map(Number).filter(Number.isFinite);
-          }
+          const data = await kyaraApi(`/packs/${encodeURIComponent(pack.id)}/characters`, { auth: false });
+          const rawList = Array.isArray(data)
+            ? data
+            : Array.isArray(data?.characters)
+              ? data.characters
+              : Array.isArray(data?.items)
+                ? data.items
+                : [];
+          pools[pack.id] = rawList
+            .map((entry: any) => Number(entry && typeof entry === 'object' ? (entry.id ?? entry.characterId) : entry))
+            .filter(Number.isFinite);
         } catch {
           pools[pack.id] = [];
         }
@@ -111,7 +118,7 @@ export async function ensureCollectionPrices(characterIds: number[], force = fal
     return !cached || now - cached.at > PRICES_TTL_MS;
   });
 
-  const batchSize = 350;
+  const batchSize = 200;
   const chunks: number[][] = [];
   for (let i = 0; i < missingIds.length; i += batchSize) {
     chunks.push(missingIds.slice(i, i + batchSize));
@@ -121,15 +128,97 @@ export async function ensureCollectionPrices(characterIds: number[], force = fal
     chunks.map(async (chunk) => {
       try {
         const res = await kyaraApi(`/me/collection/prices?ids=${chunk.join(',')}`);
-        const list = Array.isArray(res) ? res : Array.isArray(res?.items) ? res.items : [];
-        for (const item of list) {
-          const cid = Number(item.characterId ?? item.id);
-          if (Number.isFinite(cid)) {
+        for (const cid of chunk) {
+          if (!runtimeCache.collectionPrices.has(cid)) {
             runtimeCache.collectionPrices.set(cid, {
-              median7d: item.median7d ?? null,
-              median30d: item.median30d ?? null,
-              sales7d: item.sales7d ?? null,
-              sales30d: item.sales30d ?? null,
+              median7d: null,
+              median30d: null,
+              sales7d: 0,
+              sales30d: 0,
+              at: now
+            });
+          }
+        }
+        const list = Array.isArray(res) ? res : Array.isArray(res?.items) ? res.items : null;
+        if (list) {
+          for (const item of list) {
+            const cid = Number(item.characterId ?? item.id);
+            if (Number.isFinite(cid)) {
+              runtimeCache.collectionPrices.set(cid, {
+                median7d: item.median7d ?? item.price ?? null,
+                median30d: item.median30d ?? null,
+                sales7d: item.sales7d ?? null,
+                sales30d: item.sales30d ?? null,
+                at: now
+              });
+            }
+          }
+        } else if (res && typeof res === 'object') {
+          for (const [k, v] of Object.entries(res)) {
+            const cid = Number(k);
+            if (!Number.isFinite(cid)) continue;
+            if (typeof v === 'number' && Number.isFinite(v) && v > 0) {
+              runtimeCache.collectionPrices.set(cid, {
+                median7d: v,
+                median30d: null,
+                sales7d: 1,
+                sales30d: null,
+                at: now
+              });
+            } else if (v && typeof v === 'object') {
+              const item = v as any;
+              runtimeCache.collectionPrices.set(cid, {
+                median7d: item.median7d ?? item.price ?? null,
+                median30d: item.median30d ?? null,
+                sales7d: item.sales7d ?? null,
+                sales30d: item.sales30d ?? null,
+                at: now
+              });
+            }
+          }
+        }
+      } catch {}
+    })
+  );
+
+  return runtimeCache.collectionPrices;
+}
+
+/**
+ * Bulk-hydrates reference market prices for any character IDs (including unowned cards)
+ * via Kyara's `GET /api/fair-play/prices?ids=` endpoint (max 200 IDs per request).
+ */
+export async function ensureFairPlayPrices(characterIds: number[], force = false): Promise<Map<number, any>> {
+  const now = Date.now();
+  const missingIds = Array.from(new Set(characterIds.filter((id) => Number.isFinite(id) && id > 0))).filter((id) => {
+    if (force) return true;
+    const cached = runtimeCache.collectionPrices.get(id);
+    return !cached || !Number.isFinite(Number(cached.median7d)) || Number(cached.median7d) <= 0;
+  });
+  if (missingIds.length === 0) return runtimeCache.collectionPrices;
+
+  const batchSize = 200;
+  const chunks: number[][] = [];
+  for (let i = 0; i < missingIds.length; i += batchSize) {
+    chunks.push(missingIds.slice(i, i + batchSize));
+  }
+
+  await Promise.all(
+    chunks.map(async (chunk) => {
+      try {
+        const res = await kyaraApi(`/fair-play/prices?ids=${chunk.join(',')}`, { auth: true });
+        if (!res || typeof res !== 'object' || Array.isArray(res)) return;
+        const mapObj = (res.prices && typeof res.prices === 'object' ? res.prices : res) as Record<string, unknown>;
+        for (const [k, rawVal] of Object.entries(mapObj)) {
+          const cid = Number(k);
+          const price = Number(rawVal);
+          if (Number.isFinite(cid) && cid > 0 && Number.isFinite(price) && price > 0) {
+            const existing = runtimeCache.collectionPrices.get(cid);
+            runtimeCache.collectionPrices.set(cid, {
+              median7d: Number(existing?.median7d) > 0 ? existing.median7d : price,
+              median30d: existing?.median30d ?? price,
+              sales7d: existing?.sales7d ?? 1,
+              sales30d: existing?.sales30d ?? null,
               at: now
             });
           }

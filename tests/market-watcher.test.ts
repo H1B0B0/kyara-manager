@@ -2,9 +2,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockChrome, mockLocks } from './chrome';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../src/types/settings';
 import { computeRenaissanceSummary } from '../src/lib/analytics/renaissance';
+import { computeRecyclableCopies, computeSpareCopies } from '../src/lib/analytics/fees';
 import { state } from '../src/content/state';
 import { runtimeCache } from '../src/content/cache';
-import { scanMarketDealsInternal } from '../src/content/scanner';
+import { scanMarketDealsInternal, scanProfitableTrades } from '../src/content/scanner';
 import { executeAutoBuy } from '../src/content/automation/auto-buy';
 import { runMarketWatchTick } from '../src/content/automation/market-watcher';
 import { computeLiveMarketDepth } from '../src/lib/analytics/market-depth';
@@ -218,5 +219,81 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     expect(depth.count).toBe(2);
     expect(depth.lowestFixed).toBe(15);
     expect(depth.highestFixed).toBe(18);
+  });
+
+  it('Test 7: computeSpareCopies does not double-subtract activeListedQty when server entry.listable already reflects listed copies', () => {
+    // 4 owned total, 1 on sale on the market (listable=2 because 1 is in cooldown and 1 is listed), 1 to keep => 2 spare
+    const entry4With1Listed = { characterId: 501, qty: 4, locked: 0, listable: 2, resaleLocked: 0 };
+    expect(computeSpareCopies(entry4With1Listed, 1, 1)).toBe(2);
+    expect(computeRecyclableCopies(entry4With1Listed, 1, 1)).toBe(2);
+
+    // 2 owned total, 1 on sale on the market (listable=1), 1 to keep => 0 spare & 0 recyclable
+    const entry2With1Listed = { characterId: 502, qty: 2, locked: 0, listable: 1, resaleLocked: 0 };
+    expect(computeSpareCopies(entry2With1Listed, 1, 1)).toBe(0);
+    expect(computeRecyclableCopies(entry2With1Listed, 1, 1)).toBe(0);
+  });
+
+  it('Test 8: computeRenaissanceSummary parses real GET /api/me/renaissance requirements array (legendaries, mythics, boosters) and scanProfitableTrades parses GET /api/trades/offers wantIds[]', async () => {
+    const catalog = new Map<number, any>([
+      [1, { id: 1, name: 'Card C', rarity: 'C' }],
+      [2, { id: 2, name: 'Card L', rarity: 'L' }],
+      [3, { id: 3, name: 'Card M', rarity: 'M' }]
+    ]);
+    const realRenaissancePayload = {
+      level: 1,
+      next: 2,
+      renown: 4250,
+      eligible: false,
+      requirements: [
+        { key: 'C', have: 100, need: 1500, ok: false },
+        { key: 'legendaries', have: 70, need: 80, ok: false },
+        { key: 'mythics', have: 12, need: 12, ok: true },
+        { key: 'boosters', have: 920, need: 1600, ok: false }
+      ]
+    };
+    const summary = computeRenaissanceSummary(catalog, new Set([1, 2, 3]), DEFAULT_SETTINGS, {}, realRenaissancePayload, {
+      boostersOpened: 5400
+    });
+    expect(summary.byRarity.L.target).toBe(1); // capped by catalog size (1) in this mini-catalog
+    expect(summary.boostersOpened).toBe(920);
+    expect(summary.boostersTarget).toBe(1600);
+    expect(summary.estimatedRenown).toBe(4250);
+
+    runtimeCache.catalogById = new Map<number, any>([
+      [701, { id: 701, name: 'Offered Epic', rarity: 'E', series: 'S1' }],
+      [702, { id: 702, name: 'My Spare Rare', rarity: 'R', series: 'S1' }]
+    ]);
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path === '/trades/offers') {
+        return [
+          {
+            id: 'offer-1',
+            user: { id: 'u-2', pseudo: 'TraderJoe' },
+            characterId: 701,
+            wantIds: [999, 702],
+            status: 'active',
+            createdAt: new Date().toISOString()
+          }
+        ];
+      }
+      if (path.startsWith('/fair-play/prices?ids=')) {
+        return { '701': 25, '702': 8 };
+      }
+      return {};
+    });
+
+    const trades = await scanProfitableTrades(
+      new Set([702]),
+      [{ characterId: 702, name: 'My Spare Rare', rarity: 'R', spare: 2, pinned: false }],
+      new Map()
+    );
+    expect(trades).toHaveLength(1);
+    expect(trades[0]).toMatchObject({
+      listingId: 'offer-1',
+      seller: 'TraderJoe',
+      profit: 17,
+      offered: { characterId: 701, name: 'Offered Epic', median7d: 25, isMissing: true },
+      wanted: { characterId: 702, name: 'My Spare Rare', median7d: 8 }
+    });
   });
 });

@@ -1,5 +1,5 @@
 import { kyaraApi } from './api';
-import { ensureCollectionPrices, runtimeCache } from './cache';
+import { ensureCatalog, ensureCollectionPrices, ensureFairPlayPrices, runtimeCache } from './cache';
 import { state } from './state';
 import { notifyDesktop } from './utils';
 import { evaluateDeal } from '../lib/analytics/deals';
@@ -88,7 +88,9 @@ export async function scanMarketDealsInternal(
     }
   }
   if (missingPriceIds.size > 0) {
-    await ensureCollectionPrices(Array.from(missingPriceIds), false);
+    const missingArr = Array.from(missingPriceIds);
+    await ensureCollectionPrices(missingArr, false);
+    await ensureFairPlayPrices(missingArr, false);
   }
 
   const hasMedian7d = (cid: number): boolean => {
@@ -192,13 +194,19 @@ export async function scanProfitableTrades(
 ): Promise<any[]> {
   try {
     const res =
-      (await kyaraApi('/market/listings?type=trade&pageSize=40&page=1', { auth: true }).catch(() => null)) ||
-      (await kyaraApi('/trades', { auth: true }).catch(() => null)) ||
-      (await kyaraApi('/market/trades', { auth: true }).catch(() => null));
+      (await kyaraApi('/trades/offers', { auth: true }).catch(() => null)) ||
+      (await kyaraApi('/me/trades', { auth: true }).catch(() => null));
 
-    const rawItems = Array.isArray(res?.items) ? res.items : Array.isArray(res) ? res : [];
+    const rawItems = Array.isArray(res)
+      ? res
+      : Array.isArray(res?.items)
+        ? res.items
+        : Array.isArray(res?.incoming)
+          ? res.incoming
+          : [];
     if (!rawItems.length) return [];
 
+    const catalog = runtimeCache.catalogById || (await ensureCatalog(false).catch(() => new Map()));
     const spareMap = new Map<number, any>();
     for (const d of duplicateEntries || []) {
       if (d.spare > 0 && !d.pinned) {
@@ -206,23 +214,61 @@ export async function scanProfitableTrades(
       }
     }
 
+    const priceIdsToLoad = new Set<number>();
+    for (const item of rawItems) {
+      if (!item || item.isMine || (item.status && item.status !== 'active' && item.status !== 'pending')) continue;
+      const offeredId = Number(item.character?.id ?? item.offered?.id ?? item.characterId);
+      if (Number.isFinite(offeredId) && offeredId > 0) priceIdsToLoad.add(offeredId);
+      const wantList: number[] = Array.isArray(item.wantIds)
+        ? item.wantIds.map(Number).filter(Number.isFinite)
+        : [
+            Number(
+              item.wantedCharacterId ??
+              item.wantedCharacter?.id ??
+              item.targetCharacterId ??
+              item.wantedId ??
+              item.wanted?.id
+            )
+          ].filter(Number.isFinite);
+      for (const wid of wantList) {
+        if (spareMap.has(wid)) priceIdsToLoad.add(wid);
+      }
+    }
+    if (priceIdsToLoad.size > 0) {
+      await ensureFairPlayPrices(Array.from(priceIdsToLoad), false);
+    }
+
     const profitable: any[] = [];
     for (const item of rawItems) {
-      if (!item || item.isMine || (item.status && item.status !== 'active')) continue;
+      if (!item || item.isMine || (item.status && item.status !== 'active' && item.status !== 'pending')) continue;
 
       const offeredChar = item.character || item.offered || {};
       const offeredId = Number(offeredChar.id ?? item.characterId);
-      const wantedId = Number(
-        item.wantedCharacterId ??
-        item.wantedCharacter?.id ??
-        item.targetCharacterId ??
-        item.wantedId ??
-        item.wanted?.id
+      if (!Number.isFinite(offeredId) || offeredId <= 0) continue;
+
+      const wantList: number[] = Array.isArray(item.wantIds)
+        ? item.wantIds.map(Number).filter(Number.isFinite)
+        : [
+            Number(
+              item.wantedCharacterId ??
+              item.wantedCharacter?.id ??
+              item.targetCharacterId ??
+              item.wantedId ??
+              item.wanted?.id
+            )
+          ].filter(Number.isFinite);
+      const matchingWants = wantList.filter((wid) => spareMap.has(wid));
+      if (matchingWants.length === 0) continue;
+
+      // Pick the cheapest spare duplicate the trade creator accepts
+      matchingWants.sort(
+        (a, b) =>
+          (runtimeCache.collectionPrices.get(a)?.median7d || 0) -
+          (runtimeCache.collectionPrices.get(b)?.median7d || 0)
       );
-
-      if (!Number.isFinite(wantedId) || !spareMap.has(wantedId)) continue;
-
+      const wantedId = matchingWants[0];
       const myCard = spareMap.get(wantedId);
+      const catOffered = catalog.get(offeredId) || {};
       const offeredPrice = runtimeCache.collectionPrices.get(offeredId)?.median7d || 0;
       const myPrice = runtimeCache.collectionPrices.get(wantedId)?.median7d || 0;
       const isMissing = ownedSet ? !ownedSet.has(offeredId) : false;
@@ -232,12 +278,12 @@ export async function scanProfitableTrades(
       if (isWish || profit >= 3 || (isMissing && profit >= -5)) {
         profitable.push({
           listingId: String(item.id),
-          seller: item.seller?.pseudo || '?',
+          seller: item.user?.pseudo || item.seller?.pseudo || item.from?.pseudo || '?',
           isWish: Boolean(isWish),
           offered: {
             characterId: offeredId,
-            name: offeredChar.name || `Carte #${offeredId}`,
-            rarity: offeredChar.rarity || 'C',
+            name: offeredChar.name || catOffered.name || `Carte #${offeredId}`,
+            rarity: offeredChar.rarity || catOffered.rarity || 'C',
             median7d: offeredPrice,
             isMissing,
             isWish: Boolean(isWish)

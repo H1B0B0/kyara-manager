@@ -75,7 +75,7 @@ async function buildDashboardSnapshot({
   try {
     [bootstrap, rebirthData] = await Promise.all([
       kyaraApi('/me/bootstrap'),
-      kyaraApi('/me/rebirth').catch(() => null)
+      kyaraApi('/me/renaissance').catch(() => kyaraApi('/me/rebirth').catch(() => null))
     ]);
   } catch (err: any) {
     const unauthState = {
@@ -200,6 +200,12 @@ async function buildDashboardSnapshot({
 
   const { kmPinnedCards } = (await chrome.storage.local.get('kmPinnedCards')) as { kmPinnedCards?: number[] };
   const pinnedSet = new Set<number>((kmPinnedCards || []).map(Number));
+  for (const entry of Array.isArray(collection) ? collection : []) {
+    if (entry?.pinned) {
+      const cid = Number(entry.characterId ?? entry.id);
+      if (Number.isFinite(cid) && cid > 0) pinnedSet.add(cid);
+    }
+  }
 
   let deadline = performance.now() + 50;
   const evaluatedDuplicates: any[] = [];

@@ -1,5 +1,5 @@
 import { kyaraApi } from '../api';
-import { ensureCollectionPrices, runtimeCache } from '../cache';
+import { ensureCollectionPrices, ensureFairPlayPrices, runtimeCache } from '../cache';
 import { appendJournal } from '../journal';
 import { isInterrupted } from '../safety';
 import { state } from '../state';
@@ -137,7 +137,9 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
   }
 
   if (picked.length > 0) {
-    await ensureCollectionPrices(picked.map((p) => p.characterId), false);
+    const pickedIds = picked.map((p) => p.characterId);
+    await ensureCollectionPrices(pickedIds, false);
+    await ensureFairPlayPrices(pickedIds, false);
     for (const item of picked) item.median7d = runtimeCache.collectionPrices.get(item.characterId)?.median7d ?? null;
   }
   const totalCost = picked.reduce((sum, item) => sum + item.price, 0);

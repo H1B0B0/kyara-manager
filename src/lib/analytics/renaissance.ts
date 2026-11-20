@@ -31,6 +31,30 @@ export interface RenaissanceExtraContext {
   recycleMap?: Record<string, number>;
 }
 
+const RARITY_REQ_KEYS: Record<Rarity, string[]> = {
+  C: ['C', 'commons', 'common'],
+  U: ['U', 'uncommons', 'uncommon'],
+  R: ['R', 'rares', 'rare'],
+  E: ['E', 'epics', 'epic'],
+  L: ['L', 'legendaries', 'legendary'],
+  M: ['M', 'mythics', 'mythic']
+};
+
+function findServerRequirement(serverRebirth: any, keys: string[]): { have?: number; need?: number; ok?: boolean } | null {
+  const reqs = serverRebirth?.requirements;
+  if (Array.isArray(reqs)) {
+    const match = reqs.find((item: any) => item && keys.includes(String(item.key)));
+    if (match) {
+      return {
+        have: Number.isFinite(Number(match.have)) ? Math.max(0, Math.floor(Number(match.have))) : undefined,
+        need: Number.isFinite(Number(match.need)) ? Math.max(0, Math.floor(Number(match.need))) : undefined,
+        ok: typeof match.ok === 'boolean' ? match.ok : undefined
+      };
+    }
+  }
+  return null;
+}
+
 function resolveTarget(
   rarity: Rarity,
   total: number,
@@ -43,8 +67,16 @@ function resolveTarget(
     return total > 0 ? Math.min(total, floored) : floored;
   }
 
+  const arrayReq = findServerRequirement(serverRebirth, RARITY_REQ_KEYS[rarity]);
+  if (arrayReq?.need && arrayReq.need > 0) {
+    const isHighTier = rarity === 'E' || rarity === 'L' || rarity === 'M';
+    if (!isHighTier || total <= 0 || arrayReq.need < total) {
+      return total > 0 ? Math.min(total, arrayReq.need) : arrayReq.need;
+    }
+  }
+
   const rawServerReq =
-    serverRebirth?.requirements?.[rarity] ??
+    (!Array.isArray(serverRebirth?.requirements) ? serverRebirth?.requirements?.[rarity] : undefined) ??
     serverRebirth?.targets?.[rarity] ??
     serverRebirth?.[rarity];
   if (rawServerReq !== undefined && rawServerReq !== null && rawServerReq !== '') {
@@ -148,10 +180,11 @@ export function computeRenaissanceSummary(
       ? Math.min(100, Math.round(((totalTarget - totalRemaining) / totalTarget) * 1000) / 10)
       : 100;
 
-  const rawBoostersOpened = Number(extra?.boostersOpened ?? 0);
+  const boostersReq = findServerRequirement(serverRebirth, ['boosters']);
+  const rawBoostersOpened = Number(boostersReq?.have ?? extra?.boostersOpened ?? 0);
   const boostersOpened = Number.isFinite(rawBoostersOpened) ? Math.max(0, rawBoostersOpened) : 0;
-  const rawBoostersTarget = Number(serverRebirth?.boostersTarget ?? OFFICIAL_REBIRTH_BOOSTERS_TARGET);
-  const boostersTarget = Number.isFinite(rawBoostersTarget)
+  const rawBoostersTarget = Number(boostersReq?.need ?? serverRebirth?.boostersTarget ?? OFFICIAL_REBIRTH_BOOSTERS_TARGET);
+  const boostersTarget = Number.isFinite(rawBoostersTarget) && rawBoostersTarget > 0
     ? Math.max(0, rawBoostersTarget)
     : OFFICIAL_REBIRTH_BOOSTERS_TARGET;
 
@@ -182,10 +215,11 @@ export function computeRenaissanceSummary(
     }
   }
 
-  const estimatedRenown = RARITIES.reduce(
-    (sum, r) => sum + byRarity[r].owned * RENOWN_BY_RARITY[r],
-    0
-  );
+  const serverRenown = Number(serverRebirth?.renown);
+  const estimatedRenown =
+    Number.isFinite(serverRenown) && serverRenown > 0
+      ? Math.floor(serverRenown)
+      : RARITIES.reduce((sum, r) => sum + byRarity[r].owned * RENOWN_BY_RARITY[r], 0);
 
   const rarityConditionsMet = RARITIES.filter((r) => byRarity[r].remainingForTarget === 0).length;
   const conditionsTotal = 8;
