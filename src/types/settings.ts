@@ -132,9 +132,9 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   dryRun: false,
   language: 'fr',
   renaissanceFocusEnabled: false,
-  renaissanceTargetRarities: ['C', 'U', 'R'],
+  renaissanceTargetRarities: ['C', 'U', 'R', 'E'],
   renaissanceTargets: {},
-  batchBuyDefaultMaxPrice: { C: 3, U: 4, R: 6, E: 18, L: 90, M: 500 }
+  batchBuyDefaultMaxPrice: { C: 5, U: 6, R: 10, E: 35, L: 140, M: 600 }
 };
 
 // Public UI keys are canonical; legacy keys remain synchronized for compatibility.
@@ -194,13 +194,20 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
     settings.batchBuyDefaultMaxPrice && typeof settings.batchBuyDefaultMaxPrice === 'object' && !Array.isArray(settings.batchBuyDefaultMaxPrice)
       ? settings.batchBuyDefaultMaxPrice
       : {};
+  const isLegacyTightDefaults =
+    Number((rawMaxPrices as any).C) === 3 &&
+    Number((rawMaxPrices as any).U) === 4 &&
+    Number((rawMaxPrices as any).R) === 6 &&
+    Number((rawMaxPrices as any).E) === 18;
   const mergedMaxPrices: Partial<Record<Rarity, number>> = { ...DEFAULT_SETTINGS.batchBuyDefaultMaxPrice };
-  for (const r of VALID_RARITIES) {
-    const rawVal = (rawMaxPrices as Record<string, unknown>)[r];
-    if (rawVal === undefined || rawVal === null || rawVal === '') continue;
-    const val = Number(rawVal);
-    if (Number.isFinite(val) && val >= 0) {
-      mergedMaxPrices[r] = Math.round(val);
+  if (!isLegacyTightDefaults) {
+    for (const r of VALID_RARITIES) {
+      const rawVal = (rawMaxPrices as Record<string, unknown>)[r];
+      if (rawVal === undefined || rawVal === null || rawVal === '') continue;
+      const val = Number(rawVal);
+      if (Number.isFinite(val) && val >= 0) {
+        mergedMaxPrices[r] = Math.round(val);
+      }
     }
   }
   settings.batchBuyDefaultMaxPrice = mergedMaxPrices;

@@ -28,14 +28,17 @@ export async function scanMarketDealsInternal(
 
   if (options.rarity && options.rarity !== 'ALL') {
     queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(options.rarity)}&pageSize=50&page=1`);
+    queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(options.rarity)}&pageSize=50&page=2`);
   } else if (state.currentSettings.renaissanceFocusEnabled || options.focusRarities?.length) {
     const rawFocus = options.focusRarities?.length
       ? options.focusRarities
       : state.currentSettings.renaissanceTargetRarities?.length
         ? state.currentSettings.renaissanceTargetRarities
-        : (['C', 'U', 'R'] as Rarity[]);
+        : (['C', 'U', 'R', 'E'] as Rarity[]);
     for (const r of rawFocus) {
       queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(r)}&pageSize=50&page=1`);
+      queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(r)}&pageSize=50&page=2`);
+      queries.push(`/market/listings?type=fixed&sort=newest&rarity=${encodeURIComponent(r)}&pageSize=50&page=1`);
     }
   } else if (state.currentSettings.autoBuyMissingEnabled || state.currentSettings.autoMarketEnabled || state.currentSettings.autoBuyFlipEnabled) {
     for (const r of ['U', 'R', 'E'] as Rarity[]) {
@@ -130,10 +133,13 @@ export async function scanMarketDealsInternal(
 
   const deals: any[] = [];
   const minReserve = Math.max(0, Number(state.currentSettings.autoBuyMinChakraReserve ?? 500));
+  const evalSettings = options.focusRarities?.length
+    ? { ...state.currentSettings, renaissanceTargetRarities: options.focusRarities }
+    : state.currentSettings;
 
   for (const item of combined) {
     const charId = Number(item.character?.id ?? item.characterId);
-    const deal: any = evaluateDeal(item, runtimeCache.collectionPrices.get(charId) || {}, ownedSet, state.currentSettings);
+    const deal: any = evaluateDeal(item, runtimeCache.collectionPrices.get(charId) || {}, ownedSet, evalSettings);
     if (!deal) continue;
 
     // Croisement Wishlist (Mes envies)

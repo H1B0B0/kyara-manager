@@ -203,7 +203,7 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     });
 
     const res = await runMarketWatchTick({ manual: false });
-    expect(res).toEqual({ ok: true, boughtCount: 1, dealsFound: 2 });
+    expect(res).toEqual({ ok: true, boughtCount: 1, dealsFound: 1 });
     expect(bought).toEqual(['/market/listings/l-epic-needed/buy']);
   });
 
@@ -295,5 +295,68 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
       offered: { characterId: 701, name: 'Offered Epic', median7d: 25, isMissing: true },
       wanted: { characterId: 702, name: 'My Spare Rare', median7d: 8 }
     });
+  });
+
+  it('Test 9: executeAutoBuy auto-expands legacy C/U/R focus to E when E still needs cards (487/505) and deep-scans page 3 when pages 1-2 are already owned', async () => {
+    const legacyCurSettings = normalizeSettings({
+      masterEnabled: true,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['C', 'U', 'R'],
+      autoBuyMinChakraReserve: 100
+    });
+    mockChrome({
+      settings: legacyCurSettings,
+      kmDashboard: {
+        authenticated: true,
+        me: { chakra: 500 },
+        renaissance: {
+          byRarity: {
+            C: { remainingForTarget: 0 },
+            U: { remainingForTarget: 0 },
+            R: { remainingForTarget: 0 },
+            E: { remainingForTarget: 18 },
+            L: { remainingForTarget: 0 },
+            M: { remainingForTarget: 0 }
+          }
+        }
+      }
+    });
+    state.currentSettings = legacyCurSettings;
+
+    const bought: string[] = [];
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') {
+        return [{ characterId: 1001, qty: 1 }];
+      }
+      if (path.includes('rarity=E') && path.includes('page=3')) {
+        return {
+          items: [
+            { id: 'l-deep-epic', status: 'active', type: 'fixed', price: 24, character: { id: 2002, name: 'Unowned Epic Page 3', rarity: 'E' } }
+          ]
+        };
+      }
+      if (path.startsWith('/market/listings?')) {
+        // Pages 1 and 2 only contain already-owned card #1001
+        return {
+          items: [
+            { id: 'l-owned-epic', status: 'active', type: 'fixed', price: 15, character: { id: 1001, name: 'Owned Epic', rarity: 'E' } }
+          ]
+        };
+      }
+      if (path === '/market/listings/l-deep-epic') {
+        return { id: 'l-deep-epic', status: 'active', type: 'fixed', price: 24 };
+      }
+      if (path === '/me/bootstrap') return { me: { chakra: 500 } };
+      if (path === '/market/listings/l-deep-epic/buy' && opts.method === 'POST') {
+        bought.push(path);
+        return { user: { chakra: 476 } };
+      }
+      return {};
+    });
+
+    const res = await runMarketWatchTick({ manual: false });
+    expect(res.ok).toBe(true);
+    expect(res.boughtCount).toBe(1);
+    expect(bought).toEqual(['/market/listings/l-deep-epic/buy']);
   });
 });

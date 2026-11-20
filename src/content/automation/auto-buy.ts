@@ -1,10 +1,15 @@
 import { kyaraApi } from '../api';
+import { runtimeCache } from '../cache';
 import { state } from '../state';
 import { appendJournal } from '../journal';
 import { notifyDesktop } from '../utils';
 import { getLastScannedListingsCount, scanMarketDealsInternal } from '../scanner';
+import { evaluateDeal } from '../../lib/analytics/deals';
+import { OFFICIAL_REBIRTH_1_TARGETS } from '../../lib/analytics/renaissance';
 import type { MarketWatchTelemetry, Rarity } from '../../types/kyara';
 
+const ALL_RARITIES: Rarity[] = ['C', 'U', 'R', 'E', 'L', 'M'];
+const DEFAULT_REN_MAX_PRICE: Record<Rarity, number> = { C: 5, U: 6, R: 10, E: 35, L: 140, M: 600 };
 let totalBoughtSession = 0;
 
 export async function executeAutoBuy(
@@ -39,33 +44,125 @@ export async function executeAutoBuy(
     currentChakra = Number((boot?.me || boot)?.chakra ?? 0);
   }
 
-  const deals = await scanMarketDealsInternal(ownedSet, wishlistMap, currentChakra);
-  const minReserve = Math.max(0, Number(s.autoBuyMinChakraReserve ?? 500));
-  let boughtCount = 0;
-
   const remainingByRarity: Partial<Record<Rarity, number>> = {};
   const renByRarity = dashboard?.renaissance?.byRarity;
   if (renByRarity && typeof renByRarity === 'object') {
-    for (const r of ['C', 'U', 'R', 'E', 'L', 'M'] as Rarity[]) {
+    for (const r of ALL_RARITIES) {
       const rem = renByRarity[r]?.remainingForTarget;
       if (typeof rem === 'number' && Number.isFinite(rem)) {
         remainingByRarity[r] = Math.max(0, rem);
       }
     }
+  } else if (runtimeCache.catalogById && runtimeCache.catalogById.size > 0) {
+    const ownedCounts: Record<Rarity, number> = { C: 0, U: 0, R: 0, E: 0, L: 0, M: 0 };
+    for (const [cid, ch] of runtimeCache.catalogById.entries()) {
+      const r = (ch?.rarity || 'C') as Rarity;
+      if (ALL_RARITIES.includes(r) && ownedSet.has(Number(cid))) {
+        ownedCounts[r] += 1;
+      }
+    }
+    for (const r of ALL_RARITIES) {
+      const target = Number(s.renaissanceTargets?.[r]) || OFFICIAL_REBIRTH_1_TARGETS[r];
+      remainingByRarity[r] = Math.max(0, target - ownedCounts[r]);
+    }
   }
+
+  const configuredFocus: Rarity[] =
+    Array.isArray(s.renaissanceTargetRarities) && s.renaissanceTargetRarities.length
+      ? [...s.renaissanceTargetRarities]
+      : ['C', 'U', 'R', 'E'];
+  const isLegacyCurDefault =
+    configuredFocus.length === 3 &&
+    configuredFocus.includes('C') &&
+    configuredFocus.includes('U') &&
+    configuredFocus.includes('R') &&
+    !configuredFocus.includes('E');
+  if (s.renaissanceFocusEnabled && isLegacyCurDefault && (remainingByRarity.E === undefined || remainingByRarity.E > 0)) {
+    configuredFocus.push('E');
+  }
+  let activeFocusRarities = configuredFocus.filter(
+    (r) => remainingByRarity[r] === undefined || remainingByRarity[r]! > 0
+  );
+  if (s.renaissanceFocusEnabled && activeFocusRarities.length === 0) {
+    // If all explicitly focused rarities are already 100% done, advance to any incomplete Rebirth rarity (C..L)
+    activeFocusRarities = (['C', 'U', 'R', 'E', 'L'] as Rarity[]).filter(
+      (r) => (remainingByRarity[r] ?? 0) > 0
+    );
+  }
+  const effectiveFocus = activeFocusRarities.length > 0 ? activeFocusRarities : configuredFocus;
+  const evalSettings = { ...s, renaissanceTargetRarities: effectiveFocus };
+
+  const deals = await scanMarketDealsInternal(
+    ownedSet,
+    wishlistMap,
+    currentChakra,
+    s.renaissanceFocusEnabled ? { focusRarities: effectiveFocus } : {}
+  );
+
+  const getRenMaxPrice = (rarity: Rarity, refMedian?: number | null): number => {
+    const configured = Number(s.batchBuyDefaultMaxPrice?.[rarity]);
+    const baseCap =
+      Number.isFinite(configured) && configured > 0
+        ? configured
+        : Number(s.autoBuyMissingMaxPrice) || DEFAULT_REN_MAX_PRICE[rarity] || 25;
+    if (refMedian && Number.isFinite(refMedian) && refMedian > baseCap) {
+      return Math.min(Math.round(baseCap * 1.6), Math.round(refMedian));
+    }
+    return baseCap;
+  };
+
+  // Deep scan fallback: when the player already owns ~90%+ of a rarity (e.g. 487/505 Epics),
+  // pages 1-2 of price_asc often contain only already-owned cards. Walk pages 3-5 to find unowned ones.
+  if (s.renaissanceFocusEnabled && activeFocusRarities.length > 0) {
+    const existingIds = new Set<string>(deals.map((d: any) => String(d.listingId)));
+    for (const r of activeFocusRarities) {
+      const hasBuyableForRarity = deals.some(
+        (d: any) =>
+          d.rarity === r &&
+          !ownedSet.has(d.characterId) &&
+          d.buyPrice <= getRenMaxPrice(r, d.refMedian)
+      );
+      if (hasBuyableForRarity) continue;
+      const capPrice = getRenMaxPrice(r, null);
+      for (let page = 3; page <= 5; page += 1) {
+        const res = await kyaraApi(
+          `/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(r)}&pageSize=50&page=${page}`,
+          { auth: true }
+        ).catch(() => ({ items: [] }));
+        const items = Array.isArray(res?.items) ? res.items : [];
+        if (items.length === 0) break;
+        let foundInPage = 0;
+        let lowestInPage = Infinity;
+        for (const item of items) {
+          const price = Number(item?.price);
+          if (Number.isFinite(price) && price < lowestInPage) lowestInPage = price;
+          if (!item?.id || existingIds.has(String(item.id))) continue;
+          const cid = Number(item.character?.id ?? item.characterId);
+          if (!Number.isFinite(cid) || cid <= 0 || ownedSet.has(cid)) continue;
+          const d: any = evaluateDeal(item, runtimeCache.collectionPrices.get(cid) || {}, ownedSet, evalSettings);
+          if (d && d.isRenaissanceNeed && d.buyPrice <= getRenMaxPrice(r, d.refMedian)) {
+            existingIds.add(String(item.id));
+            deals.push(d);
+            foundInPage += 1;
+          }
+        }
+        if (foundInPage >= 5 || lowestInPage > capPrice * 1.6) break;
+      }
+    }
+  }
+
+  const minReserve = Math.max(0, Number(s.autoBuyMinChakraReserve ?? 500));
+  let boughtCount = 0;
 
   for (const deal of deals) {
     const rarity = deal.rarity as Rarity;
     const rarityRemaining = remainingByRarity[rarity];
     const rarityStillNeededForRenaissance = rarityRemaining === undefined || rarityRemaining > 0;
     const shouldBuyFlip = Boolean((s.autoBuyFlipEnabled || s.autoMarketEnabled) && deal.isGoodFlip);
-    const renMaxPrice =
-      s.batchBuyDefaultMaxPrice?.[rarity] ??
-      s.autoBuyMissingMaxPrice ??
-      25;
+    const renMaxPrice = getRenMaxPrice(rarity, deal.refMedian);
     const isRenaissanceBuy =
       Boolean(s.renaissanceFocusEnabled) &&
-      Boolean(deal.isRenaissanceNeed) &&
+      (Boolean(deal.isRenaissanceNeed) || effectiveFocus.includes(rarity)) &&
       rarityStillNeededForRenaissance &&
       !ownedSet.has(deal.characterId) &&
       deal.buyPrice <= renMaxPrice;

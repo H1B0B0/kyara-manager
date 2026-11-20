@@ -15,7 +15,7 @@ export interface BatchBuyPanelProps {
   onRefresh: () => void;
 }
 
-const DEFAULT_MAX_PRICES: Record<Rarity, number> = { C: 3, U: 4, R: 6, E: 18, L: 90, M: 500 };
+const DEFAULT_MAX_PRICES: Record<Rarity, number> = { C: 5, U: 6, R: 10, E: 35, L: 140, M: 600 };
 
 const RARITY_OPTIONS: Array<{ value: Rarity | 'RENAISSANCE'; label: string }> = [
   { value: 'RENAISSANCE', label: 'Focus' }, { value: 'C', label: 'C' }, { value: 'U', label: 'U' },
