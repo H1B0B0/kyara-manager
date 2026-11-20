@@ -2,48 +2,61 @@ import { kyaraApi } from '../api';
 import { state } from '../state';
 import { appendJournal } from '../journal';
 import { notifyDesktop } from '../utils';
-import { scanMarketDealsInternal } from '../scanner';
-import type { Rarity } from '../../types/kyara';
+import { getLastScannedListingsCount, scanMarketDealsInternal } from '../scanner';
+import type { MarketWatchTelemetry, Rarity } from '../../types/kyara';
 
-export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: number; dealsFound?: number }> {
-  if (
-    !state.currentSettings.autoBuyFlipEnabled &&
-    !state.currentSettings.autoBuyMissingEnabled &&
-    !state.currentSettings.wishlistAutoBuyEnabled
-  ) {
-    return { boughtCount: 0 };
+let totalBoughtSession = 0;
+
+export async function executeAutoBuy(
+  dashboard: any,
+  options: { manual?: boolean } = {}
+): Promise<{ boughtCount: number; dealsFound: number }> {
+  const s = state.currentSettings;
+  const marketBuyEnabled = Boolean(
+    s.autoBuyFlipEnabled ||
+    s.autoBuyMissingEnabled ||
+    s.wishlistAutoBuyEnabled ||
+    (s.renaissanceFocusEnabled && s.autoMarketEnabled)
+  );
+  if (!marketBuyEnabled && !options.manual) {
+    return { boughtCount: 0, dealsFound: 0 };
   }
 
   const ownedSet = new Set<number>();
   const rawColl = await kyaraApi('/me/collection?lean=1');
   if (!Array.isArray(rawColl)) throw new Error('Collection indisponible. Achats suspendus.');
-  for (const e of Array.isArray(rawColl) ? rawColl : []) {
+  for (const e of rawColl) {
     if (e.qty > 0) ownedSet.add(Number(e.characterId));
   }
 
   const { kmWishlist } = (await chrome.storage.local.get('kmWishlist')) as { kmWishlist?: any[] };
   const wishlistMap = new Map((Array.isArray(kmWishlist) ? kmWishlist : []).map((w: any) => [Number(w.characterId), w]));
 
-  const deals = await scanMarketDealsInternal(ownedSet, wishlistMap, Number(dashboard?.me?.chakra ?? 0));
-  let currentChakra = Number(dashboard?.me?.chakra ?? 0);
-  const minReserve = Math.max(0, Number(state.currentSettings.autoBuyMinChakraReserve ?? 500));
+  let currentChakra = Number(dashboard?.me?.chakra ?? NaN);
+  if (!Number.isFinite(currentChakra)) {
+    const boot = await kyaraApi('/me/bootstrap').catch(() => null);
+    currentChakra = Number((boot?.me || boot)?.chakra ?? 0);
+  }
+
+  const deals = await scanMarketDealsInternal(ownedSet, wishlistMap, currentChakra);
+  const minReserve = Math.max(0, Number(s.autoBuyMinChakraReserve ?? 500));
   let boughtCount = 0;
 
   for (const deal of deals) {
-    const shouldBuyFlip = state.currentSettings.autoBuyFlipEnabled && deal.isGoodFlip;
+    const shouldBuyFlip = Boolean(s.autoBuyFlipEnabled && deal.isGoodFlip);
     const renMaxPrice =
-      state.currentSettings.batchBuyDefaultMaxPrice?.[deal.rarity as Rarity] ??
-      state.currentSettings.autoBuyMissingMaxPrice ??
+      s.batchBuyDefaultMaxPrice?.[deal.rarity as Rarity] ??
+      s.autoBuyMissingMaxPrice ??
       25;
     const isRenaissanceBuy =
-      Boolean(state.currentSettings.renaissanceFocusEnabled) &&
+      Boolean(s.renaissanceFocusEnabled && (s.autoBuyMissingEnabled || s.autoMarketEnabled)) &&
       Boolean(deal.isRenaissanceNeed) &&
+      !ownedSet.has(deal.characterId) &&
       deal.buyPrice <= renMaxPrice;
     const shouldBuyMissing =
-      Boolean(state.currentSettings.autoBuyMissingEnabled) &&
-      !ownedSet.has(deal.characterId) &&
-      (Boolean(deal.isGoodMissingBuy) || isRenaissanceBuy);
-    const shouldBuyWish = state.currentSettings.wishlistAutoBuyEnabled && deal.autoBuyWish && !ownedSet.has(deal.characterId);
+      (Boolean(s.autoBuyMissingEnabled) && !ownedSet.has(deal.characterId) && Boolean(deal.isGoodMissingBuy)) ||
+      isRenaissanceBuy;
+    const shouldBuyWish = Boolean(s.wishlistAutoBuyEnabled && deal.autoBuyWish && !ownedSet.has(deal.characterId));
     if (!shouldBuyFlip && !shouldBuyMissing && !shouldBuyWish) continue;
 
     if (currentChakra - deal.buyPrice < minReserve) {
@@ -61,14 +74,14 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
       currentChakra = Math.min(currentChakra, balance);
       if (currentChakra - freshPrice < minReserve) continue;
 
-      if (state.currentSettings.dryRun) {
+      if (s.dryRun) {
         boughtCount += 1;
         currentChakra -= freshPrice;
         ownedSet.add(deal.characterId);
         await appendJournal(
           'buy',
           `[SIMULATION] Achèterait ${deal.name} [${deal.rarity}] à ${freshPrice} ◆ (${
-            shouldBuyWish ? 'Envie de collection' : shouldBuyFlip ? `Flip net +${deal.flipProfit} ◆` : 'Carte manquante'
+            shouldBuyWish ? 'Envie de collection' : shouldBuyFlip ? `Flip net +${deal.flipProfit} ◆` : isRenaissanceBuy ? `Renaissance [${deal.rarity}]` : 'Carte manquante'
           })`
         );
         continue;
@@ -85,7 +98,9 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
         ? `Envie de collection (budget max : ${deal.wishlistMatch?.maxBudget} ◆)`
         : shouldBuyFlip
           ? `Flip : revente cible ~${deal.targetResalePrice} ◆ (net +${deal.flipProfit} ◆, -${deal.discountPct}%)`
-          : `Nouvelle carte pour la collection (médiane ${deal.refMedian ?? '?'} ◆)`;
+          : isRenaissanceBuy
+            ? `Renaissance [${deal.rarity}] (médiane ${deal.refMedian ?? '?'} ◆)`
+            : `Nouvelle carte pour la collection (médiane ${deal.refMedian ?? '?'} ◆)`;
       await appendJournal('buy', `Achat auto : ${deal.name} [${deal.rarity}] pour ${freshPrice} ◆ · ${reasonTag}`);
       notifyDesktop(
         shouldBuyWish ? 'Carte de vos envies achetée !' : 'Bon plan acheté !',
@@ -97,6 +112,51 @@ export async function executeAutoBuy(dashboard: any): Promise<{ boughtCount: num
         await appendJournal('warn', `Achat annulé sur ${deal.name} : ${err.message}`);
       }
     }
+  }
+
+  totalBoughtSession += boughtCount;
+  const scannedListings = Math.max(deals.length, getLastScannedListingsCount());
+  const lastNote =
+    boughtCount > 0
+      ? `${boughtCount} achat(s) effectué(s) sur ${deals.length} opportunité(s)`
+      : deals.length > 0
+        ? `${deals.length} opportunité(s) analysée(s)`
+        : 'Aucune opportunité sur ce scan';
+  const marketWatch: MarketWatchTelemetry = {
+    active: Boolean(s.masterEnabled && marketBuyEnabled),
+    lastScanAt: Date.now(),
+    scannedListings,
+    dealsFound: deals.length,
+    boughtLastTick: boughtCount,
+    totalBoughtSession,
+    lastNote
+  };
+
+  const { kmDashboard } = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
+  const baseDashboard =
+    kmDashboard && typeof kmDashboard === 'object'
+      ? kmDashboard
+      : dashboard && typeof dashboard === 'object'
+        ? dashboard
+        : null;
+  if (baseDashboard) {
+    await chrome.storage.local
+      .set({
+        kmDashboard: {
+          ...baseDashboard,
+          deals: deals.slice(0, 100),
+          marketWatch,
+          me: baseDashboard.me
+            ? { ...baseDashboard.me, chakra: Number.isFinite(currentChakra) ? currentChakra : baseDashboard.me.chakra }
+            : baseDashboard.me,
+          updatedAt: Date.now()
+        }
+      })
+      .catch(() => {});
+  }
+
+  if (boughtCount > 0 || options.manual) {
+    await appendJournal('info', `Observation marché : ${deals.length} opportunité(s) analysée(s), ${boughtCount} achat(s)`);
   }
 
   return { boughtCount, dealsFound: deals.length };

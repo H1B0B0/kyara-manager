@@ -71,8 +71,12 @@ async function buildDashboardSnapshot({
   await loadSettings();
 
   let bootstrap: any = null;
+  let rebirthData: any = null;
   try {
-    bootstrap = await kyaraApi('/me/bootstrap');
+    [bootstrap, rebirthData] = await Promise.all([
+      kyaraApi('/me/bootstrap'),
+      kyaraApi('/me/rebirth').catch(() => null)
+    ]);
   } catch (err: any) {
     const unauthState = {
       updatedAt: Date.now(),
@@ -250,6 +254,9 @@ async function buildDashboardSnapshot({
     20
   );
 
+  const stored = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
+  const sameAccount = String(stored?.kmDashboard?.me?.id) === String(me.id);
+  const marketWatch = sameAccount ? stored?.kmDashboard?.marketWatch : undefined;
   let deals: any[] = [];
   let trades: any[] = [];
   if (scanMarketDeals) {
@@ -263,18 +270,17 @@ async function buildDashboardSnapshot({
     deals = dealsRes;
     trades = tradesRes;
   } else {
-    const stored = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
-    const sameAccount = String(stored?.kmDashboard?.me?.id) === String(me.id);
     deals = sameAccount ? stored?.kmDashboard?.deals || [] : [];
     trades = sameAccount ? stored?.kmDashboard?.trades || [] : [];
   }
 
+  const validRebirth = rebirthData && typeof rebirthData === 'object' && !Array.isArray(rebirthData) ? rebirthData : null;
   const renaissance = computeRenaissanceSummary(
     catalogById,
     ownedSet,
     state.currentSettings,
     runtimeCache.rarityAvgPrices,
-    bootstrap?.rebirth || bootstrap?.renaissance || config?.rebirth || null,
+    validRebirth || bootstrap?.rebirth || bootstrap?.renaissance || config?.rebirth || null,
     { boostersOpened: me.boostersOpened ?? 0, activeListings, collection, recycleMap }
   );
   const seriesProgress = computeSeriesProgress(catalogById, ownedSet, runtimeCache.collectionPrices, 25);
@@ -338,7 +344,8 @@ async function buildDashboardSnapshot({
     trades: trades.slice(0, 30),
     wishlist: Array.isArray(kmWishlist) ? kmWishlist : [],
     wishlistSuggestions: dailyWishlistSuggestions,
-    claimableMissions: progress?.claimable ?? 0
+    claimableMissions: progress?.claimable ?? 0,
+    ...(marketWatch ? { marketWatch } : {})
   };
 
   await chrome.storage.local.set({ kmDashboard: dashboard });

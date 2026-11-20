@@ -4,9 +4,15 @@ import { state } from './state';
 import { notifyDesktop } from './utils';
 import { evaluateDeal } from '../lib/analytics/deals';
 import { evaluateWishlistMatch } from '../lib/analytics/wishlist';
+import { mapLimit } from '../lib/concurrency';
 import type { Rarity } from '../types/kyara';
 
 let previousTradesCount = 0;
+let lastScannedListingsCount = 0;
+
+export function getLastScannedListingsCount(): number {
+  return lastScannedListingsCount;
+}
 
 export async function scanMarketDealsInternal(
   ownedSet: Set<number>,
@@ -50,16 +56,70 @@ export async function scanMarketDealsInternal(
     }
   }
 
-  // Hydrate missing collection prices before evaluating deals so missing cards get refMedian
+  lastScannedListingsCount = combined.length;
+
+  // Hydrate inline & collection prices first, then probe /market/prices/:id for unowned cards
+  const now = Date.now();
   const missingPriceIds = new Set<number>();
   for (const item of combined) {
     const charId = Number(item.character?.id ?? item.characterId);
-    if (Number.isFinite(charId) && charId > 0 && !runtimeCache.collectionPrices.has(charId)) {
+    if (!Number.isFinite(charId) || charId <= 0) continue;
+    const cached = runtimeCache.collectionPrices.get(charId);
+    const inlineMedian = Number(item.median7d ?? item.prices?.median7d ?? item.character?.median7d);
+    if (Number.isFinite(inlineMedian) && inlineMedian > 0 && !(cached && Number(cached.median7d) > 0)) {
+      const inlineM30 = Number(item.median30d ?? item.prices?.median30d ?? item.character?.median30d);
+      const inlineS7 = Number(item.sales7d ?? item.prices?.sales7d ?? item.character?.sales7d);
+      const inlineS30 = Number(item.sales30d ?? item.prices?.sales30d ?? item.character?.sales30d);
+      runtimeCache.collectionPrices.set(charId, {
+        median7d: inlineMedian,
+        median30d: Number.isFinite(inlineM30) && inlineM30 > 0 ? inlineM30 : null,
+        sales7d: Number.isFinite(inlineS7) && inlineS7 >= 0 ? inlineS7 : 0,
+        sales30d: Number.isFinite(inlineS30) && inlineS30 >= 0 ? inlineS30 : null,
+        at: now
+      });
+      continue;
+    }
+    if (!cached) {
       missingPriceIds.add(charId);
     }
   }
   if (missingPriceIds.size > 0) {
     await ensureCollectionPrices(Array.from(missingPriceIds), false);
+  }
+
+  const hasMedian7d = (cid: number): boolean => {
+    const p = runtimeCache.collectionPrices.get(cid);
+    return Boolean(p && Number.isFinite(Number(p.median7d)) && Number(p.median7d) > 0);
+  };
+  const newestItems = Array.isArray(pages[0]?.items) ? pages[0].items : [];
+  const cheapestItems = [...combined].sort((a, b) => (Number(a?.price) || Infinity) - (Number(b?.price) || Infinity));
+  const stillMissingSet = new Set<number>();
+  const maxLen = Math.max(newestItems.length, cheapestItems.length);
+  for (let i = 0; i < maxLen && stillMissingSet.size < 24; i += 1) {
+    for (const candidate of [newestItems[i], cheapestItems[i]]) {
+      if (!candidate || stillMissingSet.size >= 24) continue;
+      const cid = Number(candidate.character?.id ?? candidate.characterId);
+      if (Number.isFinite(cid) && cid > 0 && !hasMedian7d(cid)) {
+        stillMissingSet.add(cid);
+      }
+    }
+  }
+  if (stillMissingSet.size > 0) {
+    await mapLimit(Array.from(stillMissingSet), 6, async (cid) => {
+      const res = await kyaraApi(`/market/prices/${cid}`, { auth: false }).catch(() => null);
+      if (!res || typeof res !== 'object') return;
+      const m7 = Number(res.median7d);
+      const m30 = Number(res.median30d);
+      if ((Number.isFinite(m7) && m7 > 0) || (Number.isFinite(m30) && m30 > 0)) {
+        runtimeCache.collectionPrices.set(cid, {
+          median7d: Number.isFinite(m7) && m7 > 0 ? m7 : null,
+          median30d: Number.isFinite(m30) && m30 > 0 ? m30 : null,
+          sales7d: Number.isFinite(Number(res.sales7d)) ? Number(res.sales7d) : 0,
+          sales30d: Number.isFinite(Number(res.sales30d)) ? Number(res.sales30d) : null,
+          at: Date.now()
+        });
+      }
+    });
   }
 
   const deals: any[] = [];

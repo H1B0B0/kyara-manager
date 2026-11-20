@@ -53,11 +53,12 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
   useEffect(() => {
     const next: Record<Rarity, string> = { C: '', U: '', R: '', E: '', L: '', M: '' };
     for (const r of RARITIES) {
-      const val = settings.renaissanceTargets?.[r] ?? renaissance?.byRarity?.[r]?.target ?? OFFICIAL_TARGETS[r];
-      next[r] = val !== undefined ? String(val) : '';
+      const explicit = settings.renaissanceTargets?.[r];
+      const val = typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0 ? Math.floor(explicit) : OFFICIAL_TARGETS[r];
+      next[r] = String(val);
     }
     setDraftTargets(next);
-  }, [settings.renaissanceTargets, renaissance?.byRarity]);
+  }, [settings.renaissanceTargets]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -105,7 +106,10 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
     const base = renaissance?.byRarity?.[r];
     const owned = base?.owned ?? 0;
     const total = base?.total ?? 0;
-    const target = settings.renaissanceTargets?.[r] ?? base?.target ?? OFFICIAL_TARGETS[r];
+    const explicit = settings.renaissanceTargets?.[r];
+    const target = typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0
+      ? Math.floor(explicit)
+      : OFFICIAL_TARGETS[r];
     const remainingForTarget = Math.max(0, target - owned);
     const targetPct = target > 0 ? Math.min(100, Math.round((owned / target) * 100)) : 100;
     return {
@@ -289,17 +293,31 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
           </div>
 
           {editingTargets && (
-            <div className="ren-targets-editor" aria-label="Objectifs Renaissance par rareté">
-              {RARITIES.map((r) => (
-                <label key={r} className="ren-target-field">
-                  <RarityPill rarity={r} />
-                  <input
-                    type="number" min={0} max={99999} step={1} value={draftTargets[r]}
-                    onChange={(e) => handleTargetInputChange(r, e.target.value)}
-                    className="input input--num ren-target-input" aria-label={`Objectif Renaissance ${r}`}
-                  />
-                </label>
-              ))}
+            <div className="ren-targets-panel">
+              <div className="ren-targets-editor" aria-label="Objectifs Renaissance par rareté">
+                {RARITIES.map((r) => (
+                  <label key={r} className="ren-target-field">
+                    <RarityPill rarity={r} />
+                    <input
+                      type="number" min={0} max={99999} step={1} value={draftTargets[r]}
+                      onChange={(e) => handleTargetInputChange(r, e.target.value)}
+                      className="input input--num ren-target-input" aria-label={`Objectif Renaissance ${r}`}
+                    />
+                  </label>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '6px' }}>
+                <button
+                  type="button"
+                  className="btn btn--xs btn--ghost"
+                  onClick={() => {
+                    onUpdateSettings({ renaissanceTargets: {} });
+                    onToast?.('Objectifs réinitialisés (Rebirth 1 : 1432 C/U/R · 505 E · 70 L · 10 M)');
+                  }}
+                >
+                  Réinitialiser (Rebirth 1)
+                </button>
+              </div>
             </div>
           )}
         </div>

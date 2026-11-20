@@ -91,6 +91,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   const [actingSell, setActingSell] = useState(false);
   const [actingRecycle, setActingRecycle] = useState(false);
   const [actingOpen, setActingOpen] = useState(false);
+  const [actingWatch, setActingWatch] = useState(false);
   const [expandedModule, setExpandedModule] = useState<string | null>(null);
 
   const toggleModule = (id: string) => setExpandedModule((cur) => (cur === id ? null : id));
@@ -174,10 +175,30 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
 
   const handleOpenDailyPack = () => openPackLive(dailyPack?.packId || 'daily', dailyPack?.name || 'Pack du Jour');
 
+  const handleRunMarketWatch = async () => {
+    setActingWatch(true);
+    onToast('Observation & achat marché en cours…');
+    const res = await (sendCommand({ type: 'km:cmd:run-market-watch' } as any) as Promise<any>);
+    setActingWatch(false);
+    if (res?.ok) {
+      const bought = res.boughtCount ?? 0;
+      const found = res.dealsFound ?? dealsCount;
+      onToast(`Radar marché : ${found} deal(s) analysé(s), ${bought} achat(s)`);
+    } else if (res?.error) onToast(res.error);
+  };
+
+  const mw = (dashboard as any)?.marketWatch;
+  const radarDeals = typeof mw?.dealsFound === 'number' ? mw.dealsFound : dealsCount;
   const sellSummary = `${activeRhythmLabel} · ${sellCount} doublons (+${sellNet} ◆)`;
   const recycleSummary = `${(settings.autoRecycleRarities || ['C', 'U', 'R']).join(', ')} · ${recCount} à recycler`;
   const boostersSummary = `${recPack ? recPack.name.replace(/^Pack\s+/i, '') : 'Aucun booster'} · ${me?.freePacks ?? 0} gratuits`;
-  const marketSummary = `${settings.wishlistAutoBuyEnabled ? 'Envies & Flips' : 'Flips Marché'} · ${dealsCount} offres`;
+  const marketModes = [
+    settings.autoMarketEnabled && 'Flips', settings.autoBuyMissingEnabled && 'Manquantes',
+    settings.wishlistAutoBuyEnabled && 'Envies', settings.renaissanceFocusEnabled && 'Renaissance'
+  ].filter(Boolean);
+  const marketSummary = mw?.active
+    ? `Radar actif (20s) · ${radarDeals} deal(s)`
+    : `${marketModes.length ? marketModes.join(' · ') : 'Veille'} · ${dealsCount} offres`;
 
   return (
     <section className="tab-panel is-active">
@@ -304,21 +325,10 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             >
               <p className="module-card__desc">{t('modBoostersDesc')}</p>
               <div className="switch-row switch-row--compact" title="Désactivé : garde tes boosters bonus et tickets de côté pour les drops d'Éveil">
-                <label htmlFor="sw-autoopen-bonus" className="module-card__sublabel">
-                  Utiliser les boosters bonus / tickets en réserve
-                </label>
-                <input
-                  type="checkbox"
-                  role="switch"
-                  id="sw-autoopen-bonus"
-                  className="switch switch--xs"
-                  checked={Boolean(settings.autoOpenUseBonusPacks)}
-                  onChange={(e) => onUpdateSettings({ autoOpenUseBonusPacks: e.target.checked })}
-                />
+                <label htmlFor="sw-autoopen-bonus" className="module-card__sublabel">Utiliser les boosters bonus / tickets en réserve</label>
+                <input type="checkbox" role="switch" id="sw-autoopen-bonus" className="switch switch--xs" checked={Boolean(settings.autoOpenUseBonusPacks)} onChange={(e) => onUpdateSettings({ autoOpenUseBonusPacks: e.target.checked })} />
               </div>
-              <p className="form-hint" style={{ margin: '4px 0 0', fontSize: '11px' }}>
-                Désactivé : garde tes boosters bonus et tickets de côté pour les drops d'Éveil
-              </p>
+              <p className="form-hint" style={{ margin: '4px 0 0', fontSize: '11px' }}>Désactivé : garde tes boosters bonus et tickets de côté pour les drops d'Éveil</p>
               <div className="module-card__footer">
                 <span className="mono-stat">{recPack ? `${recPack.name} (${recPack.probAtLeastOneNewPct}% nouv.)` : 'Aucun booster prêt'}</span>
                 <button type="button" onClick={handleOpenLive} disabled={actingOpen || !canOpen} className="btn btn--xs btn--ghost">
@@ -330,26 +340,29 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
             <CollapsibleModuleCard
               id="market" variant="market" kanji="市" kanjiTone="cyan"
               title={t('modMarketTitle')} summary={marketSummary} switchId="sw-automarket"
-              checked={settings.autoMarketEnabled} expanded={expandedModule === 'market'}
-              onToggleExpand={toggleModule} onToggleSwitch={(v) => onUpdateSettings({ autoMarketEnabled: v })}
+              checked={Boolean(settings.autoMarketEnabled ?? settings.autoBuyFlipEnabled)} expanded={expandedModule === 'market'}
+              onToggleExpand={toggleModule} onToggleSwitch={(v) => onUpdateSettings({ autoMarketEnabled: v, autoBuyFlipEnabled: v })}
             >
               <p className="module-card__desc">{t('modMarketDesc')}</p>
               <div className="switch-row switch-row--compact">
-                <label htmlFor="sw-autobuy-missing" className="module-card__sublabel">{t('modBuyMissing')}</label>
-                <input type="checkbox" role="switch" id="sw-autobuy-missing" className="switch switch--xs" checked={settings.wishlistAutoBuyEnabled} onChange={(e) => onUpdateSettings({ wishlistAutoBuyEnabled: e.target.checked })} />
+                <label htmlFor="sw-autobuy-missing" className="module-card__sublabel">Acheter les cartes manquantes</label>
+                <input type="checkbox" role="switch" id="sw-autobuy-missing" className="switch switch--sm" checked={Boolean(settings.autoBuyMissingEnabled)} onChange={(e) => onUpdateSettings({ autoBuyMissingEnabled: e.target.checked })} />
+              </div>
+              <div className="switch-row switch-row--compact">
+                <label htmlFor="sw-autobuy-wishlist" className="module-card__sublabel">Acheter ma Liste d&apos;Envies</label>
+                <input type="checkbox" role="switch" id="sw-autobuy-wishlist" className="switch switch--sm" checked={Boolean(settings.wishlistAutoBuyEnabled)} onChange={(e) => onUpdateSettings({ wishlistAutoBuyEnabled: e.target.checked })} />
               </div>
               <div className="switch-row switch-row--compact">
                 <label htmlFor="sw-autopilot-renaissance" className="module-card__sublabel">
-                  Focus Renaissance <span className="mono-stat">(Cibles : {(settings.renaissanceTargetRarities || ['C', 'U', 'R']).join(', ')})</span>
+                  Focus Renaissance (auto-achat ciblé) <span className="mono-stat">({(settings.renaissanceTargetRarities || ['C', 'U', 'R']).join(', ')})</span>
                 </label>
-                <input
-                  type="checkbox" role="switch" id="sw-autopilot-renaissance" className="switch switch--sm"
-                  checked={Boolean(settings.renaissanceFocusEnabled)}
-                  onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })}
-                />
+                <input type="checkbox" role="switch" id="sw-autopilot-renaissance" className="switch switch--sm" checked={Boolean(settings.renaissanceFocusEnabled)} onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })} />
               </div>
               <div className="module-card__footer">
-                <span className="mono-stat">{dealsCount} deal(s) · {tradesCount} trade(s) rentables</span>
+                <span className="mono-stat">{mw?.active ? `Radar actif (20s) · ${radarDeals} deal(s)` : `${dealsCount} deal(s) · ${tradesCount} trade(s)`}</span>
+                <button type="button" onClick={handleRunMarketWatch} disabled={actingWatch} className="btn btn--xs btn--ghost">
+                  {actingWatch ? 'Scan…' : 'Observer & Acheter'}
+                </button>
               </div>
             </CollapsibleModuleCard>
 

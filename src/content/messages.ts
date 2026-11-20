@@ -3,6 +3,7 @@ import { state } from './state';
 import { appendJournal, DEFAULT_CUMULATIVE_STATS, recordCumulativeMetric } from './journal';
 import { refreshDashboardSnapshot } from './snapshot';
 import { runAutomationCycle } from './automation/cycle';
+import { runMarketWatchTick } from './automation/market-watcher';
 import { executeAutoSell } from './automation/auto-sell';
 import { executeAutoRecycle, recycleCopies } from './automation/auto-recycle';
 import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/live-opening';
@@ -57,6 +58,13 @@ export function setupMessageListener(): () => void {
         if (message.type === 'km:cmd:run-cycle') {
           const res = await runAutomationCycle({ manual: true });
           sendResponse(res);
+          return;
+        }
+
+        if (message.type === 'km:cmd:run-market-watch') {
+          const res = await runMarketWatchTick({ manual: true });
+          const { kmDashboard: dashboard } = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
+          sendResponse({ ...res, dashboard });
           return;
         }
 
@@ -346,7 +354,7 @@ export function setupMessageListener(): () => void {
     };
     const readOnly = [
       'km:cmd:refresh', 'km:cmd:scan-deals', 'km:cmd:preview-batch-buy',
-      'km:cmd:scan-buy-orders', 'km:alarm-tick', 'km:cmd:run-cycle', 'km:save-settings'
+      'km:cmd:scan-buy-orders', 'km:alarm-tick', 'km:cmd:run-cycle', 'km:cmd:run-market-watch', 'km:save-settings'
     ].includes(message?.type);
     void (readOnly ? handle() : runExclusive(handle)).catch((err) => sendResponse({ ok: false, error: err.message }));
     return true;

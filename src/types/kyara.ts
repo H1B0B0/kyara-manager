@@ -246,6 +246,16 @@ export interface UserProfile {
   goldenIn?: number | null;
 }
 
+export interface MarketWatchTelemetry {
+  active: boolean;
+  lastScanAt: number;
+  scannedListings: number;
+  dealsFound: number;
+  boughtLastTick: number;
+  totalBoughtSession: number;
+  lastNote?: string;
+}
+
 export interface DashboardState {
   authenticated: boolean;
   error?: string | null;
@@ -262,6 +272,7 @@ export interface DashboardState {
   bestPulls?: AutopilotPullRecord[];
   renaissance?: RenaissanceSummary;
   seriesProgress?: SeriesProgress[];
+  marketWatch?: MarketWatchTelemetry;
   updatedAt?: number;
 }
 

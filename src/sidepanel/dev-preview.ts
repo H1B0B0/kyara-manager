@@ -178,17 +178,19 @@ const mockSettings: KyaraSettings & { sellPace?: string } = {
 const renOwnedState: Record<Rarity, number> = { C: 1120, U: 890, R: 410, E: 210, L: 62, M: 14 };
 const mockRenaissance = buildRenaissance(renOwnedState, {}, ['C', 'R'], true);
 
-const mockDashboard: DashboardState = {
+const mockDashboard: DashboardState & { marketWatch?: any } = {
   authenticated: true, me: mockMe, collectionStats: mockCollectionStats, duplicates: mockDuplicates, activeListings: mockActiveListings,
   deals: mockDeals, trades: mockTrades, boosters: mockBoosters, wishlist: mockWishlist, wishlistSuggestions: mockWishlistSuggestions,
-  bestPulls: mockBestPulls, pinnedCards: [1001], renaissance: mockRenaissance, seriesProgress: mockSeriesProgress, updatedAt: now
+  bestPulls: mockBestPulls, pinnedCards: [1001], renaissance: mockRenaissance, seriesProgress: mockSeriesProgress,
+  marketWatch: { active: true, lastScanAt: now - 8000, scannedListings: 142, dealsFound: 8, boughtLastTick: 0, totalBoughtSession: 3 },
+  updatedAt: now
 };
 
 const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.3.0' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.3.1' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -350,15 +352,21 @@ function handleMessage(cmd: any): any {
     notifyStorage({ settings: nextSettings, kmDashboard: { ...store.kmDashboard, renaissance: ren } });
     return { ok: true };
   }
+  if (type === 'km:cmd:run-market-watch') {
+    const prevMw = store.kmDashboard.marketWatch || { active: true, scannedListings: 142, dealsFound: 8, totalBoughtSession: 3 };
+    const nextMw = { active: true, lastScanAt: Date.now(), scannedListings: prevMw.scannedListings + 45, dealsFound: store.kmDashboard.deals?.length ?? 8, boughtLastTick: 1, totalBoughtSession: (prevMw.totalBoughtSession || 0) + 1 };
+    notifyStorage({ kmDashboard: { ...store.kmDashboard, me: { ...store.kmDashboard.me, chakra: Math.max(0, store.kmDashboard.me.chakra - 5) }, marketWatch: nextMw }, kmJournal: [{ type: 'market' as const, message: 'Radar marché : Tanjiro Kamado [R] snipe à 5 ◆ (manquante Renaissance)', ts: Date.now() }, ...store.kmJournal] });
+    return { ok: true, boughtCount: 1, dealsFound: nextMw.dealsFound, marketWatch: nextMw };
+  }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
-  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.3.0' } }); return { ok: true }; }
+  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.3.1' } }); return { ok: true }; }
   return { ok: true, data: {} };
 }
 
 function installChromeMock() {
   (globalThis as any).chrome = {
     runtime: {
-      lastError: null, getManifest: () => ({ version: '2.3.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
+      lastError: null, getManifest: () => ({ version: '2.3.1', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
       sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },

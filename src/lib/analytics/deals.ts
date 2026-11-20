@@ -43,11 +43,18 @@ export function evaluateDeal(
     ? Number(settings.autoBuyMissingMaxPrice)
     : 25;
 
-  const prices = { ...(listing.prices || {}), ...marketStats };
-  const median7d = Number.isFinite(prices.median7d) && prices.median7d > 0 ? Number(prices.median7d) : null;
-  const median30d = Number.isFinite(prices.median30d) && prices.median30d > 0 ? Number(prices.median30d) : null;
+  const pickPositive = (...vals: unknown[]): number | null => {
+    for (const v of vals) {
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0) return n;
+    }
+    return null;
+  };
+  const median7d = pickPositive(marketStats?.median7d, listing.prices?.median7d, listing.median7d, char.median7d);
+  const median30d = pickPositive(marketStats?.median30d, listing.prices?.median30d, listing.median30d, char.median30d);
   const refMedian = median7d ?? median30d ?? null;
-  const sales7d = Number.isFinite(prices.sales7d) && prices.sales7d >= 0 ? Number(prices.sales7d) : 0;
+  const rawSales = marketStats?.sales7d ?? listing.prices?.sales7d ?? listing.sales7d ?? char.sales7d;
+  const sales7d = Number.isFinite(Number(rawSales)) && Number(rawSales) >= 0 ? Number(rawSales) : 0;
 
   if (!refMedian || refMedian <= 0) {
     return {
@@ -78,20 +85,16 @@ export function evaluateDeal(
   const flipProfit = netResale - buyPrice;
   const roiPct = Math.round((flipProfit / buyPrice) * 100);
 
-  const minDiscount = Number.isFinite(Number(settings.autoBuyMinDiscountPct))
-    ? Number(settings.autoBuyMinDiscountPct)
-    : 28;
-  const rawMinProfit = settings.autoMarketMinProfit ?? settings.autoBuyMinFlipProfit;
-  const minProfit = Number.isFinite(Number(rawMinProfit)) ? Number(rawMinProfit) : 15;
-  const minMargin = Number.isFinite(Number(settings.autoMarketMinMarginPct))
-    ? Number(settings.autoMarketMinMarginPct)
-    : 0;
-  const minSales = Number.isFinite(Number(settings.autoBuyMinSales7d))
-    ? Number(settings.autoBuyMinSales7d)
-    : 4;
-  const maxUnit = Number.isFinite(Number(settings.autoBuyMaxUnitPrice))
-    ? Number(settings.autoBuyMaxUnitPrice)
-    : 400;
+  const rawMinDiscount = settings.autoBuyMinDiscountPct ?? settings.autoMarketMinMarginPct ?? 18;
+  const minDiscount = Number.isFinite(Number(rawMinDiscount)) ? Number(rawMinDiscount) : 18;
+  const rawMinProfit = settings.autoMarketMinProfit ?? settings.autoBuyMinFlipProfit ?? 5;
+  const minProfit = Number.isFinite(Number(rawMinProfit)) ? Number(rawMinProfit) : 5;
+  const rawMinMargin = settings.autoMarketMinMarginPct ?? 15;
+  const minMargin = Number.isFinite(Number(rawMinMargin)) ? Number(rawMinMargin) : 15;
+  const rawMinSales = settings.autoBuyMinSales7d ?? 1;
+  const minSales = Number.isFinite(Number(rawMinSales)) ? Number(rawMinSales) : 1;
+  const rawMaxUnit = settings.autoBuyMaxUnitPrice ?? 400;
+  const maxUnit = Number.isFinite(Number(rawMaxUnit)) ? Number(rawMaxUnit) : 400;
 
   const isGoodFlip =
     discountPct >= minDiscount &&
@@ -103,7 +106,7 @@ export function evaluateDeal(
   const isGoodMissingBuy = Boolean(
     isMissing &&
     buyPrice <= missingMaxPrice &&
-    discountPct >= 0
+    discountPct >= -10
   );
 
   return {

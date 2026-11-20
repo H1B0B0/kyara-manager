@@ -180,9 +180,13 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
     const rawVal = (rawTargets as Record<string, unknown>)[r];
     if (rawVal === undefined || rawVal === null || rawVal === '') continue;
     const val = Number(rawVal);
-    if (Number.isFinite(val) && val >= 0) {
-      cleanTargets[r] = Math.floor(val);
+    if (!Number.isFinite(val) || val < 0) continue;
+    const floored = Math.floor(val);
+    // Drop legacy v2.1 catalog-sized overrides accidentally saved for E/L/M.
+    if ((r === 'E' && floored >= 900) || (r === 'L' && floored >= 200) || (r === 'M' && floored >= 150)) {
+      continue;
     }
+    cleanTargets[r] = floored;
   }
   settings.renaissanceTargets = cleanTargets;
 

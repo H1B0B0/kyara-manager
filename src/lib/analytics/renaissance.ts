@@ -49,8 +49,12 @@ function resolveTarget(
     serverRebirth?.[rarity];
   if (rawServerReq !== undefined && rawServerReq !== null && rawServerReq !== '') {
     const parsed = Number(rawServerReq);
-    if (Number.isFinite(parsed) && parsed >= 0) {
-      return Math.floor(parsed);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      const floored = Math.floor(parsed);
+      const isHighTier = rarity === 'E' || rarity === 'L' || rarity === 'M';
+      if (!isHighTier || (total > 0 && floored < total)) {
+        return total > 0 ? Math.min(total, floored) : floored;
+      }
     }
   }
 

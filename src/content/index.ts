@@ -2,6 +2,7 @@ import { state, loadSettings, restartLoopTimer } from './state';
 import { mountFloatingHud, updateFloatingHud } from './hud';
 import { setupAntiAfkObserver } from './automation/anti-afk';
 import { runAutomationCycle } from './automation/cycle';
+import { startMarketWatcher } from './automation/market-watcher';
 import { refreshDashboardSnapshot } from './snapshot';
 import { setupMessageListener } from './messages';
 import { setupOverlayListeners } from './overlay';
@@ -63,10 +64,16 @@ function initKyaraManager(): void {
     mountFloatingHud();
     cleanups.push(setupOverlayListeners());
     cleanups.push(setupAntiAfkObserver());
+    cleanups.push(startMarketWatcher());
     restartLoopTimer(() => runAutomationCycle({ manual: false }));
     const dashboard = await refreshDashboardSnapshot({
       forcePrices: false,
-      scanMarketDeals: Boolean(state.currentSettings.autoBuyFlipEnabled || state.currentSettings.autoBuyMissingEnabled || state.currentSettings.wishlistAutoBuyEnabled)
+      scanMarketDeals: Boolean(
+        state.currentSettings.autoBuyFlipEnabled ||
+        state.currentSettings.autoBuyMissingEnabled ||
+        state.currentSettings.wishlistAutoBuyEnabled ||
+        (state.currentSettings.renaissanceFocusEnabled && state.currentSettings.autoMarketEnabled)
+      )
     }).catch(() => null);
     if (!disposed && state.currentSettings.masterEnabled && dashboard?.authenticated) {
       void runAutomationCycle({ manual: false });
