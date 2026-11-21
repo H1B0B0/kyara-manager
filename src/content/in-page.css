@@ -161,3 +161,41 @@ body.km-highlight-missing [data-km-state="wish"] {
   box-shadow: 0 0 20px rgba(245, 197, 24, 0.3) !important;
   border-radius: 10px;
 }
+
+/* Live Mini-Game Solver Hints (/jouer/*) */
+.km-game-hint {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 6px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  line-height: 1.25;
+  pointer-events: none;
+  z-index: 12;
+  backdrop-filter: blur(8px);
+}
+
+.km-game-hint--win {
+  background: rgba(54, 211, 153, 0.2);
+  border: 1px solid rgba(54, 211, 153, 0.72);
+  color: #6ee7b7;
+  box-shadow: 0 4px 14px rgba(54, 211, 153, 0.26);
+}
+
+.km-game-hint--lose {
+  background: rgba(148, 163, 184, 0.14);
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  color: #cbd5e1;
+}
+
+.km-slot-recommended {
+  outline: 2px solid rgba(245, 197, 24, 0.92) !important;
+  box-shadow: 0 0 22px rgba(245, 197, 24, 0.36), inset 0 0 0 1px rgba(255, 255, 255, 0.16) !important;
+  transform: translateY(-2px);
+  transition: transform 0.14s ease, box-shadow 0.14s ease;
+}

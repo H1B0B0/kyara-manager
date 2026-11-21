@@ -1,5 +1,6 @@
 import { runtimeCache } from './cache';
 import { renderInPageBars, type EnhancerContext } from './in-page-bars';
+import { annotateActiveMiniGame } from './in-page-games';
 
 const ENHANCED_ATTR = 'data-km-enhanced';
 const WIKI_LINK_RE = /\/wiki\/(\d+)(?:[?#].*)?$/;
@@ -94,6 +95,10 @@ export function setupInPageEnhancer(): () => void {
     renderInPageBars(ctx);
 
     const path = window.location.pathname || '';
+    if (path.startsWith('/jouer')) {
+      annotateActiveMiniGame(ctx);
+      return;
+    }
     if (!path.startsWith('/marche') && !path.startsWith('/collection') && !path.startsWith('/renaissance')) {
       return;
     }

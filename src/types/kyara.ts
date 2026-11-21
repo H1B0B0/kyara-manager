@@ -256,6 +256,22 @@ export interface MarketWatchTelemetry {
   lastNote?: string;
 }
 
+export interface ArcadeSummary {
+  enabled: boolean;
+  blocked?: string | null;
+  balance: number;
+  today: number;
+  dayCap: number;
+  week: number;
+  weekCap: number;
+  bestLotLabel?: string | null;
+  bestLotPrice?: number | null;
+  canBuyLot?: boolean;
+  bossName?: string | null;
+  bossDefeated?: boolean;
+  secretGoldenReady?: boolean;
+}
+
 export interface DashboardState {
   authenticated: boolean;
   error?: string | null;
@@ -273,6 +289,7 @@ export interface DashboardState {
   renaissance?: RenaissanceSummary;
   seriesProgress?: SeriesProgress[];
   marketWatch?: MarketWatchTelemetry;
+  arcade?: ArcadeSummary | null;
   updatedAt?: number;
 }
 

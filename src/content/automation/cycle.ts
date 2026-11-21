@@ -6,7 +6,9 @@ import { executeAutoClaimMissions } from './missions';
 import { executeAutoRecycle } from './auto-recycle';
 import { executeAutoSell } from './auto-sell';
 import { executeAutoBuy } from './auto-buy';
+import { executeAutoGames } from './games';
 import { loadCardLedger } from '../safety';
+import { runDomainTask } from '../operations';
 
 export async function runAutomationCycle({ manual = false } = {}): Promise<any> {
   try {
@@ -36,6 +38,7 @@ interface CycleSummary {
   listed: number;
   bought: number;
   repriced: number;
+  playedGames?: number;
 }
 
 /** Recycling and selling work on disjoint cards; one shared ledger keeps them from spending the same copy twice. */
@@ -143,6 +146,26 @@ async function executeCycle(manual: boolean): Promise<any> {
         dirty = summary.bought > 0;
       } catch (err: any) {
         await appendJournal('error', `Achats auto : ${err.message}`);
+      }
+    }
+
+    // Stage 4: Game Room Farming (Main du Jour + solo ticket grind)
+    if (
+      canContinue() &&
+      settings.autoGamesEnabled &&
+      dashboard?.arcade?.enabled &&
+      !dashboard.arcade.blocked &&
+      ((dashboard.arcade.today ?? 0) < (dashboard.arcade.dayCap ?? 60)) &&
+      ((dashboard.arcade.week ?? 0) < (dashboard.arcade.weekCap ?? 300))
+    ) {
+      try {
+        const gameRes = await runDomainTask('games', () => executeAutoGames(dashboard, { manual: false }));
+        if ((gameRes?.playedGames ?? 0) > 0) {
+          summary.playedGames = gameRes.playedGames;
+          dirty = true;
+        }
+      } catch (err: any) {
+        await appendJournal('error', `Salle de Jeux auto : ${err.message}`);
       }
     }
 

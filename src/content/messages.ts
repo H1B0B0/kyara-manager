@@ -9,6 +9,7 @@ import { executeAutoRecycle, recycleCopies } from './automation/auto-recycle';
 import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/live-opening';
 import { executeBatchMissingBuy, previewBatchMissingBuy } from './automation/batch-buy';
 import { placeBatchBuyOrders, placeBuyOrder, scanBuyOrderOpportunities } from './automation/buy-orders';
+import { executeAutoGames } from './automation/games';
 import { runDomainTask, type TaskDomain } from './operations';
 import { getCardAvailability, isInterrupted, loadCardLedger, positiveInteger } from './safety';
 import { fulfilled, mapLimit } from '../lib/concurrency';
@@ -269,6 +270,31 @@ export function setupMessageListener(): () => void {
           return;
         }
 
+        if (message.type === 'km:cmd:run-games-farm') {
+          const baseDashboard = await refreshDashboardSnapshot({ forcePrices: false });
+          const res = await executeAutoGames(baseDashboard, { manual: true, gameId: message.gameId });
+          const dashboard = await refreshAfterAction({ forcePrices: false });
+          sendResponse({
+            ok: !res.blocked,
+            error: res.blocked === 'guest' ? 'Lie ton compte Discord sur kyara.games pour accéder aux mini-jeux.' : undefined,
+            ...res,
+            dashboard
+          });
+          return;
+        }
+
+        if (message.type === 'km:cmd:solve-current-game') {
+          const res = await executeAutoGames({}, { manual: true, solveOnce: true });
+          const dashboard = await refreshAfterAction({ forcePrices: false });
+          sendResponse({
+            ok: res.playedGames > 0,
+            error: res.playedGames > 0 ? undefined : 'Aucune manche active détectée sur ce mini-jeu.',
+            ...res,
+            dashboard
+          });
+          return;
+        }
+
         if (message.type === 'km:cmd:bulk-recycle') {
           const { maxNetGain = 4, excludeRarities = ['L', 'M'] } = message;
           const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
@@ -365,6 +391,9 @@ export function setupMessageListener(): () => void {
       }
       if (type === 'km:cmd:open-pack' || type === 'km:cmd:open-recommended') {
         return 'boosters';
+      }
+      if (type === 'km:cmd:run-games-farm' || type === 'km:cmd:solve-current-game') {
+        return 'games';
       }
       return 'inventory';
     };

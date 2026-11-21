@@ -65,6 +65,10 @@ export interface KyaraSettings {
   autoSellIncludeM?: boolean;
   autoClaimMissionsEnabled: boolean;
   autoClaimMissions?: boolean;
+  autoGamesEnabled?: boolean;
+  autoGamesDailyEnabled?: boolean;
+  autoGamesSolverOverlay?: boolean;
+  autoGamesTargetGame?: 'plus-aime' | 'qui-est-ce' | 'serie-express' | 'memoire' | 'kyara-21';
   antiAfkEnabled: boolean;
   refreshIntervalMinutes: number;
   loopIntervalSec?: number;
@@ -124,6 +128,10 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   autoBuyMinChakraReserve: 200,
   autoClaimMissionsEnabled: true,
   autoClaimMissions: true,
+  autoGamesEnabled: true,
+  autoGamesDailyEnabled: true,
+  autoGamesSolverOverlay: true,
+  autoGamesTargetGame: 'plus-aime',
   antiAfkEnabled: true,
   refreshIntervalMinutes: 5,
   loopIntervalSec: 45,
@@ -213,6 +221,13 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   settings.batchBuyDefaultMaxPrice = mergedMaxPrices;
   settings.autoOpenGoldenSniper = raw.autoOpenGoldenSniper !== false;
   settings.autoOpenUseBonusPacks = Boolean(raw.autoOpenUseBonusPacks ?? false);
+  settings.autoGamesEnabled = raw.autoGamesEnabled !== false;
+  settings.autoGamesDailyEnabled = raw.autoGamesDailyEnabled !== false;
+  settings.autoGamesSolverOverlay = raw.autoGamesSolverOverlay !== false;
+  const validGames = ['plus-aime', 'qui-est-ce', 'serie-express', 'memoire', 'kyara-21'];
+  settings.autoGamesTargetGame = validGames.includes(String(raw.autoGamesTargetGame))
+    ? (raw.autoGamesTargetGame as KyaraSettings['autoGamesTargetGame'])
+    : DEFAULT_SETTINGS.autoGamesTargetGame;
   const rawDiscount = settings.buyOrderDiscountPct;
   const parsedDiscount =
     rawDiscount === undefined || rawDiscount === null || (rawDiscount as unknown) === ''

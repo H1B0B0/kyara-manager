@@ -18,7 +18,7 @@ export async function runExclusive<T>(action: () => Promise<T>): Promise<T> {
   });
 }
 
-export type TaskDomain = 'market-buy' | 'inventory' | 'boosters' | 'general';
+export type TaskDomain = 'market-buy' | 'inventory' | 'boosters' | 'games' | 'general';
 
 let activeDomainTasks = 0;
 

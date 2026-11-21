@@ -6,6 +6,7 @@ import { clearRepriceHint } from './automation/reprice';
 import { mapLimit } from '../lib/concurrency';
 import { notifyDesktop } from './utils';
 import { updateFloatingHud } from './hud';
+import { fetchArcadeSummary } from './automation/games';
 import { scanMarketDealsInternal, scanProfitableTrades } from './scanner';
 import { computeNetProceeds } from '../lib/analytics/fees';
 import { evaluateDuplicate } from '../lib/analytics/duplicates';
@@ -103,12 +104,13 @@ async function buildDashboardSnapshot({
     return unauthState;
   }
 
-  const [config, collection, myMarket, packs, catalogById] = await Promise.all([
+  const [config, collection, myMarket, packs, catalogById, arcade] = await Promise.all([
     kyaraApi('/config', { auth: false }).catch(() => ({ recycle: DEFAULT_RECYCLE_VALUES })),
     kyaraApi('/me/collection?lean=1'),
     kyaraApi('/me/market'),
     kyaraApi('/packs', { auth: false }).catch(() => []),
-    ensureCatalog(false)
+    ensureCatalog(false),
+    fetchArcadeSummary()
   ]);
   if (!Array.isArray(collection) || !Array.isArray(myMarket?.listings)) {
     throw new Error('Synchronisation incomplète : collection ou annonces indisponibles.');
@@ -344,6 +346,7 @@ async function buildDashboardSnapshot({
     wishlist: Array.isArray(kmWishlist) ? kmWishlist : [],
     wishlistSuggestions: dailyWishlistSuggestions,
     claimableMissions: progress?.claimable ?? 0,
+    arcade,
     ...(marketWatch ? { marketWatch } : {})
   };
 

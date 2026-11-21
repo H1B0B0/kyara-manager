@@ -182,15 +182,15 @@ const mockDashboard: DashboardState & { marketWatch?: any } = {
   authenticated: true, me: mockMe, collectionStats: mockCollectionStats, duplicates: mockDuplicates, activeListings: mockActiveListings,
   deals: mockDeals, trades: mockTrades, boosters: mockBoosters, wishlist: mockWishlist, wishlistSuggestions: mockWishlistSuggestions,
   bestPulls: mockBestPulls, pinnedCards: [1001], renaissance: mockRenaissance, seriesProgress: mockSeriesProgress,
-  marketWatch: { active: true, lastScanAt: now - 8000, scannedListings: 142, dealsFound: 8, boughtLastTick: 0, totalBoughtSession: 3 },
-  updatedAt: now
+  arcade: { enabled: true, blocked: null, balance: 145, today: 24, dayCap: 60, week: 148, weekCap: 300, bestLotLabel: 'Lot de la salle', bestLotPrice: 200, canBuyLot: false, bossName: 'Shogun des Étoiles', bossDefeated: false, secretGoldenReady: false },
+  marketWatch: { active: true, lastScanAt: now - 8000, scannedListings: 142, dealsFound: 8, boughtLastTick: 0, totalBoughtSession: 3 }, updatedAt: now
 };
 
 const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.4.0' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.5.0' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -358,13 +358,19 @@ function handleMessage(cmd: any): any {
     notifyStorage({ kmDashboard: { ...store.kmDashboard, me: { ...store.kmDashboard.me, chakra: Math.max(0, store.kmDashboard.me.chakra - 5) }, marketWatch: nextMw }, kmJournal: [{ type: 'market' as const, message: 'Radar marché : Tanjiro Kamado [R] snipe à 5 ◆ (manquante Renaissance)', ts: Date.now() }, ...store.kmJournal] });
     return { ok: true, boughtCount: 1, dealsFound: nextMw.dealsFound, marketWatch: nextMw };
   }
+  if (type === 'km:cmd:run-games-farm') {
+    const cur = store.kmDashboard.arcade;
+    const arcade = { ...cur, today: Math.min(cur.dayCap, cur.today + 9), week: Math.min(cur.weekCap, cur.week + 9), balance: cur.balance + 9, canBuyLot: cur.balance + 9 >= (cur.bestLotPrice || 200) };
+    notifyStorage({ kmDashboard: { ...store.kmDashboard, arcade }, kmJournal: [{ type: 'info' as const, message: `Salle de Jeux (${cmd?.gameId || 'plus-aime'}) : 3 parties, +9 🎟 (Solde ${arcade.balance} 🎟)`, ts: Date.now() }, ...store.kmJournal] });
+    return { ok: true, playedGames: 3, ticketsEarned: 9, arcade };
+  }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
   if (type === 'km:update-check') {
-    notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' } });
+    notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' } });
     return { ok: true };
   }
   if (type === 'km:update-apply') {
-    notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' } });
+    notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' } });
     return { ok: true, kmUpdate: store.kmUpdate };
   }
   if (type === 'km:update-dismiss') {
@@ -376,11 +382,11 @@ function handleMessage(cmd: any): any {
 
 function installChromeMock() {
   if (typeof window !== 'undefined' && window.location.search.includes('kmUpdate=available')) {
-    store.kmUpdate = { status: 'available', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' };
+    store.kmUpdate = { status: 'available', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' };
   }
   (globalThis as any).chrome = {
     runtime: {
-      lastError: null, getManifest: () => ({ version: '2.4.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
+      lastError: null, getManifest: () => ({ version: '2.5.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
       sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },
@@ -429,27 +435,14 @@ function mountPreviewStudioBar() {
     const root = document.getElementById('root');
     const isOverlay = mode === 'overlay';
     if (root) {
-      if (isOverlay) {
-        Object.assign(root.style, {
-          position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)',
-          width: 'min(1160px, 95vw)', maxWidth: 'min(1160px, 95vw)', height: '88vh',
-          margin: '0', overflow: 'auto', borderRadius: '14px', zIndex: '99999',
-          border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 24px 80px rgba(0,0,0,0.75)'
-        });
-      } else {
-        Object.assign(root.style, {
-          position: '', top: '', left: '', transform: '', height: '', overflow: '',
-          borderRadius: '', border: '', zIndex: '',
-          width: mode, maxWidth: mode, margin: '0 auto', boxShadow: '0 0 35px rgba(0,0,0,0.55)'
-        });
-      }
+      Object.assign(root.style, isOverlay
+        ? { position: 'fixed', top: '50%', left: '50%', transform: 'translate(-50%, -50%)', width: 'min(1160px, 95vw)', maxWidth: 'min(1160px, 95vw)', height: '88vh', margin: '0', overflow: 'auto', borderRadius: '14px', zIndex: '99999', border: '1px solid rgba(255,255,255,0.14)', boxShadow: '0 24px 80px rgba(0,0,0,0.75)' }
+        : { position: '', top: '', left: '', transform: '', height: '', overflow: '', borderRadius: '', border: '', zIndex: '', width: mode, maxWidth: mode, margin: '0 auto', boxShadow: '0 0 35px rgba(0,0,0,0.55)' });
     }
     if (backdrop) backdrop.style.display = isOverlay ? 'block' : 'none';
     document.documentElement.classList.toggle('km-mode-overlay', isOverlay);
     document.documentElement.classList.toggle('km-mode-full', isOverlay);
-    btn365.style.cssText = btnStyle(mode === '365px');
-    btn440.style.cssText = btnStyle(mode === '440px');
-    btnOverlay.style.cssText = btnStyle(isOverlay);
+    btn365.style.cssText = btnStyle(mode === '365px'); btn440.style.cssText = btnStyle(mode === '440px'); btnOverlay.style.cssText = btnStyle(isOverlay);
   };
   window.addEventListener('message', (e) => {
     if (e.data?.type === 'km:close-overlay') applyMode('365px');
@@ -464,7 +457,7 @@ function mountPreviewStudioBar() {
   const btnUpd = document.createElement('button'); btnUpd.style.cssText = btnStyle(false); btnUpd.innerText = 'Pop-up Maj';
   btnUpd.onclick = () => {
     const isAvail = store.kmUpdate?.status === 'available' || store.kmUpdate?.status === 'installing';
-    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.4.0' } : { status: 'available', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' } });
+    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.5.0' } : { status: 'available', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' } });
     btnUpd.style.cssText = btnStyle(!isAvail);
   };
   const simulateStep = () => {

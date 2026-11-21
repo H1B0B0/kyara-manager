@@ -1,6 +1,7 @@
 import { kyaraApi } from './api';
 import { runtimeCache } from './cache';
 import { toggleCockpitOverlay } from './overlay';
+import { renderGamesBar } from './in-page-games';
 
 export interface EnhancerContext {
   ownedIds: Set<number>;
@@ -16,7 +17,8 @@ const BAR_IDS = [
   'km-inpage-market-bar',
   'km-inpage-collection-bar',
   'km-inpage-rebirth-bar',
-  'km-inpage-boosters-bar'
+  'km-inpage-boosters-bar',
+  'km-inpage-games-bar'
 ];
 
 const WIKI_ROUTE_RE = /^\/wiki\/(\d+)/;
@@ -279,6 +281,14 @@ export function renderInPageBars(ctx: EnhancerContext): void {
       actionBtn('Cockpit', false, () => toggleCockpitOverlay())
     );
     mountBarInMain(bar);
+    return;
+  }
+
+  if (path.startsWith('/jouer')) {
+    BAR_IDS.forEach((id) => {
+      if (id !== 'km-inpage-games-bar') document.getElementById(id)?.remove();
+    });
+    renderGamesBar(ctx);
     return;
   }
 

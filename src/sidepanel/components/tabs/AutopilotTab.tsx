@@ -9,6 +9,9 @@ import { PresetsBar } from '../common/PresetsBar';
 import { DailyChecklistBar } from '../common/DailyChecklistBar';
 import { BestPullsShowcase } from '../showcase/BestPullsShowcase';
 import { AutopilotJournal } from './AutopilotJournal';
+import { CollapsibleModuleCard } from '../autopilot/CollapsibleModuleCard';
+import { GamesModuleCard } from '../autopilot/GamesModuleCard';
+import { RoiDashboardCard } from '../autopilot/RoiDashboardCard';
 
 export interface AutopilotTabProps {
   dashboard: DashboardState | null;
@@ -38,51 +41,6 @@ const rhythmModes: Array<{ key: SellMode; label: string }> = [
   { key: 'patient', label: 'Patient' }
 ];
 
-const ChevronIcon: React.FC = () => (
-  <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-    <polyline points="6 9 12 15 18 9" />
-  </svg>
-);
-
-interface CollapsibleModuleProps {
-  id: string;
-  variant: string;
-  kanji: string;
-  kanjiTone: string;
-  title: string;
-  summary: string;
-  switchId: string;
-  checked: boolean;
-  expanded: boolean;
-  onToggleExpand: (id: string) => void;
-  onToggleSwitch: (checked: boolean) => void;
-  children: React.ReactNode;
-}
-
-const CollapsibleModuleCard: React.FC<CollapsibleModuleProps> = ({
-  id, variant, kanji, kanjiTone, title, summary, switchId,
-  checked, expanded, onToggleExpand, onToggleSwitch, children
-}) => (
-  <div className={`module-card module-card--${variant} ${expanded ? 'is-expanded' : ''}`}>
-    <div className="switch-row module-card__head">
-      <button type="button" className="module-card__toggle" aria-expanded={expanded} onClick={() => onToggleExpand(id)}>
-        <span className={`kanji-box kanji-box--${kanjiTone}`} aria-hidden="true">{kanji}</span>
-        <span className="module-card__titles">
-          <span className="module-card__title">{title}</span>
-          <span className="module-card__summary mono-stat">{summary}</span>
-        </span>
-      </button>
-      <div className="module-card__controls">
-        <button type="button" className={`module-card__toggle-btn ${expanded ? 'is-open' : ''}`} aria-expanded={expanded} onClick={() => onToggleExpand(id)}>
-          <span>Options</span><ChevronIcon />
-        </button>
-        <input type="checkbox" role="switch" id={switchId} aria-label={title} className="switch switch--sm" checked={checked} onChange={(e) => onToggleSwitch(e.target.checked)} />
-      </div>
-    </div>
-    {expanded && <div className="module-card__body">{children}</div>}
-  </div>
-);
-
 export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   dashboard, settings, stats, journal, bestPulls,
   onUpdateSettings, onResetRoi, onClearJournal, onClearBestPulls, onNavigateTab, onToast
@@ -110,23 +68,8 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
   const pity = me?.pity ?? 0;
   const isPityNear = Boolean(dashboard?.boosters?.isPityNear || pity >= 240);
   const pityTargetPack = dashboard?.boosters?.recommendedPity?.name || recPack?.name || 'Pack avec le plus de Mythiques';
-  const totalRoiChakra = (stats.chakraFromSales || 0) + (stats.chakraFromRecycle || 0);
   const activeSellMode: SellMode = settings.autoSellMode || 'adaptive';
   const activeRhythmLabel = rhythmModes.find((m) => m.key === activeSellMode)?.label || 'Adaptatif';
-  const hourlyHistory = Array.isArray(stats.hourlyHistory) ? stats.hourlyHistory : [];
-  const elapsedHours = Math.max(1, (Date.now() - (stats.startedAt || Date.now())) / 3600000);
-  const hourlyRate = hourlyHistory.length > 0
-    ? Math.round(hourlyHistory.reduce((sum, b) => sum + (b.totalChakra || 0), 0) / hourlyHistory.length)
-    : Math.round(totalRoiChakra / elapsedHours);
-  const projected8h = Math.round(hourlyRate * 8);
-
-  const sparklineCoords = (() => {
-    if (hourlyHistory.length < 2) return null;
-    const vals = hourlyHistory.map((b) => Math.max(0, b.totalChakra || 0));
-    const maxVal = Math.max(1, ...vals);
-    const pts = vals.map((v, idx) => `${((idx / (vals.length - 1)) * 240).toFixed(1)},${(31 - (v / maxVal) * 28).toFixed(1)}`);
-    return { polyline: pts.join(' '), area: `0,34 ${pts.join(' ')} 240,34` };
-  })();
 
   const handleRunCycle = async () => {
     setRunningCycle(true);
@@ -411,6 +354,11 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
               </div>
             </CollapsibleModuleCard>
 
+            <GamesModuleCard
+              dashboard={dashboard} settings={settings} expanded={expandedModule === 'games'}
+              onToggleExpand={toggleModule} onUpdateSettings={onUpdateSettings} onToast={onToast}
+            />
+
             {/* Micro-Modules: Auto-Missions & Anti-AFK */}
             <div className="module-row-pair">
               <div className="module-card module-card--compact">
@@ -438,55 +386,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
         </div>
 
         <div className="cockpit-col cockpit-col--aside">
-          <div className="card card--roi">
-            <div className="card__header">
-              <div className="roi-title-wrap">
-                <span className="kanji-box kanji-box--gold" aria-hidden="true">益</span>
-                <div>
-                  <h3 className="card__title">{t('roiTitle')}</h3>
-                  <p className="card__subtitle">{t('roiSubtitle')}</p>
-                </div>
-              </div>
-              <button type="button" onClick={onResetRoi} className="btn btn--ghost btn--xs">{t('reset')}</button>
-            </div>
-
-            <div className="roi-grid">
-              {[
-                { cls: 'roi-stat-box--chakra', label: 'Chakra total généré', iconCls: 'roi-icon--gold', icon: <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />, val: `+${new Intl.NumberFormat('fr-FR').format(totalRoiChakra)} ◆` },
-                { cls: '', label: 'Ventes marché', iconCls: 'roi-icon--acc', icon: <><line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" /></>, val: `${stats.cardsSold || 0} vendue(s)`, sub: `+${stats.chakraFromSales || 0} ◆ net` },
-                { cls: '', label: 'Recyclage', iconCls: 'roi-icon--ok', icon: <><polyline points="23 4 23 10 17 10" /><polyline points="1 20 1 14 7 14" /><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" /></>, val: `${stats.cardsRecycled || 0} recyclée(s)`, sub: `+${stats.chakraFromRecycle || 0} ◆` },
-                { cls: '', label: 'Boosters & Tirages', iconCls: 'roi-icon--purple', icon: <><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></>, val: `${stats.boostersOpenedCount || 0} ouverts`, sub: `${(stats.mythicsPulledCount || 0) + (stats.legendariesPulledCount || 0)} L/M tirées` }
-              ].map((b) => (
-                <div key={b.label} className={`roi-stat-box ${b.cls}`}>
-                  <div className="roi-stat-box__top">
-                    <span className="roi-stat-box__label">{b.label}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`roi-stat-box__icon ${b.iconCls}`} aria-hidden="true">{b.icon}</svg>
-                  </div>
-                  <strong className="roi-stat-box__val">{b.val}</strong>
-                  {b.sub && <span className="roi-stat-box__sub">{b.sub}</span>}
-                </div>
-              ))}
-            </div>
-
-            <div className="roi-yield-strip font-mono">
-              <span>
-                Rendement : <strong>{hourlyRate.toLocaleString('fr-FR')} ◆/h</strong> · Projection 8h :{' '}
-                <strong className="roi-yield-strip__proj">~{projected8h.toLocaleString('fr-FR')} ◆</strong>
-              </span>
-              {sparklineCoords && (
-                <svg className="roi-sparkline" viewBox="0 0 240 34" preserveAspectRatio="none" aria-label="Historique de rendement horaire 24h">
-                  <defs>
-                    <linearGradient id="roiSparkGrad" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#f5c518" stopOpacity="0.32" />
-                      <stop offset="100%" stopColor="#f5c518" stopOpacity="0.02" />
-                    </linearGradient>
-                  </defs>
-                  <polygon points={sparklineCoords.area} fill="url(#roiSparkGrad)" />
-                  <polyline points={sparklineCoords.polyline} fill="none" stroke="#f5c518" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                </svg>
-              )}
-            </div>
-          </div>
+          <RoiDashboardCard stats={stats} onResetRoi={onResetRoi} />
 
           <BestPullsShowcase pulls={bestPulls} onClear={onClearBestPulls} />
           <AutopilotJournal journal={journal} onClear={onClearJournal} />
