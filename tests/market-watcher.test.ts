@@ -359,4 +359,32 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     expect(res.boughtCount).toBe(1);
     expect(bought).toEqual(['/market/listings/l-deep-epic/buy']);
   });
+
+  it('Test 10: ensureFairPlayPrices sets sales7d >= 1 when /me/collection/prices returned sales7d: 0 for an unowned Mythic flip', async () => {
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-mythic-flip', status: 'active', type: 'fixed', price: 250, character: { id: 9901, name: 'Cheap Mythic', rarity: 'M' } }
+          ]
+        };
+      }
+      if (path.startsWith('/me/collection/prices')) {
+        return [{ characterId: 9901, median7d: null, sales7d: 0 }];
+      }
+      if (path.startsWith('/fair-play/prices')) {
+        return { '9901': 900 };
+      }
+      return {};
+    });
+
+    const deals = await scanMarketDealsInternal(new Set(), new Map(), 2000);
+    expect(deals).toHaveLength(1);
+    expect(deals[0]).toMatchObject({
+      listingId: 'l-mythic-flip',
+      rarity: 'M',
+      refMedian: 900,
+      isGoodFlip: true
+    });
+  });
 });

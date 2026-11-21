@@ -40,8 +40,15 @@ export async function scanMarketDealsInternal(
       queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${encodeURIComponent(r)}&pageSize=50&page=2`);
       queries.push(`/market/listings?type=fixed&sort=newest&rarity=${encodeURIComponent(r)}&pageSize=50&page=1`);
     }
+    if (state.currentSettings.autoMarketEnabled || state.currentSettings.autoBuyFlipEnabled) {
+      for (const highR of ['L', 'M'] as Rarity[]) {
+        if (!rawFocus.includes(highR)) {
+          queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${highR}&pageSize=50&page=1`);
+        }
+      }
+    }
   } else if (state.currentSettings.autoBuyMissingEnabled || state.currentSettings.autoMarketEnabled || state.currentSettings.autoBuyFlipEnabled) {
-    for (const r of ['U', 'R', 'E'] as Rarity[]) {
+    for (const r of ['U', 'R', 'E', 'L', 'M'] as Rarity[]) {
       queries.push(`/market/listings?type=fixed&sort=price_asc&rarity=${r}&pageSize=50&page=1`);
     }
   }
@@ -199,17 +206,27 @@ export async function scanProfitableTrades(
   wishlistMap: Map<number, any> = new Map()
 ): Promise<any[]> {
   try {
-    const res =
-      (await kyaraApi('/trades/offers', { auth: true }).catch(() => null)) ||
-      (await kyaraApi('/me/trades', { auth: true }).catch(() => null));
-
-    const rawItems = Array.isArray(res)
-      ? res
-      : Array.isArray(res?.items)
-        ? res.items
-        : Array.isArray(res?.incoming)
-          ? res.incoming
-          : [];
+    const [baseRes, mythicRes, legRes] = await Promise.all([
+      kyaraApi('/trades/offers', { auth: true }).catch(() => null),
+      kyaraApi('/trades/offers?rarity=M&pageSize=50&page=1', { auth: true }).catch(() => null),
+      kyaraApi('/trades/offers?rarity=L&pageSize=50&page=1', { auth: true }).catch(() => null)
+    ]);
+    const fallbackRes = !baseRes ? await kyaraApi('/me/trades', { auth: true }).catch(() => null) : null;
+    const extractItems = (r: any): any[] =>
+      Array.isArray(r) ? r : Array.isArray(r?.items) ? r.items : Array.isArray(r?.incoming) ? r.incoming : [];
+    const seenOfferIds = new Set<string>();
+    const rawItems: any[] = [];
+    for (const item of [
+      ...extractItems(baseRes),
+      ...extractItems(mythicRes),
+      ...extractItems(legRes),
+      ...extractItems(fallbackRes)
+    ]) {
+      const id = String(item?.id ?? '');
+      if (!id || seenOfferIds.has(id)) continue;
+      seenOfferIds.add(id);
+      rawItems.push(item);
+    }
     if (!rawItems.length) return [];
 
     const catalog = runtimeCache.catalogById || (await ensureCatalog(false).catch(() => new Map()));
@@ -309,6 +326,9 @@ export async function scanProfitableTrades(
 
     profitable.sort((a, b) => {
       if (Number(b.isWish) !== Number(a.isWish)) return Number(b.isWish) - Number(a.isWish);
+      const aHighMissing = a.offered?.isMissing && (a.offered?.rarity === 'M' || a.offered?.rarity === 'L') ? (a.offered.rarity === 'M' ? 2 : 1) : 0;
+      const bHighMissing = b.offered?.isMissing && (b.offered?.rarity === 'M' || b.offered?.rarity === 'L') ? (b.offered.rarity === 'M' ? 2 : 1) : 0;
+      if (bHighMissing !== aHighMissing) return bHighMissing - aHighMissing;
       return b.profit - a.profit;
     });
 

@@ -277,7 +277,10 @@ export function rankBoostersForCollection(
     candidates.sort((a, b) => {
       if (Number(canAutoOpen(b)) !== Number(canAutoOpen(a))) return Number(canAutoOpen(b)) - Number(canAutoOpen(a));
       if (Number(b.canOpenNow) !== Number(a.canOpenNow)) return Number(b.canOpenNow) - Number(a.canOpenNow);
-      return (b.missingByRarity?.M || 0) - (a.missingByRarity?.M || 0);
+      const ratioA = (a.missingByRarity?.M || 0) / Math.max(1, a.totalByRarity?.M || a.missingByRarity?.M || 1);
+      const ratioB = (b.missingByRarity?.M || 0) / Math.max(1, b.totalByRarity?.M || b.missingByRarity?.M || 1);
+      if (Math.abs(ratioB - ratioA) > 0.05) return ratioB - ratioA;
+      return (b.missingByRarity?.M || 0) - (a.missingByRarity?.M || 0) || b.expectedChakraValue - a.expectedChakraValue;
     });
     recommendedPity = candidates[0] || null;
   }

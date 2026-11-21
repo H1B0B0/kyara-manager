@@ -313,11 +313,12 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
     }
   }
 
-  let targetPack = state.currentSettings.autoBoosterStrategy === 'ev' || state.currentSettings.autoOpenMode === 'recommended_ev'
-    ? boosters.recommendedEv : boosters.recommendedNew;
-  if (state.currentSettings.renaissanceFocusEnabled && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
-    targetPack = boosters.recommendedRenaissance || boosters.recommendedNew;
-  }
+  const baseTargetPack = state.currentSettings.renaissanceFocusEnabled && state.currentSettings.autoOpenMode !== 'custom'
+    ? boosters.recommendedRenaissance || boosters.recommendedNew
+    : state.currentSettings.autoBoosterStrategy === 'ev' || state.currentSettings.autoOpenMode === 'recommended_ev'
+      ? boosters.recommendedEv
+      : boosters.recommendedNew;
+  let targetPack = baseTargetPack;
   if (boosters.isGoldenNext && boosters.recommendedGolden && state.currentSettings.autoOpenGoldenSniper !== false && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
     targetPack = boosters.recommendedGolden;
   }
@@ -346,8 +347,33 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
   const freeAvailable = Math.max(0, baseAvailable - reserve);
   const minBatch = Math.max(1, Math.min(10, Number(state.currentSettings.autoOpenMinBatch) || 1));
   const isGaugeFull = Number(dashboard?.me?.freePacks) >= Number(dashboard?.me?.freePacksMax ?? 10);
-  if (!freeAvailable || (freeAvailable < minBatch && !isGaugeFull)) return { openedCount, newCardsCount, targetPack };
+  const rawGoldenIn = dashboard?.me?.goldenIn;
+  const goldenIn = rawGoldenIn !== null && rawGoldenIn !== undefined && rawGoldenIn !== '' ? Number(rawGoldenIn) : null;
+  const pity = Number(dashboard?.me?.pity ?? 0);
+  const isSniperExact = Boolean(
+    (boosters.isGoldenNext && state.currentSettings.autoOpenGoldenSniper !== false) ||
+    (pity >= 249 && state.currentSettings.autoOpenPitySniper !== false)
+  );
+  if (!freeAvailable || (freeAvailable < minBatch && !isGaugeFull && !isSniperExact)) {
+    return { openedCount, newCardsCount, targetPack };
+  }
 
-  const liveRes = await pilotLiveBoosterOpening(targetPack.packId, targetPack.name, Math.min(10, freeAvailable));
+  let countToOpen = Math.min(10, freeAvailable);
+  // If we switched away from baseTargetPack solely for the exact Golden (10th) or Pity (250th) pull, open 1 exact sniper booster
+  if (isSniperExact && baseTargetPack && baseTargetPack.packId !== targetPack.packId) {
+    countToOpen = 1;
+  } else if (
+    goldenIn !== null &&
+    Number.isFinite(goldenIn) &&
+    goldenIn > 1 &&
+    state.currentSettings.autoOpenGoldenSniper !== false &&
+    boosters.recommendedGolden &&
+    boosters.recommendedGolden.packId !== targetPack.packId
+  ) {
+    // Stop right before the 10th Golden Booster so it isn't burned inside a batch on a lower-EV pack
+    countToOpen = Math.max(1, Math.min(countToOpen, goldenIn - 1));
+  }
+
+  const liveRes = await pilotLiveBoosterOpening(targetPack.packId, targetPack.name, countToOpen);
   return { openedCount: openedCount + liveRes.openedCount, newCardsCount: newCardsCount + liveRes.newCardsCount, targetPack };
 }

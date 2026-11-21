@@ -217,7 +217,7 @@ export async function ensureFairPlayPrices(characterIds: number[], force = false
             runtimeCache.collectionPrices.set(cid, {
               median7d: Number(existing?.median7d) > 0 ? existing.median7d : price,
               median30d: existing?.median30d ?? price,
-              sales7d: existing?.sales7d ?? 1,
+              sales7d: Number(existing?.sales7d) > 0 ? existing.sales7d : 1,
               sales30d: existing?.sales30d ?? null,
               at: now
             });
