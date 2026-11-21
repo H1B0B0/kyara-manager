@@ -6,6 +6,9 @@ export interface UpdateState {
   remoteCheckedAt?: number;
   source?: 'cws' | 'github';
   releaseUrl?: string;
+  cwsInstall?: boolean;
+  cwsUrl?: string;
+  cwsPending?: boolean;
   dismissedVersion?: string;
   notes?: string;
   error?: string;

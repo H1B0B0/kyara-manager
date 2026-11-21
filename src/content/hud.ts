@@ -12,41 +12,84 @@ function renderUpdateToast(update: UpdateState | null | undefined): void {
     status === 'waiting' ||
     status === 'installing' ||
     status === 'updated' ||
-    (status === 'available' && update?.availableVersion && update?.dismissedVersion !== update.availableVersion);
+    (status === 'available' && Boolean(update?.availableVersion) && update?.dismissedVersion !== update.availableVersion);
 
   dot?.classList.toggle('has-update', Boolean(hasVisibleUpdate));
   if (!toast) return;
 
   if (!hasVisibleUpdate) {
     toast.hidden = true;
+    toast.classList.remove('km-update-toast--modal');
+    delete toast.dataset.status;
     return;
   }
 
+  const versionEl = document.getElementById('km-update-toast-version');
   const titleEl = document.getElementById('km-update-toast-title');
   const descEl = document.getElementById('km-update-toast-desc');
+  const progressEl = document.getElementById('km-update-toast-progress') as HTMLProgressElement | null;
   const applyBtn = document.getElementById('km-update-toast-apply') as HTMLButtonElement | null;
-  if (!titleEl || !descEl || !applyBtn) return;
+  const storeBtn = document.getElementById('km-update-toast-store') as HTMLButtonElement | null;
+  const closeBtn = document.getElementById('km-update-toast-close') as HTMLButtonElement | null;
+  if (!titleEl || !descEl || !applyBtn || !storeBtn || !closeBtn || !progressEl) return;
 
-  if (status === 'installing') {
+  const isCws = update?.cwsInstall !== false;
+  const isCwsPending = status === 'available' && Boolean(update?.cwsPending) && isCws;
+  const isDevGithubOnly = status === 'available' && update?.cwsInstall === false && Boolean(update?.releaseUrl);
+  const cwsUrl =
+    update?.cwsUrl ||
+    (chrome.runtime?.id ? `https://chromewebstore.google.com/detail/${chrome.runtime.id}` : undefined);
+  const badgeVer = status === 'updated' ? update?.currentVersion : update?.availableVersion || update?.currentVersion;
+
+  if (versionEl) {
+    versionEl.textContent = badgeVer ? `v${badgeVer}` : '';
+    versionEl.hidden = !badgeVer;
+  }
+  toast.dataset.status = status;
+  toast.classList.add('km-update-toast--modal');
+
+  if (status === 'waiting' || status === 'installing') {
     titleEl.textContent = `Kyara Manager se met à jour (v${update?.availableVersion || ''})…`;
-    descEl.textContent = 'Installation en cours, l’extension va se recharger automatiquement.';
-    applyBtn.hidden = true;
-  } else if (status === 'waiting') {
-    titleEl.textContent = `Mise à jour v${update?.availableVersion || ''} prête`;
-    descEl.textContent = 'En attente de la fin de l’action en cours avant rechargement.';
-    applyBtn.hidden = true;
-  } else if (status === 'updated') {
-    titleEl.textContent = `Kyara Manager mis à jour (v${update?.currentVersion || ''})`;
-    descEl.textContent = 'Nouvelles optimisations actives. Rechargement rapide recommandé si besoin.';
-    applyBtn.hidden = true;
-  } else {
-    titleEl.textContent = `Nouvelle version v${update?.availableVersion || ''} disponible`;
     descEl.textContent =
-      update?.source === 'github'
-        ? 'Disponible sur GitHub / en cours de déploiement Chrome Web Store.'
-        : 'Une nouvelle mise à jour prête à être installée est disponible.';
+      status === 'waiting'
+        ? 'Mise à jour prête sur Chrome Web Store. Fin de l’action en cours avant rechargement automatique…'
+        : 'Installation automatique via Chrome Web Store en cours, l’extension va se recharger dans un instant.';
+    progressEl.hidden = false;
+    applyBtn.hidden = true;
+    storeBtn.hidden = true;
+    closeBtn.hidden = true;
+  } else if (status === 'updated') {
+    titleEl.textContent = `Kyara Manager a été mis à jour (v${update?.currentVersion || ''})`;
+    descEl.textContent = 'Les dernières optimisations Chrome Web Store sont maintenant actives.';
+    progressEl.hidden = true;
+    applyBtn.hidden = true;
+    storeBtn.hidden = true;
+    closeBtn.hidden = false;
+    closeBtn.textContent = 'Continuer';
+  } else {
+    titleEl.textContent = `Nouvelle mise à jour disponible (v${update?.availableVersion || ''})`;
+    descEl.textContent = isCwsPending
+      ? 'Publication Chrome Web Store en cours de validation/déploiement par Google. L’extension s’installera automatiquement dès disponibilité.'
+      : isCws
+        ? 'Prête à être installée automatiquement via le Chrome Web Store sans perdre ta session.'
+        : 'Nouvelle version détectée sur GitHub (build local sans update_url).';
+    progressEl.hidden = true;
     applyBtn.hidden = false;
-    applyBtn.textContent = update?.source === 'github' && update?.releaseUrl ? 'Voir / Vérifier' : 'Mettre à jour';
+    applyBtn.textContent = 'Mettre à jour';
+    closeBtn.hidden = false;
+    closeBtn.textContent = 'Plus tard';
+    if (isCws && (isCwsPending || update?.source === 'github') && cwsUrl) {
+      storeBtn.hidden = false;
+      storeBtn.textContent = 'Chrome Web Store';
+      storeBtn.dataset.url = cwsUrl;
+    } else if (isDevGithubOnly && update?.releaseUrl) {
+      storeBtn.hidden = false;
+      storeBtn.textContent = 'Voir sur GitHub';
+      storeBtn.dataset.url = update.releaseUrl;
+    } else {
+      storeBtn.hidden = true;
+      delete storeBtn.dataset.url;
+    }
   }
   toast.hidden = false;
 }
@@ -192,15 +235,26 @@ export function mountFloatingHud(): void {
   const toast = document.createElement('div');
   toast.id = 'km-update-toast';
   toast.className = 'km-update-toast';
-  toast.setAttribute('role', 'status');
-  toast.setAttribute('aria-live', 'polite');
   toast.hidden = true;
 
-  const toastRow = document.createElement('div');
-  toastRow.className = 'km-update-toast__row';
+  const toastCard = document.createElement('div');
+  toastCard.className = 'km-update-toast__card';
+  toastCard.setAttribute('role', 'dialog');
+  toastCard.setAttribute('aria-modal', 'true');
+  toastCard.setAttribute('aria-labelledby', 'km-update-toast-title');
+  toastCard.setAttribute('aria-describedby', 'km-update-toast-desc');
+
+  const toastSealWrap = document.createElement('div');
+  toastSealWrap.className = 'km-update-toast__seal-wrap';
   const toastSeal = document.createElement('span');
   toastSeal.className = 'km-update-toast__seal';
+  toastSeal.setAttribute('aria-hidden', 'true');
   toastSeal.textContent = '新';
+  const toastVersion = document.createElement('span');
+  toastVersion.id = 'km-update-toast-version';
+  toastVersion.className = 'km-update-toast__version';
+  toastSealWrap.append(toastSeal, toastVersion);
+
   const toastCopy = document.createElement('div');
   toastCopy.className = 'km-update-toast__copy';
   const toastTitle = document.createElement('strong');
@@ -210,7 +264,12 @@ export function mountFloatingHud(): void {
   toastDesc.id = 'km-update-toast-desc';
   toastDesc.className = 'km-update-toast__desc';
   toastCopy.append(toastTitle, toastDesc);
-  toastRow.append(toastSeal, toastCopy);
+
+  const toastProgress = document.createElement('progress');
+  toastProgress.id = 'km-update-toast-progress';
+  toastProgress.className = 'km-update-toast__progress';
+  toastProgress.setAttribute('aria-label', 'Progression de la mise à jour Chrome Web Store');
+  toastProgress.hidden = true;
 
   const toastActions = document.createElement('div');
   toastActions.className = 'km-update-toast__actions';
@@ -220,22 +279,46 @@ export function mountFloatingHud(): void {
   toastApply.className = 'km-hud__btn km-hud__btn--primary';
   toastApply.textContent = 'Mettre à jour';
   toastApply.addEventListener('click', async () => {
-    const res = await chrome.runtime.sendMessage({ type: 'km:update-apply' }).catch(() => null);
-    const upd = res?.kmUpdate as UpdateState | undefined;
-    if (upd?.source === 'github' && upd?.releaseUrl) {
-      window.open(upd.releaseUrl, '_blank', 'noopener');
+    toastApply.disabled = true;
+    try {
+      const res = await chrome.runtime.sendMessage({ type: 'km:update-apply' }).catch(() => null);
+      const upd = res?.kmUpdate as UpdateState | undefined;
+      if (upd) renderUpdateToast(upd);
+      if (upd?.cwsInstall === false && !upd?.cwsPending && upd?.source === 'github' && upd?.releaseUrl) {
+        window.open(upd.releaseUrl, '_blank', 'noopener');
+      }
+    } finally {
+      toastApply.disabled = false;
     }
+  });
+  const toastStore = document.createElement('button');
+  toastStore.type = 'button';
+  toastStore.id = 'km-update-toast-store';
+  toastStore.className = 'km-hud__btn';
+  toastStore.textContent = 'Chrome Web Store';
+  toastStore.hidden = true;
+  toastStore.addEventListener('click', () => {
+    const targetUrl = toastStore.dataset.url;
+    if (targetUrl) window.open(targetUrl, '_blank', 'noopener');
   });
   const toastClose = document.createElement('button');
   toastClose.type = 'button';
+  toastClose.id = 'km-update-toast-close';
   toastClose.className = 'km-hud__btn';
-  toastClose.textContent = 'Fermer';
-  toastClose.addEventListener('click', () => {
+  toastClose.textContent = 'Plus tard';
+  const dismissToast = () => {
+    if (toast.dataset.status === 'installing' || toast.dataset.status === 'waiting') return;
     toast.hidden = true;
+    toast.classList.remove('km-update-toast--modal');
     void chrome.runtime.sendMessage({ type: 'km:update-dismiss' }).catch(() => {});
+  };
+  toastClose.addEventListener('click', dismissToast);
+  toast.addEventListener('click', (event) => {
+    if (event.target === toast) dismissToast();
   });
-  toastActions.append(toastApply, toastClose);
-  toast.append(toastRow, toastActions);
+  toastActions.append(toastApply, toastStore, toastClose);
+  toastCard.append(toastSealWrap, toastCopy, toastProgress, toastActions);
+  toast.append(toastCard);
   document.body.appendChild(toast);
 
   void chrome.storage?.local?.get('kmUpdate').then(({ kmUpdate }) => {

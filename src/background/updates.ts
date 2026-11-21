@@ -2,10 +2,21 @@ import type { UpdateState } from '../types/updates';
 
 const GITHUB_RELEASE_API = 'https://api.github.com/repos/H1B0B0/kyara-manager/releases/latest';
 const REMOTE_POLL_INTERVAL_MS = 15 * 60 * 1000;
+const CWS_PENDING_POLL_INTERVAL_MS = 5 * 60 * 1000;
+const RELOAD_MODAL_DELAY_MS = 2000;
 
 let applying: Promise<void> | null = null;
 let checking: Promise<void> | null = null;
 let remotePolling: Promise<void> | null = null;
+let crxReadyVersion: string | null = null;
+
+export function isCwsManaged(): boolean {
+  return Boolean((chrome.runtime?.getManifest?.() as any)?.update_url);
+}
+
+export function getCwsStoreUrl(): string | undefined {
+  return chrome.runtime?.id ? `https://chromewebstore.google.com/detail/${chrome.runtime.id}` : undefined;
+}
 
 async function readUpdate(): Promise<{ kmUpdate?: UpdateState }> {
   return await chrome.storage.local.get('kmUpdate') as { kmUpdate?: UpdateState };
@@ -13,7 +24,21 @@ async function readUpdate(): Promise<{ kmUpdate?: UpdateState }> {
 
 async function storeUpdate(patch: Partial<UpdateState>): Promise<void> {
   const { kmUpdate } = await readUpdate();
-  await chrome.storage.local.set({ kmUpdate: { ...kmUpdate, currentVersion: chrome.runtime.getManifest().version, ...patch } });
+  const cwsManaged = isCwsManaged();
+  const next: UpdateState = {
+    cwsInstall: cwsManaged,
+    cwsUrl: getCwsStoreUrl(),
+    ...kmUpdate,
+    currentVersion: chrome.runtime.getManifest().version,
+    ...patch
+  };
+  if (cwsManaged && patch.cwsInstall === undefined) {
+    next.cwsInstall = true;
+  }
+  if (!next.cwsUrl && patch.cwsUrl === undefined) {
+    next.cwsUrl = getCwsStoreUrl();
+  }
+  await chrome.storage.local.set({ kmUpdate: next });
 }
 
 export function isNewerVersion(remote: string, current: string): boolean {
@@ -58,17 +83,51 @@ async function checkGithubLatestRelease(): Promise<{ version: string; releaseUrl
   }
 }
 
+async function storeGithubRelease(
+  remote: { version: string; releaseUrl?: string; notes?: string },
+  remoteCheckedAt?: number
+): Promise<void> {
+  const cwsManaged = isCwsManaged();
+  await storeUpdate({
+    status: 'available',
+    availableVersion: remote.version,
+    source: 'github',
+    cwsPending: cwsManaged,
+    cwsInstall: cwsManaged,
+    cwsUrl: getCwsStoreUrl(),
+    releaseUrl: remote.releaseUrl,
+    notes: remote.notes,
+    ...(remoteCheckedAt !== undefined ? { remoteCheckedAt } : {}),
+    error: undefined
+  });
+}
+
 export function applyPendingUpdate(): Promise<void> {
   if (applying) return applying;
   applying = (async () => {
     const { kmUpdate } = await readUpdate();
     if (!kmUpdate?.availableVersion || !['available', 'waiting', 'installing'].includes(kmUpdate.status)) return;
     if (kmUpdate.source === 'github') {
-      // GitHub release detected before CWS CRX rollout: nudge Chrome Web Store check first.
-      const res = await chrome.runtime.requestUpdateCheck().catch(() => null);
-      if (res?.status === 'update_available' && res.version) {
-        await storeUpdate({ status: 'available', availableVersion: res.version, source: 'cws', error: undefined });
+      // GitHub release detected before CWS CRX rollout: check Chrome Web Store CRX readiness first.
+      const res = crxReadyVersion
+        ? { status: 'update_available' as const, version: crxReadyVersion }
+        : await chrome.runtime.requestUpdateCheck().catch(() => null);
+      const latest = await readUpdate();
+      const readyVersion =
+        (res?.status === 'update_available' ? res.version : undefined) ||
+        crxReadyVersion ||
+        (latest.kmUpdate?.source === 'cws' ? latest.kmUpdate.availableVersion : undefined);
+      if (res?.status === 'update_available' || Boolean(crxReadyVersion) || latest.kmUpdate?.source === 'cws') {
+        await storeUpdate({
+          status: 'available',
+          availableVersion: readyVersion || kmUpdate.availableVersion,
+          source: 'cws',
+          cwsPending: false,
+          dismissedVersion: undefined,
+          error: undefined
+        });
       } else {
+        await storeUpdate({ cwsPending: true, status: 'available', source: 'github' });
         return;
       }
     }
@@ -82,15 +141,31 @@ export function applyPendingUpdate(): Promise<void> {
       return;
     }
     await storeUpdate({ status: 'installing' });
-    // Keep the progress message visible before the extension contexts are replaced.
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    // Keep the "Kyara Manager se met à jour" modal visible before reloading extension contexts.
+    await new Promise((resolve) => setTimeout(resolve, RELOAD_MODAL_DELAY_MS));
     chrome.runtime.reload();
   })().finally(() => { applying = null; });
   return applying;
 }
 
 export async function updateAvailable(version: string): Promise<void> {
-  await storeUpdate({ status: 'available', availableVersion: version, source: 'cws', error: undefined });
+  crxReadyVersion = version;
+  const { kmUpdate } = await readUpdate();
+  const alreadyApplying = Boolean(
+    applying &&
+    kmUpdate?.availableVersion === version &&
+    (kmUpdate.status === 'waiting' || kmUpdate.status === 'installing')
+  );
+  if (!alreadyApplying) {
+    await storeUpdate({
+      status: 'available',
+      availableVersion: version,
+      source: 'cws',
+      cwsPending: false,
+      dismissedVersion: undefined,
+      error: undefined
+    });
+  }
   await applyPendingUpdate();
 }
 
@@ -114,7 +189,11 @@ export async function pollForUpdateSilently(force = false): Promise<void> {
       if (kmUpdate.source !== 'github') await applyPendingUpdate();
       return;
     }
-    if (!force && Date.now() - (kmUpdate?.remoteCheckedAt || 0) < REMOTE_POLL_INTERVAL_MS) {
+    const pollInterval =
+      kmUpdate?.source === 'github' || kmUpdate?.cwsPending
+        ? CWS_PENDING_POLL_INTERVAL_MS
+        : REMOTE_POLL_INTERVAL_MS;
+    if (!force && Date.now() - (kmUpdate?.remoteCheckedAt || 0) < pollInterval) {
       return;
     }
     const currentVersion = chrome.runtime.getManifest().version;
@@ -128,21 +207,14 @@ export async function pollForUpdateSilently(force = false): Promise<void> {
       }
       const remote = await checkGithubLatestRelease();
       if (remote && isNewerVersion(remote.version, currentVersion)) {
-        await storeUpdate({
-          status: 'available',
-          availableVersion: remote.version,
-          source: 'github',
-          releaseUrl: remote.releaseUrl,
-          notes: remote.notes,
-          error: undefined
-        });
+        await storeGithubRelease(remote);
       }
     } catch {}
   })().finally(() => { remotePolling = null; });
   return remotePolling;
 }
 
-export function checkForUpdate(options: { includeRemote?: boolean } = {}): Promise<void> {
+export function checkForUpdate(options: { includeRemote?: boolean; bypassThrottle?: boolean } = {}): Promise<void> {
   if (checking) return checking;
   checking = (async () => {
     const { kmUpdate } = await readUpdate();
@@ -150,7 +222,8 @@ export function checkForUpdate(options: { includeRemote?: boolean } = {}): Promi
       await applyPendingUpdate();
       return;
     }
-    if (Date.now() - (kmUpdate?.checkedAt || 0) < 60000) {
+    const isGithubPending = Boolean(kmUpdate?.availableVersion && kmUpdate.source === 'github');
+    if (!options.bypassThrottle && !isGithubPending && Date.now() - (kmUpdate?.checkedAt || 0) < 60000) {
       await storeUpdate({ status: 'throttled' });
       return;
     }
@@ -158,27 +231,29 @@ export function checkForUpdate(options: { includeRemote?: boolean } = {}): Promi
     try {
       const result = await chrome.runtime.requestUpdateCheck();
       if (result.status === 'update_available') {
-        await updateAvailable(result.version!);
+        await updateAvailable(result.version || kmUpdate?.availableVersion || chrome.runtime.getManifest().version);
         return;
       }
-      if (options.includeRemote) {
+      if (options.includeRemote && (result.status === 'no_update' || result.status === 'throttled')) {
         const remote = await checkGithubLatestRelease();
         const currentVersion = chrome.runtime.getManifest().version;
         if (remote && isNewerVersion(remote.version, currentVersion)) {
-          await storeUpdate({
-            status: 'available',
-            availableVersion: remote.version,
-            source: 'github',
-            releaseUrl: remote.releaseUrl,
-            notes: remote.notes,
-            remoteCheckedAt: Date.now(),
-            error: undefined
-          });
+          await storeGithubRelease(remote, Date.now());
           return;
         }
       }
       const latest = await readUpdate();
-      if (!latest.kmUpdate?.availableVersion || latest.kmUpdate?.source === 'github') {
+      const currentVersion = chrome.runtime.getManifest().version;
+      if (
+        latest.kmUpdate?.availableVersion &&
+        latest.kmUpdate.source === 'github' &&
+        isNewerVersion(latest.kmUpdate.availableVersion, currentVersion)
+      ) {
+        await storeUpdate({
+          status: 'available',
+          cwsPending: isCwsManaged() || Boolean(latest.kmUpdate.cwsPending)
+        });
+      } else {
         await storeUpdate({ status: result.status });
       }
     } catch (err: any) {

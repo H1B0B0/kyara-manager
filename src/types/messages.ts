@@ -1,5 +1,6 @@
 import type { DashboardState, WishlistItem } from './kyara';
 import type { KyaraSettings, SellMode } from './settings';
+import type { UpdateState } from './updates';
 
 export type ExtensionCommand =
   | { type: 'km:cmd:refresh'; forcePrices?: boolean; scanMarketDeals?: boolean }
@@ -22,7 +23,7 @@ export type ExtensionCommand =
   | { type: 'km:cmd:wishlist-remove'; characterId: number }
   | { type: 'km:save-settings'; settings: Partial<KyaraSettings> }
   | { type: 'km:open-kyara-tab' }
-  | { type: 'km:update-check'; includeRemote?: boolean }
+  | { type: 'km:update-check'; includeRemote?: boolean; bypassThrottle?: boolean }
   | { type: 'km:update-apply' }
   | { type: 'km:update-dismiss' }
   | { type: 'km:log'; level?: string; message: string };
@@ -45,4 +46,5 @@ export interface CommandResponse {
   openRes?: { openedCount: number; newCardsCount: number };
   isPinned?: boolean;
   wishlist?: WishlistItem[];
+  kmUpdate?: UpdateState;
 }

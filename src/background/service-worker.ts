@@ -1,10 +1,13 @@
 import { mergeSettings, type KyaraSettings } from '../types/settings';
+import type { UpdateState } from '../types/updates';
 import {
   checkForUpdate,
   updateAvailable,
   applyPendingUpdate,
   pollForUpdateSilently,
-  dismissUpdateNotification
+  dismissUpdateNotification,
+  isCwsManaged,
+  getCwsStoreUrl
 } from './updates';
 
 const ALARM_NAME = 'kyara-manager-tick';
@@ -111,10 +114,17 @@ async function showDesktopNotification(title: string, message: string, idPrefix 
 }
 
 chrome.runtime.onInstalled.addListener(async (details) => {
-  await chrome.storage.local.set({ kmUpdate: {
-    status: details.reason === 'update' ? 'updated' : 'idle',
-    currentVersion: chrome.runtime.getManifest().version
-  } });
+  const cwsInstall = isCwsManaged();
+  const cwsUrl = getCwsStoreUrl();
+  await chrome.storage.local.set({
+    kmUpdate: {
+      status: details.reason === 'update' ? 'updated' : 'idle',
+      currentVersion: chrome.runtime.getManifest().version,
+      cwsInstall,
+      cwsUrl,
+      ...(details.reason === 'update' ? { source: 'cws' as const } : {})
+    } satisfies UpdateState
+  });
   await ensureAlarm();
   await updateBadgeFromState();
   const tabs = await findKyaraTabs();
@@ -162,8 +172,12 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
       }
 
       if (message.type === 'km:update-check') {
-        await checkForUpdate({ includeRemote: Boolean(message.includeRemote) });
-        sendResponse({ ok: true });
+        await checkForUpdate({
+          includeRemote: Boolean(message.includeRemote),
+          bypassThrottle: Boolean(message.bypassThrottle)
+        });
+        const { kmUpdate } = (await chrome.storage.local.get('kmUpdate')) as { kmUpdate?: UpdateState };
+        sendResponse({ ok: true, kmUpdate });
         return;
       }
       if (message.type === 'km:update-apply') {

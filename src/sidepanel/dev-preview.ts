@@ -191,7 +191,7 @@ const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.6.1' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.6.2', cwsInstall: true, cwsUrl: 'https://chromewebstore.google.com/detail/kyara-manager' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -374,19 +374,24 @@ function handleMessage(cmd: any): any {
     return { ok: true, playedGames, ticketsEarned, arcade };
   }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
-  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.6.1', availableVersion: '2.7.0', source: 'cws' } }); return { ok: true }; }
-  if (type === 'km:update-apply') { notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.6.1', availableVersion: '2.7.0', source: 'cws' } }); return { ok: true, kmUpdate: store.kmUpdate }; }
-  if (type === 'km:update-dismiss') { notifyStorage({ kmUpdate: { ...store.kmUpdate, dismissedVersion: store.kmUpdate?.availableVersion } }); return { ok: true }; }
+  const cwsUrl = 'https://chromewebstore.google.com/detail/kyara-manager';
+  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.6.2', availableVersion: '2.7.0', source: 'cws', cwsInstall: true, cwsUrl } }); return { ok: true, kmUpdate: store.kmUpdate }; }
+  if (type === 'km:update-apply') {
+    notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.6.2', availableVersion: '2.7.0', source: 'cws', cwsInstall: true, cwsUrl } });
+    setTimeout(() => { if (store.kmUpdate?.status === 'installing') notifyStorage({ kmUpdate: { status: 'updated', currentVersion: '2.7.0', source: 'cws', cwsInstall: true, cwsUrl } }); }, 1600);
+    return { ok: true, kmUpdate: store.kmUpdate };
+  }
+  if (type === 'km:update-dismiss') { const p = store.kmUpdate; notifyStorage({ kmUpdate: p?.status === 'updated' || p?.status === 'error' ? { ...p, status: 'idle', error: undefined } : { ...p, dismissedVersion: p?.availableVersion } }); return { ok: true }; }
   return { ok: true, data: {} };
 }
 
 function installChromeMock() {
   if (typeof window !== 'undefined' && window.location.search.includes('kmUpdate=available')) {
-    store.kmUpdate = { status: 'available', currentVersion: '2.6.1', availableVersion: '2.7.0', source: 'cws' };
+    store.kmUpdate = { status: 'available', currentVersion: '2.6.2', availableVersion: '2.7.0', source: 'cws', cwsInstall: true, cwsUrl: 'https://chromewebstore.google.com/detail/kyara-manager' };
   }
   (globalThis as any).chrome = {
     runtime: {
-      lastError: null, getManifest: () => ({ version: '2.6.1', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
+      lastError: null, getManifest: () => ({ version: '2.6.2', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
       sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },
@@ -456,8 +461,8 @@ function mountPreviewStudioBar() {
   updateLiveBtn(false);
   const btnUpd = document.createElement('button'); btnUpd.style.cssText = btnStyle(false); btnUpd.innerText = 'Pop-up Maj';
   btnUpd.onclick = () => {
-    const isAvail = store.kmUpdate?.status === 'available' || store.kmUpdate?.status === 'installing';
-    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.6.1' } : { status: 'available', currentVersion: '2.6.1', availableVersion: '2.7.0', source: 'cws' } });
+    const isAvail = ['available', 'waiting', 'installing', 'updated'].includes(store.kmUpdate?.status);
+    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.6.2', cwsInstall: true } : { status: 'available', currentVersion: '2.6.2', availableVersion: '2.7.0', source: 'cws', cwsInstall: true, cwsUrl: 'https://chromewebstore.google.com/detail/kyara-manager' } });
     btnUpd.style.cssText = btnStyle(!isAvail);
   };
   const simulateStep = () => {

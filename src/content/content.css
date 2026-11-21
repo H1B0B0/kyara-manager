@@ -271,96 +271,111 @@
   color: #ffffff;
 }
 
-/* Kyara-Native In-Page Update Toast */
+/* Kyara-Native In-Page Update Modal */
 #km-update-toast.km-update-toast {
   all: initial;
   position: fixed;
-  left: 16px;
-  bottom: 68px;
-  z-index: 2147483641;
-  width: min(360px, calc(100vw - 32px));
+  inset: 0;
+  z-index: 2147483646;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 11px 12px;
-  border-radius: 13px;
-  background: linear-gradient(160deg, rgba(28, 22, 26, 0.97), rgba(15, 14, 21, 0.98));
-  border: 1px solid rgba(255, 77, 46, 0.55);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.1),
-    0 18px 42px rgba(0, 0, 0, 0.8),
-    0 0 24px rgba(255, 77, 46, 0.16);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+  background: rgba(8, 7, 12, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  overscroll-behavior: contain;
   color: #edeae4;
   font-family: "Zen Kaku Gothic New", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 12px;
   opacity: 1;
-  translate: 0 0;
-  transition: display 0.24s ease-out, opacity 0.24s ease-out, translate 0.24s ease-out;
+  transition: display 0.22s ease-out, opacity 0.22s ease-out;
   transition-behavior: allow-discrete;
 }
-
 @starting-style {
-  #km-update-toast.km-update-toast {
-    opacity: 0;
-    translate: 0 10px;
-  }
+  #km-update-toast.km-update-toast { opacity: 0; }
 }
-
-#km-update-toast[hidden] {
-  display: none !important;
-  opacity: 0;
-  translate: 0 10px;
-}
-
-.km-update-toast__row {
+#km-update-toast[hidden] { display: none !important; opacity: 0; }
+.km-update-toast__card {
+  width: min(440px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
   display: flex;
+  flex-direction: column;
   align-items: center;
-  gap: 10px;
+  text-align: center;
+  gap: 12px;
+  padding: 22px 18px 18px;
+  border-radius: 16px;
+  background: linear-gradient(160deg, rgba(28, 22, 30, 0.98), #0e0e14 68%);
+  border: 1px solid rgba(255, 77, 46, 0.62);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.1), 0 24px 64px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(245, 197, 24, 0.18);
+  translate: 0 0;
+  transition: translate 0.22s ease-out, opacity 0.22s ease-out;
 }
-
+#km-update-toast[data-status="updated"] .km-update-toast__card { border-color: rgba(63, 191, 127, 0.65); }
+.km-update-toast__seal-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .km-update-toast__seal {
-  width: 30px;
-  height: 30px;
-  border-radius: 8px;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
   background: rgba(255, 77, 46, 0.16);
-  border: 1px solid rgba(255, 77, 46, 0.55);
+  border: 1px solid rgba(245, 197, 24, 0.52);
   color: #ff6a4d;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   font-weight: 800;
-  font-size: 14px;
-  flex-shrink: 0;
+  font-size: 21px;
+  box-shadow: 0 0 20px rgba(255, 77, 46, 0.25);
 }
-
-.km-update-toast__copy {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.km-update-toast__title {
-  font-size: 12px;
-  font-weight: 700;
-  color: #ffffff;
-}
-
-.km-update-toast__desc {
+#km-update-toast[data-status="updated"] .km-update-toast__seal { background: rgba(63, 191, 127, 0.16); border-color: rgba(63, 191, 127, 0.6); color: #4ee094; }
+.km-update-toast__version {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
   font-size: 11px;
-  color: #c4bfcc;
-  line-height: 1.35;
+  font-weight: 700;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(245, 197, 24, 0.12);
+  border: 1px solid rgba(245, 197, 24, 0.45);
+  color: #f5c518;
 }
-
-.km-update-toast__actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 6px;
+.km-update-toast__copy { width: 100%; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.km-update-toast__title { margin: 0; font-family: "Unbounded", system-ui, sans-serif; font-size: 15px; font-weight: 800; line-height: 1.3; color: #ffffff; }
+.km-update-toast__desc { margin: 0; font-size: 12px; color: #c4bfcc; line-height: 1.45; }
+.km-update-toast__progress {
+  appearance: none;
+  border: 0 solid;
+  margin: 0;
+  width: 100%;
+  height: 7px;
+  border-radius: 999px;
+  overflow: clip;
+  container-type: inline-size;
+  background: rgba(255, 255, 255, 0.08);
+  --km-toast-progress-dur: 1.25s;
 }
+.km-update-toast__progress::-webkit-progress-bar { background: transparent; }
+.km-update-toast__progress::-webkit-progress-value { background: linear-gradient(90deg, #ff4d2e, #f5c518); border-radius: 999px; }
+.km-update-toast__progress::-moz-progress-bar { background: linear-gradient(90deg, #ff4d2e, #f5c518); border-radius: 999px; }
+.km-update-toast__progress:indeterminate::-webkit-progress-value { animation: km-toast-progress var(--km-toast-progress-dur) infinite ease-in-out; }
+.km-update-toast__progress:indeterminate::-moz-progress-bar { animation: km-toast-progress var(--km-toast-progress-dur) infinite ease-in-out; }
+@keyframes km-toast-progress {
+  from, to { inline-size: 38%; margin-right: auto; }
+  from { translate: -100%; }
+  to { translate: 100cqi; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  #km-update-toast:is([data-status="waiting"], [data-status="installing"]) .km-update-toast__seal {
+    animation: km-toast-pulse 1.4s ease-in-out infinite alternate;
+  }
+}
+@keyframes km-toast-pulse {
+  from { transform: scale(1); }
+  to { transform: scale(1.06); }
+}
+.km-update-toast__actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px; width: 100%; }
 
 /* Non-intrusive inline badges injected on kyara.games */
 .km-inpage-badge {
@@ -456,11 +471,13 @@
 @media (prefers-reduced-motion: reduce) {
   #km-floating-hud.km-hud,
   #km-update-toast.km-update-toast,
+  .km-update-toast__card,
   .km-overlay-backdrop,
   .km-overlay-shell {
     translate: none !important;
     transition-duration: 0.08s !important;
   }
+  .km-update-toast__progress { --km-toast-progress-dur: 8s; }
   @starting-style {
     #km-floating-hud.km-hud,
     #km-update-toast.km-update-toast,
