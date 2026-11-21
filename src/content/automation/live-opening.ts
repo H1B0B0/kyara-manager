@@ -1,5 +1,6 @@
 import { kyaraApi } from '../api';
 import { state } from '../state';
+import { isMiniGameRoute, runSpaPilotTask } from '../operations';
 import { recordCumulativeMetric, appendJournal, recordBestPulls } from '../journal';
 import { sleep, newRequestId, notifyDesktop } from '../utils';
 import { setHudStatusText } from '../hud';
@@ -75,20 +76,46 @@ export async function pilotLiveBoosterOpening(
   packId: string,
   packName: string,
   requestedCount = 1
-): Promise<{ openedCount: number; newCardsCount: number; busy?: boolean; blockedForChakra?: boolean }> {
+): Promise<{ openedCount: number; newCardsCount: number; busy?: boolean; blockedForChakra?: boolean; deferredForGame?: boolean }> {
   if (state.currentSettings.dryRun) {
     await appendJournal('open', `[SIMULATION] Ouvrirait ${requestedCount}× « ${packName} »`);
     return { openedCount: 0, newCardsCount: 0 };
   }
+  if (state.isGamesRunning) {
+    return { openedCount: 0, newCardsCount: 0, busy: true, deferredForGame: true };
+  }
+  if (isMiniGameRoute()) {
+    return { openedCount: 0, newCardsCount: 0, deferredForGame: true };
+  }
   if (state.isLiveOpening) {
     return { openedCount: 0, newCardsCount: 0, busy: true };
   }
+
+  return runSpaPilotTask('boosters', async () => {
+    if (state.isGamesRunning) {
+      return { openedCount: 0, newCardsCount: 0, busy: true, deferredForGame: true };
+    }
+    if (isMiniGameRoute()) {
+      return { openedCount: 0, newCardsCount: 0, deferredForGame: true };
+    }
+    if (state.isLiveOpening) {
+      return { openedCount: 0, newCardsCount: 0, busy: true };
+    }
+    return runLiveBoosterOpeningFlow(packId, packName, requestedCount);
+  });
+}
+
+async function runLiveBoosterOpeningFlow(
+  packId: string,
+  packName: string,
+  requestedCount = 1
+): Promise<{ openedCount: number; newCardsCount: number; busy?: boolean; blockedForChakra?: boolean }> {
   state.isLiveOpening = true;
   setHudStatusText(`Ouverture live : ${packName}…`);
 
   try {
     const targetPath = `/ouvrir/${encodeURIComponent(packId)}`;
-    if (!await navigateSpaTo(targetPath)) throw new Error('Navigation vers le booster impossible');
+    if (!await navigateSpaTo(targetPath, { owner: 'boosters' })) throw new Error('Navigation vers le booster impossible');
 
     const openModalCloseBtn = document.querySelector(
       ".modal .close, button.close, [class*='modal'] [class*='close'], button[aria-label='Close'], .overlay [class*='close']"
@@ -294,18 +321,39 @@ export async function pilotLiveBoosterOpening(
   }
 }
 
-export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedCount: number; newCardsCount: number; targetPack?: any }> {
+export async function executeAutoOpenBoosters(
+  dashboard: any,
+  options?: { backgroundOnly?: boolean }
+): Promise<{ openedCount: number; newCardsCount: number; targetPack?: any; deferredForGame?: boolean }> {
   let boosters = dashboard?.boosters;
   let openedCount = 0;
   let newCardsCount = 0;
   if (!boosters) return { openedCount, newCardsCount };
 
+  const openBoosterStep = async (
+    packId: string,
+    packName: string,
+    count: number
+  ): Promise<{ openedCount: number; newCardsCount: number; deferredForGame?: boolean }> => {
+    if (Boolean(options?.backgroundOnly) || state.isGamesRunning || isMiniGameRoute()) {
+      try {
+        return await fallbackApiOpenBooster(packId, packName, count);
+      } catch (err: any) {
+        await appendJournal('warn', `Ouverture API « ${packName} » interrompue : ${err?.message || err}`);
+        return { openedCount: 0, newCardsCount: 0 };
+      }
+    }
+    return pilotLiveBoosterOpening(packId, packName, count);
+  };
+
+  let deferredForGame = false;
   if (state.currentSettings.autoOpenDailyPack !== false) {
     const dailyPack = (boosters.all || []).find((p: any) => p.packId === 'daily');
     if (dailyPack?.canOpenNow) {
-      const dailyRes = await pilotLiveBoosterOpening('daily', dailyPack.name || 'Pack du Jour', 1);
+      const dailyRes = await openBoosterStep('daily', dailyPack.name || 'Pack du Jour', 1);
       openedCount += dailyRes.openedCount;
       newCardsCount += dailyRes.newCardsCount;
+      deferredForGame ||= Boolean(dailyRes.deferredForGame);
       if (dailyRes.openedCount > 0) {
         dashboard = await refreshDashboardSnapshot({ forcePrices: false });
         boosters = dashboard.boosters;
@@ -328,11 +376,13 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
   if (state.currentSettings.autoOpenMode === 'custom' && state.currentSettings.autoOpenCustomPackId) {
     targetPack = boosters.all.find((p: any) => p.packId === state.currentSettings.autoOpenCustomPackId);
   }
-  if (!targetPack?.canOpenNow || (targetPack.packId === 'daily' && openedCount > 0)) return { openedCount, newCardsCount };
+  if (!targetPack?.canOpenNow || (targetPack.packId === 'daily' && openedCount > 0)) {
+    return { openedCount, newCardsCount, ...(deferredForGame ? { deferredForGame: true } : {}) };
+  }
 
   const useBonusPacks = state.currentSettings.autoOpenUseBonusPacks === true;
   if (!useBonusPacks && targetPack.packId !== 'daily' && (targetPack.grantOnly || !targetPack.usesFreePacks)) {
-    return { openedCount, newCardsCount, targetPack };
+    return { openedCount, newCardsCount, targetPack, ...(deferredForGame ? { deferredForGame: true } : {}) };
   }
 
   const regularFree = Math.max(0, Number(dashboard?.me?.freePacks) || 0);
@@ -355,7 +405,7 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
     (pity >= 249 && state.currentSettings.autoOpenPitySniper !== false)
   );
   if (!freeAvailable || (freeAvailable < minBatch && !isGaugeFull && !isSniperExact)) {
-    return { openedCount, newCardsCount, targetPack };
+    return { openedCount, newCardsCount, targetPack, ...(deferredForGame ? { deferredForGame: true } : {}) };
   }
 
   let countToOpen = Math.min(10, freeAvailable);
@@ -374,6 +424,14 @@ export async function executeAutoOpenBoosters(dashboard: any): Promise<{ openedC
     countToOpen = Math.max(1, Math.min(countToOpen, goldenIn - 1));
   }
 
-  const liveRes = await pilotLiveBoosterOpening(targetPack.packId, targetPack.name, countToOpen);
-  return { openedCount: openedCount + liveRes.openedCount, newCardsCount: newCardsCount + liveRes.newCardsCount, targetPack };
+  if (deferredForGame) {
+    return { openedCount, newCardsCount, targetPack, deferredForGame: true };
+  }
+  const liveRes = await openBoosterStep(targetPack.packId, targetPack.name, countToOpen);
+  return {
+    openedCount: openedCount + liveRes.openedCount,
+    newCardsCount: newCardsCount + liveRes.newCardsCount,
+    targetPack,
+    ...(liveRes.deferredForGame ? { deferredForGame: true } : {})
+  };
 }

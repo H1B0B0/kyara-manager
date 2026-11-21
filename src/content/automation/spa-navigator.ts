@@ -1,8 +1,25 @@
 import { sleep } from '../utils';
+import { state } from '../state';
+import { isMiniGameRoute } from '../operations';
 
-export async function navigateSpaTo(targetPath: string): Promise<boolean> {
-  if (location.pathname === targetPath) return true;
-  const existingLink = document.querySelector(`a[href="${CSS.escape(targetPath)}"]`) as HTMLAnchorElement | null;
+export interface SpaNavigateOptions {
+  owner?: 'games' | 'boosters' | 'nav';
+  allowInterruptGame?: boolean;
+}
+
+export async function navigateSpaTo(targetPath: string, options?: SpaNavigateOptions): Promise<boolean> {
+  if (state.disposed) return false;
+  const effectiveOwner = options?.owner ?? state.spaPilotOwner;
+  if (!options?.allowInterruptGame && effectiveOwner !== 'games') {
+    if (state.isGamesRunning || isMiniGameRoute()) {
+      return false;
+    }
+  }
+
+  const currentPath = typeof location !== 'undefined' ? location.pathname : '';
+  if (currentPath === targetPath) return true;
+  const escaped = typeof CSS !== 'undefined' && typeof CSS.escape === 'function' ? CSS.escape(targetPath) : targetPath;
+  const existingLink = document.querySelector(`a[href="${escaped}"]`) as HTMLAnchorElement | null;
   if (existingLink) {
     existingLink.click();
   } else {
@@ -16,10 +33,11 @@ export async function navigateSpaTo(targetPath: string): Promise<boolean> {
 
   const start = Date.now();
   while (Date.now() - start < 4000) {
-    if (location.pathname === targetPath) return true;
+    if (state.disposed) return false;
+    if (typeof location !== 'undefined' && location.pathname === targetPath) return true;
     await sleep(80);
   }
-  return location.pathname === targetPath;
+  return typeof location !== 'undefined' && location.pathname === targetPath;
 }
 
 export async function waitForElement<T extends Element = HTMLElement>(

@@ -13,6 +13,10 @@ import {
   pickMostLovedWinner,
   pickThreeArcsLineIndex,
   recommendArcadeLot,
+  chooseExpeditionTeamIndices,
+  decideMainKyaraAction,
+  evaluateKyara21,
+  evaluateKyaraPokerHand,
   shouldHitKyara21,
   type DailyHandCard
 } from '../src/lib/analytics/games-solver';
@@ -255,5 +259,51 @@ describe('games solver & room farmer', () => {
       ])
     ).toBe(1);
     expect(pickExpeditionNextIndex([])).toBe(-1);
+  });
+});
+
+describe('Kyara solver exact specs', () => {
+  const c = (series: string, family: string, rarity: any, pow?: number) => ({ name: series + family + rarity, series, family, rarity, pow });
+
+  it('evaluates pair with pow bonus only on scoring cards', () => {
+    const r = evaluateKyaraPokerHand([c('A', 'f1', 'C', 100), c('A', 'f2', 'E', 50), c('B', 'f3', 'L', 999), c('D', 'f4', 'M', 999), c('E', 'f5', 'R', 999)]);
+    expect(r.kind).toBe('pair');
+    expect(r.scoringIndices).toEqual([0, 1]);
+    expect(r.points).toBe((10 + 10 + 5) * 2);
+  });
+
+  it('evaluates flush and straight flush', () => {
+    const flush = evaluateKyaraPokerHand([c('A', 'f', 'C', 10), c('B', 'f', 'C', 10), c('D', 'f', 'U', 10), c('E', 'f', 'R', 10), c('F', 'f', 'L', 10)]);
+    expect(flush.kind).toBe('flush');
+    expect(flush.points).toBe((45 + 5) * 5);
+    const sf = evaluateKyaraPokerHand([c('A', 'f', 'C', 10), c('B', 'f', 'U', 10), c('D', 'f', 'R', 10), c('E', 'f', 'E', 10), c('F', 'f', 'L', 10)]);
+    expect(sf.kind).toBe('sflush');
+    expect(sf.points).toBe((100 + 5) * 8);
+  });
+
+  it('decides discard with 4 same family and play on flush', () => {
+    const hand = [c('A', 'f', 'C'), c('B', 'f', 'U'), c('D', 'f', 'R'), c('E', 'f', 'C'), c('F', 'g', 'C'), c('G', 'h', 'U'), c('H', 'i', 'R'), c('I', 'j', 'E')];
+    const d = decideMainKyaraAction(hand, { handsLeft: 4, discardsLeft: 3, score: 0 });
+    expect(d.action).toBe('discard');
+    expect([0, 1, 2, 3].some((i) => d.indices.includes(i))).toBe(false);
+    const flush = decideMainKyaraAction([c('A', 'f', 'C'), c('B', 'f', 'C'), c('D', 'f', 'U'), c('E', 'f', 'R'), c('F', 'f', 'L')], { handsLeft: 4, discardsLeft: 3, score: 0 });
+    expect(flush.action).toBe('play');
+    expect(flush.expectedKind).toBe('flush');
+  });
+
+  it('plays Kyara 21 basic strategy with soft ace handling', () => {
+    expect(evaluateKyara21([10, 6], 10)).toBe('hit');
+    expect(evaluateKyara21([10, 7], 10)).toBe('stand');
+    expect(evaluateKyara21([11, 6], 10)).toBe('hit');
+    expect(evaluateKyara21([11, 6, 10], 10)).toBe('stand');
+  });
+
+  it('chooses exactly 5 expedition cards within budget', () => {
+    const cards = ['M', 'L', 'E', 'R', 'U', 'C', 'C', 'U'].map((rarity: any, i) => ({ rarity, attack: 10 + i, health: 100, series: i % 2 ? 'A' : 'B' }));
+    const idx = chooseExpeditionTeamIndices(cards, 14);
+    expect(idx).toHaveLength(5);
+    expect(new Set(idx).size).toBe(5);
+    const cost: Record<string, number> = { C: 1, U: 2, R: 3, E: 5, L: 8, M: 12 };
+    expect(idx.reduce((s, i) => s + cost[cards[i].rarity], 0)).toBeLessThanOrEqual(14);
   });
 });

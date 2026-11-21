@@ -70,13 +70,32 @@ async function injectContentScriptIfNeeded(tabId: number): Promise<boolean> {
   return injection;
 }
 
-async function findKyaraTabs(): Promise<chrome.tabs.Tab[]> {
-  const tabs = await chrome.tabs.query({ url: KYARA_URL_PATTERNS });
-  return [...tabs].sort((a, b) => Number(Boolean(b.active)) - Number(Boolean(a.active)));
+function isGamesTab(tab: chrome.tabs.Tab): boolean {
+  if (!tab.url) return false;
+  try {
+    const pathname = new URL(tab.url).pathname;
+    return pathname === '/jouer' || pathname.startsWith('/jouer/');
+  } catch {
+    return /\/jouer(?:\/|$|\?|#)/.test(tab.url);
+  }
 }
 
-async function sendToKyaraTab(payload: any, { focusTab = false }: { focusTab?: boolean } = {}): Promise<any> {
-  const tabs = await findKyaraTabs();
+async function findKyaraTabs({ preferNonGame = false }: { preferNonGame?: boolean } = {}): Promise<chrome.tabs.Tab[]> {
+  const tabs = await chrome.tabs.query({ url: KYARA_URL_PATTERNS });
+  return [...tabs].sort((a, b) => {
+    if (preferNonGame) {
+      const gameDiff = Number(isGamesTab(a)) - Number(isGamesTab(b));
+      if (gameDiff !== 0) return gameDiff;
+    }
+    return Number(Boolean(b.active)) - Number(Boolean(a.active));
+  });
+}
+
+async function sendToKyaraTab(
+  payload: any,
+  { focusTab = false, preferNonGame = false }: { focusTab?: boolean; preferNonGame?: boolean } = {}
+): Promise<any> {
+  const tabs = await findKyaraTabs({ preferNonGame });
   if (!tabs.length) {
     return {
       ok: false,
@@ -152,7 +171,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   void pollForUpdateSilently().catch(() => {});
   const { settings } = (await chrome.storage.local.get('settings')) as { settings?: KyaraSettings };
   if (!settings?.masterEnabled) return;
-  await sendToKyaraTab({ type: 'km:alarm-tick' });
+  await sendToKyaraTab({ type: 'km:alarm-tick' }, { preferNonGame: true });
 });
 
 chrome.storage.onChanged.addListener(async (changes, areaName) => {

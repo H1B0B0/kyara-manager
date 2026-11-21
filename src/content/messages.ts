@@ -10,10 +10,20 @@ import { executeAutoOpenBoosters, pilotLiveBoosterOpening } from './automation/l
 import { executeBatchMissingBuy, previewBatchMissingBuy } from './automation/batch-buy';
 import { placeBatchBuyOrders, placeBuyOrder, scanBuyOrderOpportunities } from './automation/buy-orders';
 import { executeAutoGames } from './automation/games';
-import { runDomainTask, type TaskDomain } from './operations';
+import { isMiniGameRoute, runDomainTask, runSpaPilotTask, type TaskDomain } from './operations';
 import { getCardAvailability, isInterrupted, loadCardLedger, positiveInteger } from './safety';
 import { fulfilled, mapLimit } from '../lib/concurrency';
 import { mergeSettings } from '../types/settings';
+
+function getLiveBoosterGameBlockError(): string | null {
+  if (state.isGamesRunning) {
+    return "Farm Salle de Jeux en cours : attends la fin ou coupe le farm avant d'ouvrir en live.";
+  }
+  if (isMiniGameRoute()) {
+    return "Mini-jeu en cours sur cet onglet : quitte la partie avant d'ouvrir un booster en live.";
+  }
+  return null;
+}
 
 async function refreshAfterAction(options = {}): Promise<any> {
   try { return await refreshDashboardSnapshot(options); }
@@ -31,7 +41,7 @@ export function setupMessageListener(): () => void {
     }
     if (message?.type === 'km:prepare-update') {
       state.updatePending = true;
-      sendResponse({ ok: true, busy: state.isOperationRunning || state.isLiveOpening });
+      sendResponse({ ok: true, busy: state.isOperationRunning || state.isLiveOpening || state.isGamesRunning });
       return false;
     }
     const handle = async () => {
@@ -87,10 +97,24 @@ export function setupMessageListener(): () => void {
         }
 
         if (message.type === 'km:cmd:open-recommended') {
+          const gameBlockError = getLiveBoosterGameBlockError();
+          if (gameBlockError) {
+            sendResponse({ ok: false, error: gameBlockError });
+            return;
+          }
           const dashboard = await refreshDashboardSnapshot({ forcePrices: false });
           const openRes = await executeAutoOpenBoosters(dashboard);
           const updated = await refreshAfterAction({ forcePrices: false });
-          sendResponse({ ok: openRes.openedCount > 0, error: openRes.openedCount > 0 ? undefined : 'Aucune ouverture confirmée par Kyara.', openRes, dashboard: updated });
+          sendResponse({
+            ok: openRes.openedCount > 0,
+            error: openRes.openedCount > 0
+              ? undefined
+              : openRes.deferredForGame
+                ? (getLiveBoosterGameBlockError() || "Farm Salle de Jeux en cours : attends la fin ou coupe le farm avant d'ouvrir en live.")
+                : 'Aucune ouverture confirmée par Kyara.',
+            openRes,
+            dashboard: updated
+          });
           return;
         }
 
@@ -264,15 +288,36 @@ export function setupMessageListener(): () => void {
           const { packId, packName = packId, count = 1 } = message;
           positiveInteger(count, 'Nombre de boosters');
           if (Number(count) > 10 || typeof packId !== 'string' || !packId) throw new Error('Booster invalide');
+          const gameBlockError = getLiveBoosterGameBlockError();
+          if (gameBlockError) {
+            sendResponse({ ok: false, error: gameBlockError });
+            return;
+          }
           const openRes = await pilotLiveBoosterOpening(packId, packName, Number(count) || 1);
           const dashboard = await refreshAfterAction({ forcePrices: false });
-          sendResponse({ ok: openRes.openedCount > 0, error: openRes.openedCount > 0 ? undefined : 'Aucune ouverture confirmée. Vérifie le booster dans Kyara.', openRes, dashboard });
+          sendResponse({
+            ok: openRes.openedCount > 0,
+            error: openRes.openedCount > 0
+              ? undefined
+              : openRes.deferredForGame
+                ? (getLiveBoosterGameBlockError() || "Farm Salle de Jeux en cours : attends la fin ou coupe le farm avant d'ouvrir en live.")
+                : 'Aucune ouverture confirmée. Vérifie le booster dans Kyara.',
+            openRes,
+            dashboard
+          });
           return;
         }
 
         if (message.type === 'km:cmd:run-games-farm') {
-          const baseDashboard = await refreshDashboardSnapshot({ forcePrices: false });
-          const res = await executeAutoGames(baseDashboard, { manual: true, gameId: message.gameId });
+          const res = await runSpaPilotTask('games', async () => {
+            state.isGamesRunning = true;
+            try {
+              const baseDashboard = await refreshDashboardSnapshot({ forcePrices: false });
+              return await executeAutoGames(baseDashboard, { manual: true, gameId: message.gameId });
+            } finally {
+              state.isGamesRunning = false;
+            }
+          });
           const dashboard = await refreshAfterAction({ forcePrices: false });
           sendResponse({
             ok: !res.blocked,

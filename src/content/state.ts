@@ -9,6 +9,8 @@ export const state = {
   updatePending: false,
   disposed: false,
   isLiveOpening: false,
+  isGamesRunning: false,
+  spaPilotOwner: null as string | null,
   /** Set by scheduled cycles only: lets long loops stop as soon as the user turns the autopilot off. */
   abortWhenMasterOff: false,
   loopTimer: null as any,

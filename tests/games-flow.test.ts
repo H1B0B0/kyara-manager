@@ -21,12 +21,13 @@ vi.mock('../src/content/automation/spa-navigator', () => ({ navigateSpaTo: mocks
 import {
   clickAdvanceOrNextButton,
   findButtonByText,
-  hasAnsweredChoices,
   humanSleep,
+  isGameFinishedScreen,
   setGamesFastModeForTest,
   solveMainKyaraStep,
   waitForEnabledButton
 } from '../src/content/automation/games-extra';
+import { solveKyara21Step, solveMemoryStep, solveSoloQuizStep } from '../src/content/automation/games-classic';
 import {
   executeAutoGames,
   solveActiveMiniGameRound,
@@ -61,6 +62,7 @@ class StubClassList {
 }
 
 class StubElement {
+  nodeType = 1;
   tagName: string;
   id = '';
   classList = new StubClassList();
@@ -76,6 +78,19 @@ class StubElement {
 
   constructor(tag: string) {
     this.tagName = tag.toUpperCase();
+  }
+
+  get firstChild(): any {
+    if (this._text) {
+      return { nodeType: 3, nodeValue: this._text, nextSibling: this.children[0] ?? null };
+    }
+    return this.children[0] ?? null;
+  }
+
+  get nextSibling(): any {
+    if (!this.parentElement) return null;
+    const idx = this.parentElement.children.indexOf(this);
+    return idx >= 0 && idx + 1 < this.parentElement.children.length ? this.parentElement.children[idx + 1] : null;
   }
 
   get className(): string {
@@ -570,7 +585,7 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
       'Question suivante',
       'Continuer',
       'Terminer',
-      'Passer',
+      'Voir le résultat',
       'Confirmer l’équipe'
     ];
     for (const label of validLabels) {
@@ -588,51 +603,41 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
   it('chains quiz rounds on /jouer/qui-est-ce and next hand on /jouer/kyara-21 without double-clicking choices', async () => {
     setGamesFastModeForTest(true);
 
-    // 1. /jouer/qui-est-ce: answer once, then on .chosen / majority disabled + Question suivante, advance without re-clicking
+    // 1. /jouer/qui-est-ce: answer once, then on .right + Suivant in .foot, advance without re-clicking
     dom.setPath('/jouer/qui-est-ce');
-    const c1 = dom.btn('Naruto Uzumaki');
-    const c2 = dom.btn('Gojo Satoru');
-    const c3 = dom.btn('Monkey D. Luffy');
-    const c4 = dom.btn('Ichigo Kurosaki');
+    const c1 = dom.btn('Naruto Uzumaki', { className: 'choice' });
+    const c2 = dom.btn('Gojo Satoru', { className: 'choice' });
+    const c3 = dom.btn('Monkey D. Luffy', { className: 'choice' });
+    const c4 = dom.btn('Ichigo Kurosaki', { className: 'choice' });
+    const choicesBox = dom.el('div', { className: 'choices' }, [c1, c2, c3, c4]);
     const arena = dom.el('div', { className: 'arena' }, [
       dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
-      c1,
-      c2,
-      c3,
-      c4
+      choicesBox
     ]);
-    dom.doc.body.replaceChildren(dom.el('main', {}, [arena]));
+    const mainEl = dom.el('main', {}, [arena]);
+    dom.doc.body.replaceChildren(mainEl);
 
-    expect(hasAnsweredChoices(arena as unknown as ParentNode, [c1, c2, c3, c4] as unknown as Element[])).toBe(false);
     expect(await solveActiveMiniGameRound(catalog)).toBe(true);
     expect(c2.clickCount).toBe(1);
     expect(c1.clickCount + c3.clickCount + c4.clickCount).toBe(0);
 
-    // Post-answer state: c2 marked .chosen, majority disabled, Question suivante visible
-    c2.classList.add('chosen');
+    // Post-answer state: c2 marked .right, Suivant visible in .foot
+    c2.classList.add('right');
     c1.disabled = true;
     c2.disabled = true;
     c3.disabled = true;
-    const nextQuestionBtn = dom.btn('Question suivante');
-    arena.append(nextQuestionBtn);
+    const nextQuestionBtn = dom.btn('Suivant', { className: 'btn btn-acc' });
+    mainEl.append(dom.el('div', { className: 'foot' }, [nextQuestionBtn]));
 
-    expect(hasAnsweredChoices(arena as unknown as ParentNode, [c1, c2, c3, c4] as unknown as Element[])).toBe(true);
     expect(await solveActiveMiniGameRound(catalog)).toBe(true);
     expect(nextQuestionBtn.clickCount).toBe(1);
     expect(c2.clickCount).toBe(1);
     expect(c4.clickCount).toBe(0);
 
-    // Majority disabled even without .chosen class still advances without clicking remaining enabled choice
-    c2.classList.remove('chosen');
-    expect(hasAnsweredChoices(arena as unknown as ParentNode, [c1, c2, c3, c4] as unknown as Element[])).toBe(true);
-    expect(await solveActiveMiniGameRound(catalog)).toBe(true);
-    expect(nextQuestionBtn.clickCount).toBe(2);
-    expect(c4.clickCount).toBe(0);
-
     // 2. /jouer/kyara-21: plays Hit when sum < 17, then clicks Main suivante when Hit/Stand are absent
     dom.setPath('/jouer/kyara-21');
-    const hitBtn = dom.btn('Tirer');
-    const standBtn = dom.btn('Rester');
+    const hitBtn = dom.btn('Tirer', { className: 'btn btn-acc' });
+    const standBtn = dom.btn('Rester', { className: 'btn btn-ghost' });
     const felt = dom.el('div', { className: 'felt' }, [
       dom.el('div', { className: 'tcg pf p-C' }),
       dom.el('div', { className: 'tcg pf p-U' }),
@@ -646,7 +651,7 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     expect(standBtn.clickCount).toBe(0);
 
     // Round resolved: Hit/Stand absent, Main suivante shown
-    const nextHandBtn = dom.btn('Main suivante');
+    const nextHandBtn = dom.btn('Main suivante', { className: 'btn btn-acc' });
     felt.replaceChildren(dom.el('div', { className: 'tcg pf p-L' }), dom.el('div', { className: 'tcg pf p-E' }));
     dom.doc.querySelector('main')!.append(dom.el('div', { className: 'foot' }, [dom.el('div', { className: 'actions' }, [nextHandBtn])]));
 
@@ -692,7 +697,8 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
           dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
           dom.el('span', { className: 'pf-name', text: 'Gojo Satoru' })
         ]);
-        const arena = dom.el('div', { className: 'arena' }, [cardA, cardB]);
+        const duel = dom.el('div', { className: 'duel' }, [cardA, cardB]);
+        const arena = dom.el('div', { className: 'arena' }, [duel]);
         const main = dom.el('main', {}, [arena]);
         cardB.addEventListener('click', () => {
           balance += 3;
@@ -704,11 +710,14 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
         return;
       }
       // Generic quiz/duel route (e.g. /jouer/qui-est-ce)
-      const qChoice = dom.btn('Gojo Satoru');
+      const qChoice = dom.btn('Gojo Satoru', { className: 'choice' });
+      const choices = dom.el('div', { className: 'choices' }, [
+        dom.btn('Naruto Uzumaki', { className: 'choice' }),
+        qChoice
+      ]);
       const arena = dom.el('div', { className: 'arena' }, [
         dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
-        dom.btn('Naruto Uzumaki'),
-        qChoice
+        choices
       ]);
       const main = dom.el('main', {}, [arena]);
       qChoice.addEventListener('click', () => {
@@ -758,5 +767,226 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('solves Memory (8 tiles = 4 pairs) with .tile.up/.found and NO disabled attribute without re-clicking found tiles', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/memoire');
+
+    const cardIds = [201, 202, 203, 204, 202, 204, 201, 203];
+    const openQueue: number[] = [];
+    let clickedFoundTile = false;
+
+    const tiles = cardIds.map((id, idx) => {
+      const front = dom.el('div', { className: 'face front' }, [
+        dom.img(`https://cdn.kyara.games/cards/sm/${id}.webp`)
+      ]);
+      const tile = dom.el('button', { className: 'tile' }, [front]) as StubHTMLButtonElement;
+      // Note: real Kyara DOM never sets tile.disabled = true on .found tiles!
+      tile.addEventListener('click', () => {
+        if (tile.classList.contains('found')) {
+          clickedFoundTile = true;
+          return;
+        }
+        if (tile.classList.contains('up')) return;
+        tile.classList.add('up');
+        openQueue.push(idx);
+        if (openQueue.length === 2) {
+          const [a, b] = openQueue.splice(0, 2);
+          if (cardIds[a] === cardIds[b]) {
+            tiles[a].classList.add('found');
+            tiles[b].classList.add('found');
+          } else {
+            tiles[a].classList.remove('up');
+            tiles[b].classList.remove('up');
+          }
+        }
+      });
+      return tile;
+    });
+
+    const grid = dom.el('div', { className: 'grid' }, tiles);
+    dom.doc.body.replaceChildren(dom.el('main', {}, [grid]));
+
+    const memState = new Map<number, string>();
+    for (let step = 0; step < 20; step += 1) {
+      if (tiles.every((t) => t.classList.contains('found'))) break;
+      expect(await solveMemoryStep(memState)).toBe(true);
+    }
+
+    expect(tiles.every((t) => t.classList.contains('found'))).toBe(true);
+    expect(clickedFoundTile).toBe(false);
+  });
+
+  it('plays Kyara 21 with div.felt-in .row (.val.mono), external div.actions, disabled->enabled Main suivante, and Voir le résultat', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/kyara-21');
+
+    const dealerRow = dom.el('div', { className: 'row' }, [
+      dom.el('span', { className: 'val mono', text: '10' })
+    ]);
+    const playerRow = dom.el('div', { className: 'row' }, [
+      dom.el('span', { className: 'val mono', text: '10' }),
+      dom.el('span', { className: 'val mono', text: '9' })
+    ]);
+    const feltIn = dom.el('div', { className: 'felt-in' }, [dealerRow, playerRow]);
+    const felt = dom.el('div', { className: 'felt' }, [feltIn]);
+
+    const hitBtn = dom.btn('Tirer', { className: 'btn btn-acc' });
+    const standBtn = dom.btn('Rester', { className: 'btn btn-ghost' });
+    const actions = dom.el('div', { className: 'actions' }, [hitBtn, standBtn]);
+    const main = dom.el('main', {}, [felt, actions]);
+    dom.doc.body.replaceChildren(main);
+
+    // Player has 19 vs dealer 10 -> must click Rester
+    expect(await solveKyara21Step()).toBe(true);
+    expect(standBtn.clickCount).toBe(1);
+    expect(hitBtn.clickCount).toBe(0);
+
+    // Main suivante initially disabled -> waits and returns true without clicking
+    const nextHandBtn = dom.btn('Main suivante', { className: 'btn btn-acc', disabled: true });
+    actions.replaceChildren(nextHandBtn);
+    expect(await solveKyara21Step()).toBe(true);
+    expect(nextHandBtn.clickCount).toBe(0);
+
+    // Main suivante becomes enabled -> clicked
+    nextHandBtn.disabled = false;
+    expect(await solveKyara21Step()).toBe(true);
+    expect(nextHandBtn.clickCount).toBe(1);
+
+    // Final round: Voir le résultat -> clicked
+    const resultBtn = dom.btn('Voir le résultat', { className: 'btn btn-acc' });
+    actions.replaceChildren(resultBtn);
+    expect(await solveKyara21Step()).toBe(true);
+    expect(resultBtn.clickCount).toBe(1);
+  });
+
+  it('does not get blocked by ol.dots (.ok/.ko) on Quiz round 2, clicks answer, Suivant, then Voir le résultat', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/qui-est-ce');
+
+    const dots = dom.el('ol', { className: 'dots' }, [
+      dom.el('li', { className: 'dot ok' }),
+      dom.el('li', { className: 'dot ko' }),
+      dom.el('li', { className: 'dot cur' })
+    ]);
+    const c1 = dom.btn('Naruto Uzumaki', { className: 'choice' });
+    const c2 = dom.btn('Gojo Satoru', { className: 'choice' });
+    const choices = dom.el('div', { className: 'choices' }, [c1, c2]);
+    const arena = dom.el('div', { className: 'arena' }, [
+      dots,
+      dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
+      choices
+    ]);
+    const foot = dom.el('div', { className: 'foot' }, []);
+    const main = dom.el('main', {}, [arena, foot]);
+    dom.doc.body.replaceChildren(main);
+
+    // Presence of .ok/.ko in ol.dots must NOT prevent clicking the answer on round 2
+    expect(await solveSoloQuizStep('/jouer/qui-est-ce', catalog)).toBe(true);
+    expect(c2.clickCount).toBe(1);
+    expect(c1.clickCount).toBe(0);
+
+    // After answer, Suivant appears in .foot -> clicked
+    c2.classList.add('right');
+    const nextBtn = dom.btn('Suivant', { className: 'btn btn-acc' });
+    foot.replaceChildren(nextBtn);
+    expect(await solveSoloQuizStep('/jouer/qui-est-ce', catalog)).toBe(true);
+    expect(nextBtn.clickCount).toBe(1);
+
+    // Last question -> Voir le résultat appears -> clicked
+    const seeResultBtn = dom.btn('Voir le résultat', { className: 'btn btn-acc' });
+    foot.replaceChildren(seeResultBtn);
+    expect(await solveSoloQuizStep('/jouer/qui-est-ce', catalog)).toBe(true);
+    expect(seeResultBtn.clickCount).toBe(1);
+  });
+
+  it('discards non-flush cards in Main Kyara when holding 4 same-family cards and discardsLeft=3, and plays when holding a flush', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/main-kyara');
+
+    const mountPokerHand = (
+      specs: Array<{ name: string; series: string; family: string; rarity: string }>,
+      discardsLeft: number
+    ) => {
+      const hud = dom.el('div', { className: 'hud', text: `Score 0 · Mains 4 · Défausses ${discardsLeft}` });
+      const discardBtn = dom.btn('Défausser', { className: 'btn btn-ghost', disabled: true });
+      const playBtn = dom.btn('Jouer', { className: 'btn btn-acc', disabled: true });
+      const slots = specs.map((c) => {
+        const slot = dom.el('button', { className: 'slot', attrs: { 'aria-pressed': 'false' } }, [
+          dom.el('div', { className: `tcg pf p-${c.rarity}` }, [
+            dom.el('span', { className: 'pf-seal', text: c.rarity }),
+            dom.el('span', { className: 'pf-name', text: c.name }),
+            dom.el('span', { className: 'pf-ser', text: c.series }),
+            dom.el('span', { className: 'pf-rib', attrs: { title: c.family } })
+          ])
+        ]) as StubHTMLButtonElement;
+        slot.addEventListener('click', () => {
+          const next = slot.getAttribute('aria-pressed') !== 'true';
+          slot.setAttribute('aria-pressed', next ? 'true' : 'false');
+          const pressedCount = slots.filter((s) => s.getAttribute('aria-pressed') === 'true').length;
+          playBtn.disabled = pressedCount === 0;
+          discardBtn.disabled = pressedCount === 0 || discardsLeft <= 0;
+        });
+        return slot;
+      });
+      const main = dom.el('main', {}, [
+        hud,
+        dom.el('div', { className: 'hand' }, slots),
+        dom.el('div', { className: 'foot' }, [dom.el('div', { className: 'actions' }, [discardBtn, playBtn])])
+      ]);
+      dom.doc.body.replaceChildren(main);
+      return { slots, discardBtn, playBtn };
+    };
+
+    // 4 same family ('Shonen') + 4 other cards (including a weak pair) -> must discard non-Shonen cards!
+    const drawCase = mountPokerHand(
+      [
+        { name: 'A', series: 'S1', family: 'Shonen', rarity: 'R' },
+        { name: 'B', series: 'S2', family: 'Shonen', rarity: 'U' },
+        { name: 'C', series: 'S3', family: 'Shonen', rarity: 'C' },
+        { name: 'D', series: 'S4', family: 'Shonen', rarity: 'E' },
+        { name: 'E', series: 'PairS', family: 'Other1', rarity: 'C' },
+        { name: 'F', series: 'PairS', family: 'Other2', rarity: 'C' },
+        { name: 'G', series: 'S7', family: 'Other3', rarity: 'C' },
+        { name: 'H', series: 'S8', family: 'Other4', rarity: 'C' }
+      ],
+      3
+    );
+
+    expect(await solveMainKyaraStep(catalog)).toBe(true);
+    expect(drawCase.discardBtn.clickCount).toBe(1);
+    expect(drawCase.playBtn.clickCount).toBe(0);
+    expect(drawCase.slots.slice(0, 4).every((s) => s.getAttribute('aria-pressed') === 'false')).toBe(true);
+    expect(drawCase.slots.slice(4).some((s) => s.getAttribute('aria-pressed') === 'true')).toBe(true);
+
+    // 5 same family ('Shonen') -> flush! Must click Jouer!
+    const flushCase = mountPokerHand(
+      [
+        { name: 'A', series: 'S1', family: 'Shonen', rarity: 'R' },
+        { name: 'B', series: 'S2', family: 'Shonen', rarity: 'U' },
+        { name: 'C', series: 'S3', family: 'Shonen', rarity: 'C' },
+        { name: 'D', series: 'S4', family: 'Shonen', rarity: 'E' },
+        { name: 'E', series: 'S5', family: 'Shonen', rarity: 'L' }
+      ],
+      3
+    );
+
+    expect(await solveMainKyaraStep(catalog)).toBe(true);
+    expect(flushCase.playBtn.clickCount).toBe(1);
+    expect(flushCase.discardBtn.clickCount).toBe(0);
+  });
+
+  it('prevents false positive in isGameFinishedScreen("main-du-jour") while button.slot is present', () => {
+    const slot = dom.el('button', { className: 'slot', attrs: { 'aria-pressed': 'false' } });
+    const linkBtn = dom.btn('Jouer à Main Kyara');
+    const main = dom.el('main', {}, [dom.el('div', { className: 'hand' }, [slot]), linkBtn]);
+    dom.doc.body.replaceChildren(main);
+
+    expect(isGameFinishedScreen('main-du-jour')).toBe(false);
+
+    // Once button.slot disappears, the replay button indicates the finished screen
+    main.replaceChildren(linkBtn);
+    expect(isGameFinishedScreen('main-du-jour')).toBe(true);
   });
 });

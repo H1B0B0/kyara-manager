@@ -4,6 +4,7 @@ import { navigateSpaTo } from './automation/spa-navigator';
 import {
   chooseBestDailyHandIndices,
   chooseBestRaidTeamIndices,
+  decideMainKyaraAction,
   extractCardIdFromUrl,
   findBlindTestMatch,
   matchCharacterChoice,
@@ -119,7 +120,7 @@ export function renderGamesBar(ctx: EnhancerContext): void {
   }
   actions.append(
     btn('Farmer la Salle', true, (b) => runCmdBtn(b, { type: 'km:cmd:run-games-farm' }, 'Farm OK')),
-    btn('Comptoir Boosters', false, () => void navigateSpaTo('/jouer/comptoir')),
+    btn('Comptoir Boosters', false, () => void navigateSpaTo('/jouer/comptoir', { owner: 'nav' })),
     btn('Cockpit', false, () => toggleCockpitOverlay())
   );
 
@@ -141,12 +142,44 @@ function beginAnnotation(sig: string): boolean {
   return true;
 }
 
+function createHintBadge(label: string, variant: 'win' | 'lose' = 'win'): HTMLSpanElement {
+  const badge = document.createElement('span');
+  badge.className = `${HINT_CLASS} km-game-hint--${variant}`;
+  badge.setAttribute('data-km-ignore', '1');
+  badge.setAttribute('aria-hidden', 'true');
+  badge.textContent = label;
+  return badge;
+}
+
+function readCleanText(el: Element | null | undefined): string {
+  if (!el) return '';
+  if (!el.querySelector(`[data-km-ignore], .${HINT_CLASS}`)) {
+    return ((el as HTMLElement).innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+  }
+  const clone = el.cloneNode(true) as HTMLElement;
+  clone.querySelectorAll(`[data-km-ignore], .${HINT_CLASS}`).forEach((n) => n.remove());
+  return (clone.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
 function markWin(el: HTMLElement, label: string): void {
   el.classList.add('km-slot-recommended');
-  const badge = document.createElement('span');
-  badge.className = `${HINT_CLASS} km-game-hint--win`;
-  badge.textContent = label;
-  el.appendChild(badge);
+  el.appendChild(createHintBadge(label, 'win'));
+}
+
+function parseMainKyaraHud(): { handsLeft: number; discardsLeft: number; score: number } {
+  const main = document.querySelector('main') || document;
+  const discardBtn = document.querySelector<HTMLButtonElement>('.foot .actions button.btn-ghost') || findButtonByText(main, /^(?:Discard|Défausser)\b/i);
+  const playBtn = document.querySelector<HTMLButtonElement>('.foot .actions button.btn.btn-acc') || findButtonByText(main, /^(?:Play|Jouer)\b/i);
+  const numIn = (txt: string, fallback: number) => {
+    const m = txt.match(/\d+/);
+    return m ? Number(m[0]) : fallback;
+  };
+  const scoreEl = document.querySelector('main .score, main .pts, main .hud .val');
+  return {
+    handsLeft: playBtn && !playBtn.disabled ? numIn(readCleanText(playBtn), 4) : 4,
+    discardsLeft: discardBtn && !discardBtn.disabled ? numIn(readCleanText(discardBtn), 1) : 0,
+    score: scoreEl ? numIn(readCleanText(scoreEl), 0) : 0
+  };
 }
 
 /**
@@ -171,41 +204,36 @@ export function annotateActiveMiniGame(ctx: EnhancerContext): void {
   const catalog = runtimeCache.catalogById;
 
   if (path.startsWith('/jouer/plus-aime') && catalog) {
-    const arena = document.querySelector('main .arena');
-    if (!arena) return;
-    const candidates = Array.from(arena.querySelectorAll<HTMLElement>('button, [role="button"]')).filter((el) =>
-      Boolean(el.querySelector('img[src*="/cards/"]') || el.querySelector('.pf-name'))
-    );
+    let candidates = Array.from(document.querySelectorAll<HTMLElement>('main div.duel button.pick:not(:disabled)'));
+    if (candidates.length < 2) {
+      candidates = Array.from(document.querySelectorAll<HTMLElement>('main .arena button:not(:disabled)')).filter((el) =>
+        Boolean(el.querySelector('img[src*="/cards/"]'))
+      );
+    }
     if (candidates.length < 2) return;
-    const ids = candidates.map((c) => extractCardIdFromUrl(c.querySelector<HTMLImageElement>('img')?.src));
-    const names = candidates.map((c) => c.querySelector('.pf-name')?.textContent?.trim() || c.textContent?.trim() || '');
+    const ids = candidates.map((c) => extractCardIdFromUrl(c.querySelector<HTMLImageElement>('img[src*="/cards/"], img')?.src));
+    const names = candidates.map((c) => readCleanText(c.querySelector('.pf-name')) || readCleanText(c));
     const sig = `${path}:${ids.join(',')}:${names.join('|')}`;
     if (!beginAnnotation(sig)) return;
     const { winnerIndex, ranks } = pickMostLovedWinner(ids, names, catalog);
     candidates.forEach((card, idx) => {
       const rankLabel = ranks[idx] !== null ? `#${ranks[idx]}` : '#?';
-      if (idx === winnerIndex) {
-        markWin(card, `👑 ${rankLabel} Plus aimé`);
-      } else {
-        const badge = document.createElement('span');
-        badge.className = `${HINT_CLASS} km-game-hint--lose`;
-        badge.textContent = rankLabel;
-        card.appendChild(badge);
-      }
+      if (idx === winnerIndex) markWin(card, `👑 ${rankLabel} Plus aimé`);
+      else card.appendChild(createHintBadge(rankLabel, 'lose'));
     });
     return;
   }
 
   if ((path.startsWith('/jouer/qui-est-ce') || path.startsWith('/jouer/serie-express')) && catalog) {
-    const arena = document.querySelector('main .arena');
-    if (!arena) return;
-    const imgs = Array.from(arena.querySelectorAll<HTMLImageElement>('img[src*="/cards/"]'));
+    const scope = document.querySelector('main .arena') || document.querySelector('main');
+    if (!scope) return;
+    const imgs = Array.from(scope.querySelectorAll<HTMLImageElement>('img[src*="/cards/"]'));
     const clueIds = imgs.map((img) => extractCardIdFromUrl(img.src)).filter((id): id is number => id !== null);
-    const choiceBtns = Array.from(arena.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')).filter(
-      (b) => !b.querySelector('img[src*="/cards/"]') && (b.innerText || '').trim().length > 0
-    );
+    const choiceBtns = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('main div.choices button.choice:not(:disabled)')
+    ).filter((b) => !b.closest(KM_IGNORE_SEL) && readCleanText(b).length > 0);
     if (!clueIds.length || !choiceBtns.length) return;
-    const labels = choiceBtns.map((b) => (b.innerText || b.textContent || '').trim());
+    const labels = choiceBtns.map((b) => readCleanText(b));
     const idx = matchCharacterChoice(clueIds, labels, catalog, path.startsWith('/jouer/serie-express') ? 'series' : 'character');
     if (idx >= 0) {
       if (!beginAnnotation(`${path}:${clueIds.join(',')}:${labels.join('|')}:${idx}`)) return;
@@ -217,35 +245,39 @@ export function annotateActiveMiniGame(ctx: EnhancerContext): void {
   if (path.startsWith('/jouer/main-du-jour') || path.startsWith('/jouer/main-kyara')) {
     const { cards, slots } = parseHandSlotsDom();
     if (!cards.length) return;
-    const best = chooseBestDailyHandIndices(cards);
-    const sig = `${path}:${cards.map((c) => `${c.name}-${c.rarity}`).join('|')}:${best.join(',')}`;
-    if (!beginAnnotation(sig)) return;
-    best.forEach((idx) => {
-      if (slots[idx]) markWin(slots[idx], '★ Combo');
+    const enriched = cards.map((card, i) => {
+      const id = extractCardIdFromUrl(slots[i]?.querySelector<HTMLImageElement>('img[src*="/cards/"]')?.src);
+      const entry = id !== null ? (catalog?.get(id) as any) : null;
+      const rawPow = entry?.pow ?? entry?.power;
+      return Number.isFinite(Number(rawPow)) ? { ...card, pow: Number(rawPow) } : card;
     });
+    const isMainKyara = path.startsWith('/jouer/main-kyara');
+    const decision = isMainKyara ? decideMainKyaraAction(enriched, parseMainKyaraHud()) : null;
+    const best = decision ? decision.indices : chooseBestDailyHandIndices(enriched);
+    const label = decision?.action === 'discard' ? '↺ Défausser' : '★ Combo';
+    const sig = `${path}:${enriched.map((c) => `${c.name}-${c.rarity}-${c.pow ?? ''}`).join('|')}:${label}:${best.join(',')}`;
+    if (!beginAnnotation(sig)) return;
+    best.forEach((idx) => { if (slots[idx]) markWin(slots[idx], label); });
     return;
   }
 
   if (path.startsWith('/jouer/raid-du-jour') || path.startsWith('/jouer/raid')) {
-    const poolBtns = Array.from(
-      document.querySelectorAll<HTMLButtonElement>('.arena .draft .pool button.pick, main .pool button.pick')
-    );
+    const poolBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.arena .draft .pool button.pick, main .pool button.pick'));
     if (poolBtns.length > 0) {
-      const cards = parseRaidPoolCards(poolBtns);
-      const best = chooseBestRaidTeamIndices(cards, 5);
-      const sig = `${path}:pool:${poolBtns.length}:${best.join(',')}`;
-      if (!beginAnnotation(sig)) return;
-      best.forEach((idx, pos) => {
-        if (poolBtns[idx]) markWin(poolBtns[idx], `⚔ Raid #${pos + 1}`);
-      });
+      const best = chooseBestRaidTeamIndices(parseRaidPoolCards(poolBtns), 5);
+      if (!beginAnnotation(`${path}:pool:${poolBtns.length}:${best.join(',')}`)) return;
+      best.forEach((idx, pos) => { if (poolBtns[idx]) markWin(poolBtns[idx], `⚔ Raid #${pos + 1}`); });
       return;
     }
-    const finishBtn = findButtonByText(
-      document.querySelector('.panel.game.fighting') || document,
-      /^(Finish(?:\s*[×x]\d+)?|Terminer(?:\s*[×x]\d+)?)$/i
-    );
-    if (finishBtn && beginAnnotation(`${path}:fight:${finishBtn.textContent}`)) {
-      markWin(finishBtn, '⚡ Terminer');
+    const perkBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('main button.perk:not(:disabled), .arena button.perk:not(:disabled)'));
+    if (perkBtns.length > 0) {
+      if (!beginAnnotation(`${path}:perks:${perkBtns.map((b) => readCleanText(b)).join('|')}`)) return;
+      perkBtns.forEach((b) => markWin(b, '★ Bonus'));
+      return;
+    }
+    if (lastSig.startsWith(`${path}:`)) {
+      clearPreviousHints();
+      lastSig = '';
     }
     return;
   }
@@ -319,32 +351,40 @@ export function annotateActiveMiniGame(ctx: EnhancerContext): void {
   if (path.startsWith('/jouer/blind-test')) {
     const { choiceBtns, hintText } = extractBlindTestDom(catalog || new Map());
     if (!choiceBtns.length) return;
-    const labels = choiceBtns.map((b) => (b.innerText || b.textContent || '').trim());
+    const labels = choiceBtns.map((b) => readCleanText(b));
     const match = findBlindTestMatch(hintText, labels, catalog || undefined);
-    if (match.confident && choiceBtns[match.index]) {
-      if (!beginAnnotation(`${path}:${hintText}:${labels.join('|')}:${match.index}`)) return;
+    if (match.confident && choiceBtns[match.index] && beginAnnotation(`${path}:${hintText}:${labels.join('|')}:${match.index}`)) {
       markWin(choiceBtns[match.index], '♪ Réponse');
     }
     return;
   }
 
   if (path.startsWith('/jouer/memoire')) {
-    const tiles = Array.from(document.querySelectorAll<HTMLButtonElement>('main .felt button'));
-    if (tiles.length < 4) return;
+    let tiles = Array.from(document.querySelectorAll<HTMLButtonElement>('main div.grid button.tile'));
+    if (!tiles.length) tiles = Array.from(document.querySelectorAll<HTMLButtonElement>('main .felt button'));
+    if (tiles.length < 4) {
+      if (memoryNotes.size > 0) { memoryNotes.clear(); clearPreviousHints(); }
+      return;
+    }
+    const hasUpOrFound = tiles.some((t) => t.classList.contains('up') || t.classList.contains('found'));
+    if (!hasUpOrFound && memoryNotes.size > 0) { memoryNotes.clear(); clearPreviousHints(); }
     const seenKeys = new Map<string, number>();
     let nextPairNum = 1;
     tiles.forEach((tile, idx) => {
-      const img = tile.querySelector<HTMLImageElement>('img[src*="/cards/"]');
-      const name = tile.querySelector('.pf-name')?.textContent?.trim();
-      const sig = img?.src ? `id:${extractCardIdFromUrl(img.src) || img.src}` : name ? `name:${name}` : null;
-      if (sig) memoryNotes.set(idx, sig);
+      const front = tile.querySelector('.face.front');
+      const img = (front || tile).querySelector<HTMLImageElement>('img[src*="/cards/"]');
+      const cardId = extractCardIdFromUrl(img?.src);
+      if (cardId !== null) memoryNotes.set(idx, `id:${cardId}`);
       const remembered = memoryNotes.get(idx);
       if (remembered && !seenKeys.has(remembered)) seenKeys.set(remembered, nextPairNum++);
-      if (remembered && !sig && !tile.disabled && !tile.querySelector(`.${HINT_CLASS}`)) {
-        const badge = document.createElement('span');
-        badge.className = `${HINT_CLASS} km-game-hint--win`;
-        badge.textContent = `#${seenKeys.get(remembered)}`;
-        tile.appendChild(badge);
+      const existingBadge = tile.querySelector(`.${HINT_CLASS}`);
+      const canBadge = Boolean(remembered) && !tile.classList.contains('found') && !tile.classList.contains('up') && !tile.disabled;
+      if (canBadge && remembered) {
+        const label = `#${seenKeys.get(remembered)}`;
+        if (!existingBadge) tile.appendChild(createHintBadge(label, 'win'));
+        else if (existingBadge.textContent !== label) existingBadge.textContent = label;
+      } else if (existingBadge) {
+        existingBadge.remove();
       }
     });
   }

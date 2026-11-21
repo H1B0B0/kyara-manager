@@ -8,7 +8,7 @@ import { executeAutoSell } from './auto-sell';
 import { executeAutoBuy } from './auto-buy';
 import { executeAutoGames } from './games';
 import { loadCardLedger } from '../safety';
-import { runDomainTask } from '../operations';
+import { isMiniGameRoute, runDomainTask, runSpaPilotTask } from '../operations';
 
 export async function runAutomationCycle({ manual = false } = {}): Promise<any> {
   try {
@@ -83,11 +83,15 @@ async function executeCycle(manual: boolean): Promise<any> {
 
     // Stage 1: Boosters & Missions run in parallel FIRST
     let dirty = false;
+    const blockLiveBoosterNav = state.isGamesRunning || isMiniGameRoute();
     const openingTasks: Array<{ label: string; run: Promise<void> }> = [];
     if (canContinue() && settings.autoBoosterEnabled) {
       openingTasks.push({
         label: 'Ouverture des boosters',
-        run: executeAutoOpenBoosters(dashboard).then((res) => {
+        run: (blockLiveBoosterNav
+          ? executeAutoOpenBoosters(dashboard, { backgroundOnly: true })
+          : executeAutoOpenBoosters(dashboard)
+        ).then((res) => {
           summary.opened = res.openedCount;
           dirty ||= res.openedCount > 0;
         })
@@ -150,7 +154,9 @@ async function executeCycle(manual: boolean): Promise<any> {
     }
 
     // Stage 4: Game Room Farming (Main du Jour + solo ticket grind)
+    const skipAutoGamesForActiveSession = !manual && (state.isGamesRunning || isMiniGameRoute());
     if (
+      !skipAutoGamesForActiveSession &&
       canContinue() &&
       settings.autoGamesEnabled &&
       dashboard?.arcade?.enabled &&
@@ -159,7 +165,16 @@ async function executeCycle(manual: boolean): Promise<any> {
       ((dashboard.arcade.week ?? 0) < (dashboard.arcade.weekCap ?? 300))
     ) {
       try {
-        const gameRes = await runDomainTask('games', () => executeAutoGames(dashboard, { manual: false }));
+        const gameRes = await runDomainTask('games', () =>
+          runSpaPilotTask('games', async () => {
+            state.isGamesRunning = true;
+            try {
+              return await executeAutoGames(dashboard, { manual: false });
+            } finally {
+              state.isGamesRunning = false;
+            }
+          })
+        );
         if ((gameRes?.playedGames ?? 0) > 0) {
           summary.playedGames = gameRes.playedGames;
           dirty = true;
