@@ -67,7 +67,7 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
       onToggleExpand={onToggleExpand} onToggleSwitch={(v) => onUpdateSettings({ autoGamesEnabled: v })}
     >
       <p className="module-card__desc">
-        Joue les quotidiens (Main &amp; Raid du Jour) et les 12 mini-jeux jusqu&apos;à {dayCap} 🎟/jour pour débloquer Boosters Dorés, Lot Légendaire (200 🎟) et Sceau Mythique (1000 🎟).
+        Joue les quotidiens (Main &amp; Raid du Jour) et les 12 mini-jeux jusqu&apos;à {dayCap} 🎟/jour. Enchaîne réponses, boutons «&nbsp;Suivant&nbsp;» et temporisations humaines anti-détection (~15–25s/partie) pour valider les tickets arcade sans blocage (Boosters Dorés, Lot Légendaire 200 🎟, Sceau Mythique 1000 🎟).
       </p>
 
       {arcade?.blocked === 'guest' && (

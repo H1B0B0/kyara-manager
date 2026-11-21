@@ -1,0 +1,762 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { mockChrome } from './chrome';
+
+const mocks = vi.hoisted(() => ({
+  api: vi.fn(),
+  catalog: vi.fn(),
+  journal: vi.fn(),
+  navigate: vi.fn(),
+  interrupted: false
+}));
+
+vi.mock('../src/content/api', () => ({ kyaraApi: mocks.api }));
+vi.mock('../src/content/cache', () => ({
+  ensureCatalog: mocks.catalog,
+  runtimeCache: { catalogById: new Map() }
+}));
+vi.mock('../src/content/journal', () => ({ appendJournal: mocks.journal }));
+vi.mock('../src/content/safety', () => ({ isInterrupted: () => mocks.interrupted }));
+vi.mock('../src/content/automation/spa-navigator', () => ({ navigateSpaTo: mocks.navigate }));
+
+import {
+  clickAdvanceOrNextButton,
+  findButtonByText,
+  hasAnsweredChoices,
+  humanSleep,
+  setGamesFastModeForTest,
+  solveMainKyaraStep,
+  waitForEnabledButton
+} from '../src/content/automation/games-extra';
+import {
+  executeAutoGames,
+  solveActiveMiniGameRound,
+  solveDailyHandStep
+} from '../src/content/automation/games';
+
+type ClickHandler = (ev: any) => void;
+
+class StubClassList {
+  private set = new Set<string>();
+  setFromString(raw: string): void {
+    this.set = new Set(raw.split(/\s+/).filter(Boolean));
+  }
+  toString(): string {
+    return Array.from(this.set).join(' ');
+  }
+  contains(cls: string): boolean {
+    return this.set.has(cls);
+  }
+  add(...tokens: string[]): void {
+    tokens.forEach((t) => t && this.set.add(t));
+  }
+  remove(...tokens: string[]): void {
+    tokens.forEach((t) => this.set.delete(t));
+  }
+  toggle(token: string, force?: boolean): boolean {
+    const next = force !== undefined ? force : !this.set.has(token);
+    if (next) this.set.add(token);
+    else this.set.delete(token);
+    return next;
+  }
+}
+
+class StubElement {
+  tagName: string;
+  id = '';
+  classList = new StubClassList();
+  parentElement: StubElement | null = null;
+  children: StubElement[] = [];
+  style: Record<string, string> = {};
+  hidden = false;
+  clickCount = 0;
+  onclick: ClickHandler | null = null;
+  private attrs = new Map<string, string>();
+  private listeners = new Map<string, ClickHandler[]>();
+  private _text = '';
+
+  constructor(tag: string) {
+    this.tagName = tag.toUpperCase();
+  }
+
+  get className(): string {
+    return this.classList.toString();
+  }
+  set className(val: string) {
+    this.classList.setFromString(val || '');
+  }
+
+  get textContent(): string {
+    if (!this.children.length) return this._text;
+    return this._text + this.children.map((c) => c.textContent).join('');
+  }
+  set textContent(val: string) {
+    this._text = val || '';
+    this.children = [];
+  }
+
+  get innerText(): string {
+    return this.textContent;
+  }
+  set innerText(val: string) {
+    this.textContent = val;
+  }
+
+  getAttribute(name: string): string | null {
+    if (name === 'id') return this.id || null;
+    if (name === 'class') return this.className || null;
+    if (name === 'hidden') return this.hidden ? '' : null;
+    return this.attrs.has(name) ? this.attrs.get(name)! : null;
+  }
+
+  setAttribute(name: string, value: string): void {
+    const str = String(value);
+    if (name === 'id') this.id = str;
+    else if (name === 'class') this.className = str;
+    else if (name === 'hidden') this.hidden = true;
+    else this.attrs.set(name, str);
+  }
+
+  removeAttribute(name: string): void {
+    if (name === 'id') this.id = '';
+    else if (name === 'class') this.className = '';
+    else if (name === 'hidden') this.hidden = false;
+    else this.attrs.delete(name);
+  }
+
+  hasAttribute(name: string): boolean {
+    if (name === 'hidden') return this.hidden;
+    if (name === 'disabled') return Boolean((this as any).disabled);
+    return this.attrs.has(name);
+  }
+
+  append(...nodes: StubElement[]): void {
+    for (const n of nodes) {
+      n.parentElement = this;
+      this.children.push(n);
+    }
+  }
+
+  appendChild<T extends StubElement>(node: T): T {
+    this.append(node);
+    return node;
+  }
+
+  replaceChildren(...nodes: StubElement[]): void {
+    this._text = '';
+    this.children = [];
+    this.append(...nodes);
+  }
+
+  addEventListener(type: string, fn: ClickHandler): void {
+    const arr = this.listeners.get(type) || [];
+    arr.push(fn);
+    this.listeners.set(type, arr);
+  }
+
+  click(): void {
+    if ((this as any).disabled) return;
+    this.clickCount += 1;
+    const ev = { type: 'click', target: this, currentTarget: this, preventDefault() {}, stopPropagation() {} };
+    if (typeof this.onclick === 'function') this.onclick(ev);
+    for (const fn of this.listeners.get('click') || []) fn(ev);
+  }
+
+  matches(selectorList: string): boolean {
+    return selectorList
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .some((sel) => matchesComplex(this, tokenizeSelector(sel)));
+  }
+
+  closest(selectorList: string): StubElement | null {
+    let cur: StubElement | null = this;
+    while (cur) {
+      if (cur.matches(selectorList)) return cur;
+      cur = cur.parentElement;
+    }
+    return null;
+  }
+
+  querySelectorAll<T = StubElement>(selectorList: string): T[] {
+    const branches = selectorList
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)
+      .map(tokenizeSelector);
+    const out: StubElement[] = [];
+    const visit = (node: StubElement) => {
+      for (const child of node.children) {
+        if (branches.some((parts) => matchesComplex(child, parts))) out.push(child);
+        visit(child);
+      }
+    };
+    visit(this);
+    return out as unknown as T[];
+  }
+
+  querySelector<T = StubElement>(selectorList: string): T | null {
+    return this.querySelectorAll<T>(selectorList)[0] ?? null;
+  }
+}
+
+class StubHTMLElement extends StubElement {}
+
+class StubHTMLButtonElement extends StubHTMLElement {
+  disabled = false;
+  constructor() {
+    super('button');
+  }
+}
+
+class StubHTMLImageElement extends StubHTMLElement {
+  constructor() {
+    super('img');
+  }
+  get src(): string {
+    return this.getAttribute('src') || '';
+  }
+  set src(val: string) {
+    this.setAttribute('src', val);
+  }
+  get alt(): string {
+    return this.getAttribute('alt') || '';
+  }
+  set alt(val: string) {
+    this.setAttribute('alt', val);
+  }
+}
+
+function tokenizeSelector(sel: string): string[] {
+  const tokens: string[] = [];
+  let i = 0;
+  let cur = '';
+  let bracketDepth = 0;
+  let parenDepth = 0;
+  while (i < sel.length) {
+    const ch = sel[i];
+    if (ch === '[') bracketDepth += 1;
+    else if (ch === ']') bracketDepth = Math.max(0, bracketDepth - 1);
+    else if (ch === '(') parenDepth += 1;
+    else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+
+    if (bracketDepth === 0 && parenDepth === 0 && (ch === '>' || /\s/.test(ch))) {
+      if (cur) {
+        tokens.push(cur);
+        cur = '';
+      }
+      if (ch === '>') tokens.push('>');
+    } else {
+      cur += ch;
+    }
+    i += 1;
+  }
+  if (cur) tokens.push(cur);
+  return tokens;
+}
+
+function matchesCompound(el: StubElement, compound: string): boolean {
+  if (compound === ':disabled') return Boolean((el as any).disabled);
+  let rest = compound;
+  const tagMatch = rest.match(/^([a-zA-Z][a-zA-Z0-9-]*)/);
+  if (tagMatch) {
+    if (el.tagName !== tagMatch[1].toUpperCase()) return false;
+    rest = rest.slice(tagMatch[0].length);
+  }
+  while (rest.length > 0) {
+    if (rest.startsWith('#')) {
+      const m = rest.match(/^#([a-zA-Z0-9_-]+)/);
+      if (!m || el.id !== m[1]) return false;
+      rest = rest.slice(m[0].length);
+    } else if (rest.startsWith('.')) {
+      const m = rest.match(/^\.([a-zA-Z0-9_-]+)/);
+      if (!m || !el.classList.contains(m[1])) return false;
+      rest = rest.slice(m[0].length);
+    } else if (rest.startsWith('[')) {
+      const end = rest.indexOf(']');
+      if (end < 0) return false;
+      const inner = rest.slice(1, end).trim();
+      rest = rest.slice(end + 1);
+      const attrMatch = inner.match(/^([a-zA-Z0-9_-]+)(?:\s*(\*?=)\s*["']?([^"'\]]*?)["']?(?:\s+(i))?)?$/);
+      if (!attrMatch) return false;
+      const [, attrName, op, expected, ci] = attrMatch;
+      if (!op) {
+        if (!el.hasAttribute(attrName)) return false;
+      } else {
+        const actual = el.getAttribute(attrName);
+        if (actual === null) return false;
+        const lhs = ci ? actual.toLowerCase() : actual;
+        const rhs = ci ? (expected || '').toLowerCase() : expected || '';
+        if (op === '=' && lhs !== rhs) return false;
+        if (op === '*=' && !lhs.includes(rhs)) return false;
+      }
+    } else if (rest.startsWith(':not(')) {
+      const end = rest.indexOf(')');
+      if (end < 0) return false;
+      const inner = rest.slice(5, end).trim();
+      rest = rest.slice(end + 1);
+      if (matchesCompound(el, inner)) return false;
+    } else if (rest.startsWith(':disabled')) {
+      if (!(el as any).disabled) return false;
+      rest = rest.slice(':disabled'.length);
+    } else {
+      return false;
+    }
+  }
+  return true;
+}
+
+function matchesComplex(el: StubElement, parts: string[], idx = parts.length - 1): boolean {
+  if (idx < 0 || !matchesCompound(el, parts[idx])) return false;
+  if (idx === 0) return true;
+  if (parts[idx - 1] === '>') {
+    if (!el.parentElement || idx - 2 < 0) return false;
+    return matchesComplex(el.parentElement, parts, idx - 2);
+  }
+  let anc = el.parentElement;
+  while (anc) {
+    if (matchesComplex(anc, parts, idx - 1)) return true;
+    anc = anc.parentElement;
+  }
+  return false;
+}
+
+class StubDocument {
+  body = new StubHTMLElement('body');
+  createElement(tag: string): StubHTMLElement {
+    const low = tag.toLowerCase();
+    if (low === 'button') return new StubHTMLButtonElement();
+    if (low === 'img') return new StubHTMLImageElement();
+    return new StubHTMLElement(low);
+  }
+  querySelector<T = StubElement>(selectorList: string): T | null {
+    return this.body.querySelector<T>(selectorList);
+  }
+  querySelectorAll<T = StubElement>(selectorList: string): T[] {
+    return this.body.querySelectorAll<T>(selectorList);
+  }
+}
+
+function installDomEnv(initialPath = '/'): {
+  doc: StubDocument;
+  setPath: (path: string) => void;
+  el: (tag: string, opts?: { className?: string; id?: string; text?: string; disabled?: boolean; attrs?: Record<string, string> }, children?: StubElement[]) => StubHTMLElement;
+  btn: (text: string, opts?: { className?: string; id?: string; disabled?: boolean; attrs?: Record<string, string> }) => StubHTMLButtonElement;
+  img: (src: string, alt?: string) => StubHTMLImageElement;
+  cleanup: () => void;
+} {
+  const saved = {
+    document: (globalThis as any).document,
+    window: (globalThis as any).window,
+    location: (globalThis as any).location,
+    Element: (globalThis as any).Element,
+    HTMLElement: (globalThis as any).HTMLElement,
+    HTMLButtonElement: (globalThis as any).HTMLButtonElement,
+    HTMLImageElement: (globalThis as any).HTMLImageElement
+  };
+
+  const doc = new StubDocument();
+  const loc = { pathname: initialPath };
+  const win = { location: loc };
+
+  (globalThis as any).Element = StubElement;
+  (globalThis as any).HTMLElement = StubHTMLElement;
+  (globalThis as any).HTMLButtonElement = StubHTMLButtonElement;
+  (globalThis as any).HTMLImageElement = StubHTMLImageElement;
+  (globalThis as any).document = doc;
+  (globalThis as any).window = win;
+  (globalThis as any).location = loc;
+
+  const el = (
+    tag: string,
+    opts: { className?: string; id?: string; text?: string; disabled?: boolean; attrs?: Record<string, string> } = {},
+    children: StubElement[] = []
+  ) => {
+    const node = doc.createElement(tag);
+    if (opts.className) node.className = opts.className;
+    if (opts.id) node.id = opts.id;
+    if (opts.text) node.textContent = opts.text;
+    if (opts.disabled !== undefined && 'disabled' in node) (node as StubHTMLButtonElement).disabled = opts.disabled;
+    if (opts.attrs) {
+      for (const [k, v] of Object.entries(opts.attrs)) node.setAttribute(k, v);
+    }
+    if (children.length) node.append(...children);
+    return node;
+  };
+
+  const btn = (
+    text: string,
+    opts: { className?: string; id?: string; disabled?: boolean; attrs?: Record<string, string> } = {}
+  ) => el('button', { ...opts, text }) as StubHTMLButtonElement;
+
+  const img = (src: string, alt = '') => {
+    const node = doc.createElement('img') as StubHTMLImageElement;
+    node.src = src;
+    if (alt) node.alt = alt;
+    return node;
+  };
+
+  return {
+    doc,
+    setPath: (path: string) => {
+      loc.pathname = path;
+    },
+    el,
+    btn,
+    img,
+    cleanup: () => {
+      for (const [k, v] of Object.entries(saved)) {
+        if (v === undefined) delete (globalThis as any)[k];
+        else (globalThis as any)[k] = v;
+      }
+    }
+  };
+}
+
+describe('games DOM flow, next buttons, and anti-bot pacing', () => {
+  const catalog = new Map<number, any>([
+    [101, { id: 101, name: 'Gojo Satoru', series: 'Jujutsu Kaisen', rarity: 'L', rank: 4 }],
+    [102, { id: 102, name: 'Random Villager', series: 'Filler', rarity: 'C', rank: 980 }],
+    [103, { id: 103, name: 'Megumi Fushiguro', series: 'Jujutsu Kaisen', rarity: 'E', rank: 19 }]
+  ]);
+
+  let dom: ReturnType<typeof installDomEnv>;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.interrupted = false;
+    mocks.catalog.mockResolvedValue(catalog);
+    mocks.navigate.mockResolvedValue(true);
+    dom = installDomEnv('/');
+  });
+
+  afterEach(() => {
+    setGamesFastModeForTest(false);
+    dom.cleanup();
+  });
+
+  function buildSixCardHandDom(delayEnableMs = 0) {
+    const cardSpecs = [
+      { name: 'Gojo', series: 'Jujutsu Kaisen', family: 'Action', rarity: 'R' },
+      { name: 'Yuji', series: 'Jujutsu Kaisen', family: 'Action', rarity: 'R' },
+      { name: 'Villager', series: 'Other', family: 'Slice', rarity: 'C' },
+      { name: 'Megumi', series: 'Jujutsu Kaisen', family: 'Action', rarity: 'R' },
+      { name: 'Nobara', series: 'Jujutsu Kaisen', family: 'Action', rarity: 'R' },
+      { name: 'Yuta', series: 'Jujutsu Kaisen', family: 'Action', rarity: 'R' }
+    ];
+
+    const playBtn = dom.btn('Jouer', { className: 'btn btn-acc', disabled: true });
+    const slots = cardSpecs.map((c) => {
+      const slot = dom.el('button', { className: 'slot', attrs: { 'aria-pressed': 'false' } }, [
+        dom.el('div', { className: `tcg pf p-${c.rarity}` }, [
+          dom.el('span', { className: 'pf-seal', text: c.rarity }),
+          dom.el('span', { className: 'pf-name', text: c.name }),
+          dom.el('span', { className: 'pf-ser', text: c.series }),
+          dom.el('span', { className: 'pf-rib', attrs: { title: c.family } })
+        ])
+      ]) as StubHTMLButtonElement;
+      slot.addEventListener('click', () => {
+        const next = slot.getAttribute('aria-pressed') !== 'true';
+        slot.setAttribute('aria-pressed', next ? 'true' : 'false');
+        const anyPressed = slots.some((s) => s.getAttribute('aria-pressed') === 'true');
+        if (anyPressed) {
+          if (delayEnableMs > 0) {
+            setTimeout(() => {
+              playBtn.disabled = false;
+            }, delayEnableMs);
+          } else {
+            playBtn.disabled = false;
+          }
+        }
+      });
+      return slot;
+    });
+
+    const hand = dom.el('div', { className: 'hand' }, slots);
+    const actions = dom.el('div', { className: 'actions' }, [playBtn]);
+    const foot = dom.el('div', { className: 'foot' }, [actions]);
+    const main = dom.el('main', {}, [hand, foot]);
+    dom.doc.body.replaceChildren(main);
+
+    return { slots, playBtn, main };
+  }
+
+  it('selects optimal cards in main-du-jour and main-kyara, waits for enabled Jouer, and clicks Jouer', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/main-du-jour');
+    const daily = buildSixCardHandDom(0);
+
+    expect(await solveDailyHandStep()).toBe(true);
+    expect(daily.slots.map((s) => s.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'true',
+      'false',
+      'true',
+      'true',
+      'true'
+    ]);
+    expect(daily.playBtn.disabled).toBe(false);
+    expect(daily.playBtn.clickCount).toBe(1);
+
+    dom.setPath('/jouer/main-kyara');
+    const solo = buildSixCardHandDom(0);
+    expect(await solveMainKyaraStep()).toBe(true);
+    expect(solo.slots.map((s) => s.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'true',
+      'false',
+      'true',
+      'true',
+      'true'
+    ]);
+    expect(solo.playBtn.clickCount).toBe(1);
+
+    // Also verifies async button activation polling when fast mode is disabled
+    setGamesFastModeForTest(false);
+    const asyncHand = buildSixCardHandDom(25);
+    asyncHand.slots[0].click();
+    expect(asyncHand.playBtn.disabled).toBe(true);
+    const waited = await waitForEnabledButton(
+      () => findButtonByText(dom.doc as unknown as ParentNode, /^Jouer$/i),
+      400
+    );
+    expect(waited).toBe(asyncHand.playBtn as unknown as HTMLButtonElement);
+    expect(asyncHand.playBtn.disabled).toBe(false);
+  });
+
+  it('clicks advance/next buttons including typographic apostrophes and ignores excluded buttons', async () => {
+    setGamesFastModeForTest(true);
+
+    const buildIgnoredSet = () => {
+      const discordBtn = dom.btn('Me connecter avec Discord');
+      const copyBtn = dom.btn('Copier le résultat');
+      const leaderboardBtn = dom.btn('Classement');
+      const replayBtn = dom.btn('Rejouer');
+      const newGameBtn = dom.btn('Nouvelle partie');
+      const playMainKyaraBtn = dom.btn('Jouer à Main Kyara');
+      const barNextBtn = dom.btn('Suivant');
+      const barContinueBtn = dom.btn('Continuer');
+      const inpageBar = dom.el('div', { id: 'km-inpage-games-bar' }, [barNextBtn, barContinueBtn]);
+      const actionsAccDiscord = dom.el('div', { className: 'actions' }, [
+        dom.btn('Me connecter avec Discord', { className: 'btn btn-acc' })
+      ]);
+      const excluded = [
+        discordBtn,
+        copyBtn,
+        leaderboardBtn,
+        replayBtn,
+        newGameBtn,
+        playMainKyaraBtn,
+        barNextBtn,
+        barContinueBtn,
+        actionsAccDiscord.children[0] as StubHTMLButtonElement
+      ];
+      return { excluded, inpageBar, actionsAccDiscord };
+    };
+
+    // Only excluded buttons -> clickAdvanceOrNextButton must return false and click nothing
+    const onlyExcluded = buildIgnoredSet();
+    dom.doc.body.replaceChildren(
+      dom.el('main', {}, [...onlyExcluded.excluded.slice(0, 6), onlyExcluded.actionsAccDiscord, onlyExcluded.inpageBar])
+    );
+    expect(findButtonByText(dom.doc as unknown as ParentNode, /^Suivant$/)).toBeNull();
+    expect(await clickAdvanceOrNextButton()).toBe(false);
+    expect(onlyExcluded.excluded.every((b) => b.clickCount === 0)).toBe(true);
+
+    // Each valid advance label (including typographic apostrophe ’) must be clicked while ignoring all exclusions
+    const validLabels = [
+      'Suivant',
+      'Main suivante',
+      'Question suivante',
+      'Continuer',
+      'Terminer',
+      'Passer',
+      'Confirmer l’équipe'
+    ];
+    for (const label of validLabels) {
+      const set = buildIgnoredSet();
+      const targetBtn = dom.btn(label);
+      const main = dom.el('main', {}, [...set.excluded.slice(0, 6), set.actionsAccDiscord, set.inpageBar, targetBtn]);
+      dom.doc.body.replaceChildren(main);
+
+      expect(await clickAdvanceOrNextButton()).toBe(true);
+      expect(targetBtn.clickCount).toBe(1);
+      expect(set.excluded.every((b) => b.clickCount === 0)).toBe(true);
+    }
+  });
+
+  it('chains quiz rounds on /jouer/qui-est-ce and next hand on /jouer/kyara-21 without double-clicking choices', async () => {
+    setGamesFastModeForTest(true);
+
+    // 1. /jouer/qui-est-ce: answer once, then on .chosen / majority disabled + Question suivante, advance without re-clicking
+    dom.setPath('/jouer/qui-est-ce');
+    const c1 = dom.btn('Naruto Uzumaki');
+    const c2 = dom.btn('Gojo Satoru');
+    const c3 = dom.btn('Monkey D. Luffy');
+    const c4 = dom.btn('Ichigo Kurosaki');
+    const arena = dom.el('div', { className: 'arena' }, [
+      dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
+      c1,
+      c2,
+      c3,
+      c4
+    ]);
+    dom.doc.body.replaceChildren(dom.el('main', {}, [arena]));
+
+    expect(hasAnsweredChoices(arena as unknown as ParentNode, [c1, c2, c3, c4] as unknown as Element[])).toBe(false);
+    expect(await solveActiveMiniGameRound(catalog)).toBe(true);
+    expect(c2.clickCount).toBe(1);
+    expect(c1.clickCount + c3.clickCount + c4.clickCount).toBe(0);
+
+    // Post-answer state: c2 marked .chosen, majority disabled, Question suivante visible
+    c2.classList.add('chosen');
+    c1.disabled = true;
+    c2.disabled = true;
+    c3.disabled = true;
+    const nextQuestionBtn = dom.btn('Question suivante');
+    arena.append(nextQuestionBtn);
+
+    expect(hasAnsweredChoices(arena as unknown as ParentNode, [c1, c2, c3, c4] as unknown as Element[])).toBe(true);
+    expect(await solveActiveMiniGameRound(catalog)).toBe(true);
+    expect(nextQuestionBtn.clickCount).toBe(1);
+    expect(c2.clickCount).toBe(1);
+    expect(c4.clickCount).toBe(0);
+
+    // Majority disabled even without .chosen class still advances without clicking remaining enabled choice
+    c2.classList.remove('chosen');
+    expect(hasAnsweredChoices(arena as unknown as ParentNode, [c1, c2, c3, c4] as unknown as Element[])).toBe(true);
+    expect(await solveActiveMiniGameRound(catalog)).toBe(true);
+    expect(nextQuestionBtn.clickCount).toBe(2);
+    expect(c4.clickCount).toBe(0);
+
+    // 2. /jouer/kyara-21: plays Hit when sum < 17, then clicks Main suivante when Hit/Stand are absent
+    dom.setPath('/jouer/kyara-21');
+    const hitBtn = dom.btn('Tirer');
+    const standBtn = dom.btn('Rester');
+    const felt = dom.el('div', { className: 'felt' }, [
+      dom.el('div', { className: 'tcg pf p-C' }),
+      dom.el('div', { className: 'tcg pf p-U' }),
+      hitBtn,
+      standBtn
+    ]);
+    dom.doc.body.replaceChildren(dom.el('main', {}, [felt]));
+
+    expect(await solveActiveMiniGameRound(catalog)).toBe(true);
+    expect(hitBtn.clickCount).toBe(1);
+    expect(standBtn.clickCount).toBe(0);
+
+    // Round resolved: Hit/Stand absent, Main suivante shown
+    const nextHandBtn = dom.btn('Main suivante');
+    felt.replaceChildren(dom.el('div', { className: 'tcg pf p-L' }), dom.el('div', { className: 'tcg pf p-E' }));
+    dom.doc.querySelector('main')!.append(dom.el('div', { className: 'foot' }, [dom.el('div', { className: 'actions' }, [nextHandBtn])]));
+
+    expect(await solveActiveMiniGameRound(catalog)).toBe(true);
+    expect(nextHandBtn.clickCount).toBe(1);
+  });
+
+  it('handles rotation, end-of-game replay buttons, real humanSleep delay, and MIN_RUN_MS pacing', async () => {
+    mockChrome({
+      settings: {
+        dryRun: false,
+        autoGamesEnabled: true,
+        autoGamesDailyEnabled: false,
+        autoGamesTargetGame: 'all'
+      }
+    });
+
+    let balance = 100;
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path === '/play/arcade') {
+        return { enabled: true, blocked: null, balance, today: 10, dayCap: 60, week: 20, weekCap: 300, lots: [] };
+      }
+      return null;
+    });
+
+    const mountGameRoute = (path: string) => {
+      dom.setPath(path);
+      if (path.startsWith('/jouer/main-kyara')) {
+        const handState = buildSixCardHandDom(0);
+        handState.playBtn.addEventListener('click', () => {
+          const replayBtn = dom.btn('Jouer à Main Kyara');
+          replayBtn.addEventListener('click', () => mountGameRoute('/jouer/main-kyara'));
+          handState.main.replaceChildren(replayBtn);
+        });
+        return;
+      }
+      if (path.startsWith('/jouer/plus-aime')) {
+        const cardA = dom.el('button', { className: 'pick' }, [
+          dom.img('https://cdn.kyara.games/cards/sm/102.webp'),
+          dom.el('span', { className: 'pf-name', text: 'Random Villager' })
+        ]);
+        const cardB = dom.el('button', { className: 'pick' }, [
+          dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
+          dom.el('span', { className: 'pf-name', text: 'Gojo Satoru' })
+        ]);
+        const arena = dom.el('div', { className: 'arena' }, [cardA, cardB]);
+        const main = dom.el('main', {}, [arena]);
+        cardB.addEventListener('click', () => {
+          balance += 3;
+          const newGame = dom.btn('Nouvelle partie');
+          newGame.addEventListener('click', () => mountGameRoute('/jouer/plus-aime'));
+          main.replaceChildren(newGame);
+        });
+        dom.doc.body.replaceChildren(main);
+        return;
+      }
+      // Generic quiz/duel route (e.g. /jouer/qui-est-ce)
+      const qChoice = dom.btn('Gojo Satoru');
+      const arena = dom.el('div', { className: 'arena' }, [
+        dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
+        dom.btn('Naruto Uzumaki'),
+        qChoice
+      ]);
+      const main = dom.el('main', {}, [arena]);
+      qChoice.addEventListener('click', () => {
+        balance += 3;
+        const newGame = dom.btn('Nouvelle partie');
+        newGame.addEventListener('click', () => mountGameRoute(path));
+        main.replaceChildren(newGame);
+      });
+      dom.doc.body.replaceChildren(main);
+    };
+
+    mocks.navigate.mockImplementation(async (path: string) => {
+      mountGameRoute(path);
+      return true;
+    });
+
+    // 1. main-kyara stops cleanly when "Jouer à Main Kyara" appears and plays 2 runs via replay trigger
+    const mkRes = await executeAutoGames({ me: { id: 1 } }, { manual: false, gameId: 'main-kyara', _fastForTest: true });
+    expect(mkRes.playedGames).toBe(2);
+
+    // 2. Rotation ("all") plays multiple games cleanly and stops each run on "Nouvelle partie"
+    const rotRes = await executeAutoGames({ me: { id: 1 } }, { manual: false, gameId: 'all', _fastForTest: true });
+    expect(rotRes.playedGames).toBe(2);
+    expect(rotRes.ticketsEarned).toBe(6);
+
+    // 3. executeAutoGames resets fast mode in finally, so humanSleep waits >= 100ms in real time
+    const realStart = Date.now();
+    await humanSleep(120, 180);
+    const realElapsed = Date.now() - realStart;
+    expect(realElapsed).toBeGreaterThanOrEqual(100);
+
+    // 4. Verify setGamesFastModeForTest(true) skips sleep, and MIN_RUN_MS enforces >= 12s/run when _fastForTest is false
+    setGamesFastModeForTest(true);
+    const fastStart = Date.now();
+    await humanSleep(120, 180);
+    expect(Date.now() - fastStart).toBeLessThan(50);
+    setGamesFastModeForTest(false);
+
+    vi.useFakeTimers();
+    try {
+      const simStart = Date.now();
+      const pacedPromise = executeAutoGames({ me: { id: 1 } }, { manual: false, gameId: 'plus-aime', _fastForTest: false });
+      await vi.advanceTimersByTimeAsync(45_000);
+      const pacedRes = await pacedPromise;
+      expect(pacedRes.playedGames).toBe(2);
+      expect(Date.now() - simStart).toBeGreaterThanOrEqual(24_000);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
