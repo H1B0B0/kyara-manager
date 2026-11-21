@@ -3,17 +3,20 @@
    ========================================================================== */
 .wishlist-add-bar {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px;
   margin-top: 10px;
   position: relative;
 }
 
 .wishlist-add-bar input[type="search"] {
-  flex: 1;
+  flex: 1 1 150px;
+  min-width: 0;
 }
 
 .wishlist-add-bar .input--num {
-  width: 90px;
+  width: 78px;
+  flex-shrink: 0;
 }
 
 .wishlist-autocomplete {

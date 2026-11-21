@@ -87,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({ dashboard, loading, onRefresh })
             onClick={onRefresh}
             disabled={loading}
             className="icon-btn"
+            aria-label="Rafraîchir les données et cours (Sync)"
             title="Rafraîchir les données et cours (Sync)"
           >
             <svg

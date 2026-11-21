@@ -6,6 +6,7 @@ import { runMarketWatchTick, startMarketWatcher } from './automation/market-watc
 import { refreshDashboardSnapshot } from './snapshot';
 import { setupMessageListener } from './messages';
 import { setupOverlayListeners } from './overlay';
+import { setupInPageEnhancer } from './in-page-enhancer';
 import { recordBestPulls } from './journal';
 import { normalizeSettings } from '../types/settings';
 import { setLanguage } from '../lib/i18n';
@@ -25,6 +26,7 @@ function initKyaraManager(): void {
       clearInterval(state.loopTimer);
       cleanups.forEach((cleanup) => cleanup());
       document.getElementById('km-floating-hud')?.remove();
+      document.getElementById('km-update-toast')?.remove();
     }
   };
 
@@ -70,6 +72,7 @@ function initKyaraManager(): void {
     if (disposed) return;
     mountFloatingHud();
     cleanups.push(setupOverlayListeners());
+    cleanups.push(setupInPageEnhancer());
     cleanups.push(setupAntiAfkObserver());
     cleanups.push(startMarketWatcher());
     restartLoopTimer(() => runAutomationCycle({ manual: false }));

@@ -3,6 +3,9 @@ import type { WishlistItem } from '../../../types/kyara';
 import type { KyaraSettings, Language, PricingStrategy, SellMode } from '../../../types/settings';
 import { DEFAULT_SETTINGS, normalizeSettings } from '../../../types/settings';
 import { t } from '../../../lib/i18n';
+import { RARITIES } from '../../../lib/analytics/constants';
+import type { Rarity } from '../../../types/kyara';
+import { SettingsSystemSection } from '../settings/SettingsSystemSection';
 
 export interface SettingsTabProps {
   settings: KyaraSettings;
@@ -73,7 +76,8 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   React.useEffect(() => {
-    setForm({ ...settings, ...edits.current });
+    edits.current = {};
+    setForm(settings);
   }, [settings]);
 
   const handleChange = <K extends keyof KyaraSettings>(key: K, value: KyaraSettings[K]) => {
@@ -190,6 +194,53 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
             />
             <span>Protection Krach Live (débraye le garde-fou 70% si krach détecté)</span>
           </label>
+
+          <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="km-set-max-listings" className="form-label">Créneaux max</label>
+              <input
+                id="km-set-max-listings"
+                type="number"
+                min={1}
+                max={30}
+                value={form.autoSellMaxListings ?? 10}
+                onChange={(e) => handleChange('autoSellMaxListings', Number(e.target.value))}
+                className="input input--num"
+              />
+            </div>
+            <div className="form-group" style={{ flex: 1 }}>
+              <label htmlFor="km-set-duration" className="form-label">Durée d&apos;annonce</label>
+              <select
+                id="km-set-duration"
+                value={form.autoSellDurationHours ?? 12}
+                onChange={(e) => handleChange('autoSellDurationHours', Number(e.target.value) as 12 | 24 | 48)}
+                className="select"
+              >
+                <option value={12}>12 heures</option>
+                <option value={24}>24 heures</option>
+                <option value={48}>48 heures</option>
+              </select>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginTop: '8px' }}>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={Boolean(form.autoSellIncludeL)}
+                onChange={(e) => handleChange('autoSellIncludeL', e.target.checked)}
+              />
+              <span>Inclure doublons [L]</span>
+            </label>
+            <label className="check-row">
+              <input
+                type="checkbox"
+                checked={Boolean(form.autoSellIncludeM)}
+                onChange={(e) => handleChange('autoSellIncludeM', e.target.checked)}
+              />
+              <span>Inclure doublons [M]</span>
+            </label>
+          </div>
         </div>
 
         {/* Sell pace */}
@@ -288,13 +339,89 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
           <h3 className="card__title">Mes Envies &amp; Marché</h3>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' }}>
+            <div className="rarity-checks">
+              <span className="rarity-checks__label">Raretés auto-recyclées :</span>
+              {(RARITIES.slice(0, 4) as Rarity[]).map((r) => {
+                const list = form.autoRecycleRarities || ['C', 'U', 'R'];
+                const checked = list.includes(r);
+                return (
+                  <label key={r} className="chip-check">
+                    <input
+                      type="checkbox"
+                      checked={checked}
+                      onChange={(e) => {
+                        const next = e.target.checked ? [...new Set([...list, r])] : list.filter((x) => x !== r);
+                        handleChange('autoRecycleRarities', next);
+                      }}
+                    />
+                    <span>{r}</span>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="field-row">
+              <label htmlFor="km-set-keep-copies" className="form-label">Exemplaires gardés avant vente/recyclage</label>
+              <input
+                id="km-set-keep-copies"
+                type="number"
+                min={1}
+                max={10}
+                value={form.autoRecycleKeepCopies ?? 1}
+                onChange={(e) => handleChange('autoRecycleKeepCopies', Number(e.target.value))}
+                className="input input--num"
+              />
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '6px' }}>
+              <div className="form-group">
+                <label htmlFor="km-set-reserve" className="form-label">Réserve (◆)</label>
+                <input
+                  id="km-set-reserve"
+                  type="number"
+                  min={0}
+                  max={50000}
+                  value={form.autoBuyMinChakraReserve ?? 200}
+                  onChange={(e) => handleChange('autoBuyMinChakraReserve', Number(e.target.value))}
+                  className="input input--num"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="km-set-margin" className="form-label">Marge flip %</label>
+                <input
+                  id="km-set-margin"
+                  type="number"
+                  min={5}
+                  max={80}
+                  value={form.autoMarketMinMarginPct ?? 15}
+                  onChange={(e) => handleChange('autoMarketMinMarginPct', Number(e.target.value))}
+                  className="input input--num"
+                  style={{ width: '100%' }}
+                />
+              </div>
+              <div className="form-group">
+                <label htmlFor="km-set-profit" className="form-label">Profit min (◆)</label>
+                <input
+                  id="km-set-profit"
+                  type="number"
+                  min={1}
+                  max={500}
+                  value={form.autoMarketMinProfit ?? 5}
+                  onChange={(e) => handleChange('autoMarketMinProfit', Number(e.target.value))}
+                  className="input input--num"
+                  style={{ width: '100%' }}
+                />
+              </div>
+            </div>
+
             <label className="check-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
               <input
                 type="checkbox"
                 checked={form.wishlistAutoBuyEnabled}
                 onChange={(e) => handleChange('wishlistAutoBuyEnabled', e.target.checked)}
               />
-              <span>Auto-achat des cartes en wishlist dès qu'une offre respecte le budget</span>
+              <span>Auto-achat des cartes en wishlist dès qu&apos;une offre respecte le budget</span>
             </label>
 
             <label className="check-row" style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
@@ -324,38 +451,17 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
             <span>Utiliser les boosters bonus / tickets en réserve</span>
           </label>
           <p className="form-hint" style={{ marginTop: '4px' }}>
-            Désactivé : garde tes boosters bonus et tickets de côté pour les drops d'Éveil
+            Désactivé : garde tes boosters bonus et tickets de côté pour les drops d&apos;Éveil
           </p>
         </div>
 
-        {/* JSON Backup Export / Import */}
-        <fieldset className="settings-group">
-          <legend className="settings-group__legend">Sauvegarde &amp; Profil (JSON)</legend>
-          <p className="form-hint" style={{ margin: 0 }}>
-            Exportez ou restaurez vos réglages, votre wishlist et vos cartes protégées.
-          </p>
-          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-            <button type="button" onClick={handleExportBackup} className="btn btn--ghost" style={{ flex: 1 }}>
-              Exporter la config
-            </button>
-            <button
-              type="button"
-              onClick={() => fileInputRef.current?.click()}
-              className="btn btn--ghost"
-              style={{ flex: 1 }}
-            >
-              Importer un fichier
-            </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept="application/json"
-              style={{ display: 'none' }}
-              aria-label="Importer un fichier de configuration JSON"
-              onChange={handleImportBackup}
-            />
-          </div>
-        </fieldset>
+        <SettingsSystemSection
+          form={form}
+          fileInputRef={fileInputRef}
+          onChange={handleChange}
+          onExportBackup={handleExportBackup}
+          onImportBackup={handleImportBackup}
+        />
 
         {/* Actions */}
         <div style={{ display: 'flex', gap: '8px', marginTop: '16px' }}>

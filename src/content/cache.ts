@@ -12,6 +12,7 @@ export const runtimeCache: RuntimeCache = {
   packPools: {},
   packPoolsAt: 0,
   collectionPrices: new Map(),
+  ownedIds: new Set(),
   rarityAvgPrices: { C: 3, U: 3, R: 6, E: 18, L: 130, M: 950 },
   recycleMap: { ...DEFAULT_RECYCLE_VALUES }
 };

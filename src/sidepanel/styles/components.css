@@ -178,11 +178,19 @@
 
 .toolbar {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 6px;
 }
 
 .toolbar--tight {
   margin-top: 8px;
+}
+
+.toolbar .select {
+  min-width: 0;
+  max-width: 100%;
+  flex: 1 1 120px;
 }
 
 .input,
@@ -196,14 +204,15 @@
   font-size: 12px;
 }
 
-.input:focus,
-.select:focus {
-  outline: none;
+.input:focus-visible,
+.select:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 1px;
   border-color: var(--acc);
 }
 
 .input--search {
-  flex: 1;
+  flex: 1 1 150px;
   min-width: 0;
 }
 
@@ -232,7 +241,7 @@
 .rarity-pill--R { background: var(--rarity-R); }
 .rarity-pill--E { background: var(--rarity-E); }
 .rarity-pill--L { background: var(--rarity-L); }
-.rarity-pill--M { background: var(--rarity-M); color: #ffffff; }
+.rarity-pill--M { background: var(--rarity-M); color: #0e0d12; font-weight: 800; }
 
 .verdict-badge {
   display: inline-block;
@@ -291,25 +300,36 @@
   appearance: none;
   background: transparent;
   border: 1px solid var(--line2);
+  color: var(--mut);
   border-radius: 6px;
-  padding: 2px 6px;
+  min-width: 24px;
+  min-height: 24px;
+  padding: 3px 6px;
   font-size: 11px;
   cursor: pointer;
   line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: all 0.15s ease;
 }
 
 .btn-pin:hover {
   background: var(--raise);
   border-color: var(--line3);
-  transform: scale(1.08);
+  color: var(--fg);
+  transform: scale(1.06);
 }
 
-.btn-pin.is-pinned {
-  background: rgba(168, 85, 247, 0.2);
-  border-color: rgba(168, 85, 247, 0.6);
-  box-shadow: 0 0 8px rgba(168, 85, 247, 0.25);
+.btn-pin.is-pinned,
+.btn-pin.is-active {
+  color: var(--gold);
+  background: rgba(245, 197, 24, 0.14);
+  border-color: rgba(245, 197, 24, 0.5);
+  box-shadow: 0 0 8px rgba(245, 197, 24, 0.22);
 }
+
+.btn-pin svg { width: 13px; height: 13px; }
 
 .sub-meta {
   display: block;
@@ -430,6 +450,8 @@
   bottom: 14px;
   left: 50%;
   transform: translateX(-50%);
+  max-width: calc(100vw - 24px);
+  text-align: center;
   z-index: 100;
   background: var(--raise);
   border: 1px solid var(--acc);
@@ -442,17 +464,9 @@
 }
 
 
-/* Robust 2-Line ROI Boxes */
-.roi-stat-box__sub {
-  font-size: 9.5px;
-  color: var(--fg2);
-  margin-top: 1px;
-  font-family: var(--mono);
-}
-
 /* Empty State Box Overhaul */
 .empty-state-box {
-  padding: 26px 16px;
+  padding: 24px 16px;
   text-align: center;
   display: flex;
   flex-direction: column;
@@ -464,23 +478,6 @@
   border-radius: 12px;
   margin: 6px 0;
 }
-
-.empty-state-box__icon {
-  font-size: 26px;
-  opacity: 0.6;
-  line-height: 1;
-}
-
-.empty-state-box__title {
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--fg);
-}
-
-.empty-state-box__text {
-  margin: 0;
-  font-size: 11.5px;
-  color: var(--mut);
-  max-width: 280px;
-  line-height: 1.45;
-}
+.empty-state-box__icon { font-size: 26px; opacity: 0.6; line-height: 1; }
+.empty-state-box__title { font-size: 12.5px; font-weight: 700; color: var(--fg); }
+.empty-state-box__text { margin: 0; font-size: 11.5px; color: var(--mut); max-width: 280px; line-height: 1.45; }

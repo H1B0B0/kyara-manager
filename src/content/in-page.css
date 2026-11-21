@@ -1,0 +1,163 @@
+/* Kyara Manager — In-Page Tactical Bars & Filter Visual States */
+.km-inpage-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border-radius: 11px;
+  background: linear-gradient(155deg, rgba(24, 21, 31, 0.97), rgba(14, 13, 20, 0.98));
+  border: 1px solid rgba(255, 77, 46, 0.42);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.07), 0 8px 24px rgba(0, 0, 0, 0.48);
+  color: #edeae4;
+  font-family: "Zen Kaku Gothic New", system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+}
+
+.km-inpage-bar__left,
+.km-inpage-bar__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.km-inpage-bar__seal {
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(255, 77, 46, 0.16);
+  border: 1px solid rgba(255, 77, 46, 0.5);
+  color: #ff6a4d;
+  font-weight: 800;
+  font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.km-inpage-bar__title {
+  font-family: "Unbounded", system-ui, sans-serif;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  color: #f3f0ea;
+  text-transform: uppercase;
+}
+
+.km-inpage-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10.5px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #d6d1df;
+  white-space: nowrap;
+}
+
+.km-inpage-pill--wish {
+  background: rgba(245, 197, 24, 0.16);
+  border-color: rgba(245, 197, 24, 0.55);
+  color: #f5c518;
+}
+
+.km-inpage-pill--missing {
+  background: rgba(255, 77, 46, 0.16);
+  border-color: rgba(255, 77, 46, 0.5);
+  color: #ff8c75;
+}
+
+.km-inpage-pill--owned {
+  background: rgba(63, 191, 127, 0.16);
+  border-color: rgba(63, 191, 127, 0.45);
+  color: #4ee094;
+}
+
+.km-inpage-pill--gold {
+  background: rgba(245, 197, 24, 0.12);
+  border-color: rgba(245, 197, 24, 0.4);
+  color: #f5c518;
+}
+
+.km-inpage-pill--warn {
+  background: rgba(255, 179, 71, 0.15);
+  border-color: rgba(255, 179, 71, 0.45);
+  color: #ffb347;
+}
+
+.km-inpage-btn {
+  appearance: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: #edeae4;
+  font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 10px;
+  border-radius: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background-color 0.15s ease, border-color 0.15s ease, transform 0.12s ease;
+}
+
+.km-inpage-btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.28);
+  transform: translateY(-1px);
+}
+
+.km-inpage-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
+}
+
+.km-inpage-btn--primary {
+  background: linear-gradient(135deg, #ff4d2e, #ff6a4d);
+  border-color: #ff6a4d;
+  color: #0e0d12;
+  font-weight: 800;
+}
+
+.km-inpage-btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff6a4d, #ff856d);
+}
+
+.km-inpage-btn.is-active {
+  background: rgba(255, 77, 46, 0.18);
+  border-color: rgba(255, 77, 46, 0.6);
+  color: #ff9880;
+}
+
+.km-inpage-badge--dupe {
+  background: rgba(77, 214, 255, 0.14);
+  border-color: rgba(77, 214, 255, 0.42);
+  color: #7ae2ff;
+}
+
+/* Native /marche Interactive Filter Highlight States */
+body.km-hide-owned-cards [data-km-state="owned"] {
+  opacity: 0.24 !important;
+  filter: grayscale(0.75);
+  transition: opacity 0.15s ease;
+}
+
+body.km-highlight-missing [data-km-state="missing"] {
+  outline: 2px solid rgba(255, 77, 46, 0.72) !important;
+  box-shadow: 0 0 18px rgba(255, 77, 46, 0.22) !important;
+  border-radius: 10px;
+}
+
+body.km-highlight-missing [data-km-state="wish"] {
+  outline: 2px solid rgba(245, 197, 24, 0.85) !important;
+  box-shadow: 0 0 20px rgba(245, 197, 24, 0.3) !important;
+  border-radius: 10px;
+}

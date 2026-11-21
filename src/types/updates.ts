@@ -3,5 +3,10 @@ export interface UpdateState {
   currentVersion: string;
   availableVersion?: string;
   checkedAt?: number;
+  remoteCheckedAt?: number;
+  source?: 'cws' | 'github';
+  releaseUrl?: string;
+  dismissedVersion?: string;
+  notes?: string;
   error?: string;
 }

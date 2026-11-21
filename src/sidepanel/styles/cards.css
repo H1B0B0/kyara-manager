@@ -67,16 +67,16 @@
   .metric-cell__val { font-size: 12px; }
 }
 
-/* Rarity Accents & Border Glow */
-.rarity-m { border-left: 3px solid #ff2a4b !important; }
-.rarity-m:hover { box-shadow: 0 6px 20px rgba(255, 42, 75, 0.25) !important; }
-.rarity-l { border-left: 3px solid #ffb300 !important; }
-.rarity-l:hover { box-shadow: 0 6px 20px rgba(255, 179, 0, 0.25) !important; }
-.rarity-e { border-left: 3px solid #9d4edd !important; }
-.rarity-e:hover { box-shadow: 0 6px 20px rgba(157, 78, 221, 0.25) !important; }
-.rarity-r { border-left: 3px solid #00b4d8 !important; }
-.rarity-u { border-left: 3px solid #2ec4b6 !important; }
-.rarity-c { border-left: 3px solid #6c757d !important; }
+/* Rarity Accents & Border Glow (synced with tokens.css) */
+.rarity-m { border-left: 3px solid var(--rarity-M); }
+.rarity-m:hover { box-shadow: 0 6px 20px rgba(255, 77, 46, 0.22); }
+.rarity-l { border-left: 3px solid var(--rarity-L); }
+.rarity-l:hover { box-shadow: 0 6px 20px rgba(245, 197, 24, 0.22); }
+.rarity-e { border-left: 3px solid var(--rarity-E); }
+.rarity-e:hover { box-shadow: 0 6px 20px rgba(176, 114, 255, 0.22); }
+.rarity-r { border-left: 3px solid var(--rarity-R); }
+.rarity-u { border-left: 3px solid var(--rarity-U); }
+.rarity-c { border-left: 3px solid var(--rarity-C); }
 
 .inventory-card.is-pinned {
   border-color: rgba(245, 197, 24, 0.4);
@@ -121,23 +121,6 @@
   gap: 5px;
   flex-shrink: 0;
 }
-
-.btn-pin {
-  appearance: none;
-  background: transparent;
-  border: none;
-  color: var(--dim);
-  cursor: pointer;
-  padding: 3px;
-  border-radius: 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: color 0.15s ease, transform 0.15s ease;
-}
-.btn-pin:hover { color: var(--fg); }
-.btn-pin.is-active { color: var(--gold); }
-.btn-pin svg { width: 13px; height: 13px; }
 
 .spare-badge {
   font-family: var(--mono);
@@ -190,13 +173,15 @@
 
 .inventory-card__footer, .deal-card__footer, .wishlist-card__footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 6px;
+  row-gap: 6px;
   margin-top: 2px;
 }
 .inventory-card__verdict { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
-.inventory-card__actions { display: flex; align-items: center; gap: 5px; }
+.inventory-card__actions { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; }
 .inventory-card__pedagogy { margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); animation: fadeIn 0.2s ease-out; }
 
 /* Sell Pace Tier Pills */
@@ -212,9 +197,9 @@
   align-items: center;
   gap: 3px;
 }
-.sell-tier-pill--fast { background: rgba(77, 214, 255, 0.12); color: var(--cyan); border: 1px solid rgba(77, 214, 255, 0.35); }
-.sell-tier-pill--normal { background: rgba(245, 197, 24, 0.12); color: var(--gold); border: 1px solid rgba(245, 197, 24, 0.35); }
-.sell-tier-pill--patient { background: rgba(176, 114, 255, 0.12); color: var(--purple); border: 1px solid rgba(176, 114, 255, 0.35); }
+.sell-tier-pill--fast { background: rgba(34, 211, 238, 0.12); color: var(--tier-fast); border: 1px solid rgba(34, 211, 238, 0.35); }
+.sell-tier-pill--normal { background: rgba(167, 139, 250, 0.12); color: var(--tier-normal); border: 1px solid rgba(167, 139, 250, 0.35); }
+.sell-tier-pill--patient { background: rgba(251, 191, 36, 0.12); color: var(--tier-patient); border: 1px solid rgba(251, 191, 36, 0.35); }
 
 /* Capsule Filter Pills */
 .capsule-pills { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
@@ -233,6 +218,7 @@
   white-space: nowrap;
 }
 .capsule-pill:hover { color: var(--fg); border-color: var(--line2); }
+.capsule-pill:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
 .capsule-pill.is-active {
   background: var(--panel2);
   color: var(--gold);
@@ -280,15 +266,16 @@
 .active-listings-list { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
 .active-listing-item {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   padding: 6px 8px;
   background: var(--raise);
   border: 1px solid var(--line);
   border-radius: 8px;
-  gap: 8px;
+  gap: 6px 8px;
 }
-.active-listing-item__info { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.active-listing-item__info { display: flex; align-items: center; gap: 6px; min-width: 0; flex: 1 1 160px; }
 .active-listing-item__name { font-size: 11.5px; font-weight: 600; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .active-listing-item__price { font-size: 11px; color: var(--gold); font-weight: 700; flex-shrink: 0; }
 .listing-age { display: inline-flex; align-items: center; gap: 5px; font-family: var(--mono); font-size: 10px; color: var(--mut); }
@@ -357,17 +344,3 @@
   border-radius: 2px;
   transition: width 0.3s ease;
 }
-
-.pity-banner {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  background: rgba(245, 197, 24, 0.08);
-  border: 1px solid rgba(245, 197, 24, 0.3);
-  border-radius: 10px;
-  padding: 10px 12px;
-  margin-bottom: 12px;
-}
-.pity-banner__icon { display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
-.pity-banner__title { font-size: 12px; color: var(--gold); }
-.pity-banner__desc { font-size: 10.5px; color: var(--fg2); margin: 2px 0 0; }

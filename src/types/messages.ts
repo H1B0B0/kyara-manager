@@ -20,7 +20,9 @@ export type ExtensionCommand =
   | { type: 'km:cmd:wishlist-remove'; characterId: number }
   | { type: 'km:save-settings'; settings: Partial<KyaraSettings> }
   | { type: 'km:open-kyara-tab' }
-  | { type: 'km:update-check' }
+  | { type: 'km:update-check'; includeRemote?: boolean }
+  | { type: 'km:update-apply' }
+  | { type: 'km:update-dismiss' }
   | { type: 'km:log'; level?: string; message: string };
 
 export interface CommandResponse {

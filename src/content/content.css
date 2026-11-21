@@ -1,4 +1,4 @@
-/* Kyara Manager — In-page Floating HUD (Kyara Native Obsidian & Vermilion Theme) */
+/* Kyara Manager — In-page Floating HUD & Kyara DOM Enhancements (Obsidian & Vermilion Theme) */
 #km-floating-hud.km-hud {
   all: initial;
   position: fixed;
@@ -8,69 +8,109 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  padding: 7px 11px 7px 8px;
-  border-radius: 12px;
-  background: rgba(21, 20, 26, 0.95);
-  border: 1px solid #2e2b36;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65), 0 0 1px rgba(255, 255, 255, 0.1);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  padding: 6px 8px;
+  border-radius: 13px;
+  background: linear-gradient(180deg, rgba(24, 22, 31, 0.96), rgba(15, 14, 20, 0.97));
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 14px 36px rgba(0, 0, 0, 0.72),
+    0 2px 8px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
   color: #edeae4;
   font-family: "Zen Kaku Gothic New", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   font-size: 12px;
   line-height: 1.25;
+  max-width: calc(100vw - 32px);
   user-select: none;
   box-sizing: border-box;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  opacity: 1;
+  translate: 0 0;
+  transition:
+    display 0.2s ease-out,
+    opacity 0.2s ease-out,
+    translate 0.2s ease-out,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
+  transition-behavior: allow-discrete;
+}
+
+@starting-style {
+  #km-floating-hud.km-hud {
+    opacity: 0;
+    translate: 0 12px;
+  }
 }
 
 #km-floating-hud *,
 #km-floating-hud *::before,
-#km-floating-hud *::after {
+#km-floating-hud *::after,
+#km-update-toast *,
+#km-update-toast *::before,
+#km-update-toast *::after {
   box-sizing: border-box;
 }
 
 #km-floating-hud.km-hud:hover {
-  border-color: #3f3b4a;
-  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.75), 0 0 1px rgba(255, 255, 255, 0.15);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 16px 40px rgba(0, 0, 0, 0.8),
+    0 0 0 1px rgba(255, 77, 46, 0.18);
 }
 
+/* Collapsed State: pure floating Japanese seal only — hides info, sep, actions, and all non-seal children */
 #km-floating-hud.km-hud.is-collapsed {
-  padding: 4px;
+  padding: 0;
   gap: 0;
-  border-radius: 10px;
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
 }
 
-#km-floating-hud.km-hud.is-collapsed .km-hud__info,
-#km-floating-hud.km-hud.is-collapsed .km-hud__btn--toggle,
-#km-floating-hud.km-hud.is-collapsed .km-hud__btn--primary,
-#km-floating-hud.km-hud.is-collapsed .km-hud__btn--icon {
+#km-floating-hud.km-hud.is-collapsed > :not(.km-hud__seal) {
   display: none !important;
 }
 
 .km-hud__seal {
+  position: relative;
   appearance: none;
-  border: none;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  background: #1e1c26;
-  border: 1px solid #2e2b36;
-  color: #9d98a5;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  background: linear-gradient(145deg, #1d1b27, #13121a);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #b4afbe;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
   font-weight: 800;
-  font-size: 13px;
+  font-size: 14px;
   flex-shrink: 0;
   cursor: pointer;
-  transition: all 0.18s ease;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: transform 0.18s ease, border-color 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+}
+
+#km-floating-hud.km-hud.is-collapsed .km-hud__seal {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  font-size: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 10px 26px rgba(0, 0, 0, 0.72),
+    0 0 0 1px rgba(0, 0, 0, 0.4);
 }
 
 .km-hud__seal:hover {
   border-color: #ff4d2e;
-  color: #edeae4;
-  transform: scale(1.05);
+  color: #fff;
+  transform: scale(1.06);
 }
 
 .km-hud__seal:focus-visible {
@@ -79,10 +119,25 @@
 }
 
 .km-hud__seal.is-on {
-  background: rgba(63, 191, 127, 0.16);
+  background: linear-gradient(145deg, rgba(63, 191, 127, 0.22), rgba(20, 42, 34, 0.92));
   border-color: rgba(63, 191, 127, 0.65);
-  color: #3fbf7f;
-  box-shadow: 0 0 10px rgba(63, 191, 127, 0.4);
+  color: #4ee094;
+  box-shadow:
+    inset 0 1px 0 rgba(120, 255, 190, 0.18),
+    0 0 14px rgba(63, 191, 127, 0.36);
+}
+
+.km-hud__seal.has-update::after {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #ff4d2e;
+  border: 2px solid #13121a;
+  box-shadow: 0 0 8px rgba(255, 77, 46, 0.8);
 }
 
 .km-hud__info {
@@ -90,46 +145,93 @@
   flex-direction: column;
   gap: 2px;
   min-width: 0;
-  padding-right: 2px;
+  padding: 0 2px;
+}
+
+.km-hud__title-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .km-hud__title {
   font-family: "Unbounded", system-ui, sans-serif;
   font-weight: 800;
-  font-size: 10.5px;
-  letter-spacing: 0.06em;
-  color: #edeae4;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  color: #f3f0ea;
+}
+
+.km-hud__status-pill {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #9d98a5;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.km-hud__status-pill.is-on {
+  background: rgba(63, 191, 127, 0.16);
+  color: #4ee094;
+  border-color: rgba(63, 191, 127, 0.45);
 }
 
 .km-hud__meta {
   font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
-  font-size: 11px;
+  font-size: 10.5px;
   color: #c4bfcc;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+}
+
+.km-hud__sep {
+  width: 1px;
+  height: 24px;
+  background: linear-gradient(180deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+  flex-shrink: 0;
+}
+
+.km-hud__actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
 }
 
 .km-hud__btn {
   appearance: none;
-  border: 1px solid #2e2b36;
-  background: #1e1c26;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
   color: #edeae4;
   font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  padding: 5px 9px;
-  border-radius: 7px;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: 8px;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 4px;
+  white-space: nowrap;
   transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
 }
 
-.km-hud__btn:hover {
-  background: #272432;
-  border-color: #3f3b4a;
+.km-hud__btn:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(255, 255, 255, 0.22);
   transform: translateY(-1px);
+}
+
+.km-hud__btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
 }
 
 .km-hud__btn:focus-visible {
@@ -139,62 +241,209 @@
 
 .km-hud__btn--toggle.is-on {
   background: rgba(63, 191, 127, 0.16);
-  border-color: rgba(63, 191, 127, 0.6);
-  color: #3fbf7f;
+  border-color: rgba(63, 191, 127, 0.52);
+  color: #4ee094;
 }
 
 .km-hud__btn--primary {
   background: linear-gradient(135deg, #ff4d2e, #ff6a4d);
   border-color: #ff6a4d;
-  color: #fff;
+  color: #0e0d12;
   font-family: "Zen Kaku Gothic New", system-ui, sans-serif;
-  font-weight: 700;
-  box-shadow: 0 2px 8px rgba(255, 77, 46, 0.3);
+  font-weight: 800;
+  padding: 0 11px;
+  box-shadow: 0 3px 10px rgba(255, 77, 46, 0.34);
 }
 
-.km-hud__btn--primary:hover {
-  background: linear-gradient(135deg, #ff6a4d, #ff8266);
-  border-color: #ff7a45;
+.km-hud__btn--primary:hover:not(:disabled) {
+  background: linear-gradient(135deg, #ff5e40, #ff7c61);
+  border-color: #ff856d;
 }
 
 .km-hud__btn--icon {
-  padding: 3px 6px;
-  font-size: 12px;
+  width: 28px;
+  padding: 0;
+  font-size: 13px;
   color: #9d98a5;
-  border-radius: 6px;
 }
 
-.km-hud__btn--icon:hover {
+.km-hud__btn--icon:hover:not(:disabled) {
+  color: #ffffff;
+}
+
+/* Kyara-Native In-Page Update Toast */
+#km-update-toast.km-update-toast {
+  all: initial;
+  position: fixed;
+  left: 16px;
+  bottom: 68px;
+  z-index: 2147483641;
+  width: min(360px, calc(100vw - 32px));
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px;
+  border-radius: 13px;
+  background: linear-gradient(160deg, rgba(28, 22, 26, 0.97), rgba(15, 14, 21, 0.98));
+  border: 1px solid rgba(255, 77, 46, 0.55);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.1),
+    0 18px 42px rgba(0, 0, 0, 0.8),
+    0 0 24px rgba(255, 77, 46, 0.16);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   color: #edeae4;
+  font-family: "Zen Kaku Gothic New", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 12px;
+  opacity: 1;
+  translate: 0 0;
+  transition: display 0.24s ease-out, opacity 0.24s ease-out, translate 0.24s ease-out;
+  transition-behavior: allow-discrete;
+}
+
+@starting-style {
+  #km-update-toast.km-update-toast {
+    opacity: 0;
+    translate: 0 10px;
+  }
+}
+
+#km-update-toast[hidden] {
+  display: none !important;
+  opacity: 0;
+  translate: 0 10px;
+}
+
+.km-update-toast__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.km-update-toast__seal {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: rgba(255, 77, 46, 0.16);
+  border: 1px solid rgba(255, 77, 46, 0.55);
+  color: #ff6a4d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 800;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.km-update-toast__copy {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.km-update-toast__title {
+  font-size: 12px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.km-update-toast__desc {
+  font-size: 11px;
+  color: #c4bfcc;
+  line-height: 1.35;
+}
+
+.km-update-toast__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+/* Non-intrusive inline badges injected on kyara.games */
+.km-inpage-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1.45;
+  vertical-align: middle;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(20, 19, 26, 0.9);
+  color: #d6d1df;
+}
+
+.km-inpage-badge--wish {
+  background: rgba(245, 197, 24, 0.16);
+  border-color: rgba(245, 197, 24, 0.55);
+  color: #f5c518;
+}
+
+.km-inpage-badge--missing {
+  background: rgba(255, 77, 46, 0.16);
+  border-color: rgba(255, 77, 46, 0.5);
+  color: #ff7a5c;
+}
+
+.km-inpage-badge--owned {
+  background: rgba(63, 191, 127, 0.14);
+  border-color: rgba(63, 191, 127, 0.45);
+  color: #4ee094;
 }
 
 /* In-page Cockpit Overlay */
 .km-overlay-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 2147483640;
+  z-index: 2147483647;
   background: rgba(9, 8, 13, 0.78);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 16px;
   box-sizing: border-box;
+  opacity: 1;
+  transition: display 0.2s ease-out, opacity 0.2s ease-out;
+  transition-behavior: allow-discrete;
+}
+
+@starting-style {
+  .km-overlay-backdrop {
+    opacity: 0;
+  }
 }
 
 .km-overlay-backdrop.is-hidden {
   display: none;
+  opacity: 0;
 }
 
 .km-overlay-shell {
-  width: min(1160px, 94vw);
-  height: min(860px, 88vh);
+  width: min(1200px, calc(100vw - 32px));
+  height: min(860px, calc(100vh - 32px));
   border-radius: 16px;
   border: 1px solid rgba(255, 77, 46, 0.35);
   background: #0e0d12;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.85);
   overflow: hidden;
+  translate: 0 0;
+  transition: translate 0.2s ease-out;
+}
+
+@starting-style {
+  .km-overlay-shell {
+    translate: 0 12px;
+  }
 }
 
 .km-overlay-iframe {
@@ -202,4 +451,21 @@
   height: 100%;
   border: 0;
   display: block;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #km-floating-hud.km-hud,
+  #km-update-toast.km-update-toast,
+  .km-overlay-backdrop,
+  .km-overlay-shell {
+    translate: none !important;
+    transition-duration: 0.08s !important;
+  }
+  @starting-style {
+    #km-floating-hud.km-hud,
+    #km-update-toast.km-update-toast,
+    .km-overlay-shell {
+      translate: none;
+    }
+  }
 }

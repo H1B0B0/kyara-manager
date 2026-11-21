@@ -38,6 +38,7 @@ export interface RuntimeCache {
   packPools: Record<string, number[]>;
   packPoolsAt: number;
   collectionPrices: Map<number, PriceInfo>;
+  ownedIds?: Set<number>;
   rarityAvgPrices: Record<string, number>;
   recycleMap: Record<string, number>;
 }

@@ -25,7 +25,7 @@
 
 /* Renaissance Focus Panel */
 .renaissance-panel {
-  container-type: inline-size; border-color: var(--line2);
+  container-type: inline-size; container-name: ren-panel; border-color: var(--line2);
   background: linear-gradient(155deg, rgba(255, 77, 46, 0.05) 0%, var(--panel) 55%);
 }
 .renaissance-panel.is-enabled { border-color: rgba(255, 77, 46, 0.42); }
@@ -69,9 +69,18 @@
   font-family: var(--mono); font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 4px; cursor: pointer; line-height: 1.2;
 }
 .ren-focus-pill.is-active {
-  color: var(--ren-color);
-  border-color: color-mix(in srgb, var(--ren-color) 55%, transparent);
-  background: color-mix(in srgb, var(--ren-color) 14%, transparent);
+  color: color-mix(in srgb, var(--ren-color) 86%, white);
+  border-color: color-mix(in srgb, var(--ren-color) 62%, transparent);
+  background: color-mix(in srgb, var(--ren-color) 18%, transparent);
+}
+.market-subtab:focus-visible,
+.ren-collapse-btn:focus-visible,
+.ren-focus-pill:focus-visible,
+.ren-edit-toggle:focus-visible,
+.offers-subswitch__pill:focus-visible,
+.series-card__toggle:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
 }
 .ren-cell__ratio { font-size: 10px; color: var(--fg2); white-space: nowrap; font-variant-numeric: tabular-nums; }
 .ren-progress-track { height: 3px; width: 100%; border-radius: 999px; background: rgba(255, 255, 255, 0.08); overflow: hidden; }
@@ -88,18 +97,26 @@
 }
 .ren-edit-toggle:hover { color: var(--fg); }
 .ren-focus-summary { font-size: 10px; color: var(--mut); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.ren-targets-editor { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; padding-top: 4px; }
+.ren-targets-editor { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding-top: 4px; }
 .ren-target-field {
-  display: flex; align-items: center; gap: 5px; background: var(--panel2);
-  border: 1px solid var(--line); border-radius: 7px; padding: 4px 6px; min-width: 0;
+  display: flex; align-items: center; gap: 6px; background: var(--panel2);
+  border: 1px solid var(--line); border-radius: 7px; padding: 4px 7px; min-width: 0;
 }
 .ren-target-field .rarity-pill { margin-right: 0; flex-shrink: 0; }
-.ren-target-input { width: 100%; min-width: 0; padding: 3px 5px; font-size: 11px; }
+.ren-target-input {
+  width: 100%; min-width: 0; padding: 3px 6px; font-size: 11.5px;
+  appearance: textfield; -moz-appearance: textfield;
+}
+.ren-target-input::-webkit-outer-spin-button,
+.ren-target-input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
 
 /* Market Filters & Badges */
 .market-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
-.market-filter-bar .input--search { flex: 1 1 130px; min-width: 0; }
-.market-sort-select { flex: 0 1 135px; min-width: 0; font-size: 11px; padding: 5px 6px; }
+.market-filter-bar .input--search { flex: 1 1 160px; min-width: 0; }
+.market-sort-select { flex: 1 1 110px; min-width: 0; font-size: 11px; padding: 5px 6px; }
 .market-chip-row { margin-top: 6px; gap: 4px; }
 .capsule-pill--xs { padding: 2px 8px; font-size: 10px; }
 .renaissance-badge {
@@ -113,7 +130,7 @@
 .batch-section { display: flex; flex-direction: column; gap: 5px; }
 .batch-label { font-size: 11px; font-weight: 600; color: var(--fg2); }
 .batch-pills { margin-top: 0; gap: 5px; }
-.batch-pills--inline { flex-wrap: nowrap; }
+.batch-pills--inline { flex-wrap: wrap; }
 .batch-qty-row { display: flex; flex-direction: column; gap: 5px; }
 .batch-qty-controls { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 .batch-qty-input { width: 68px; padding: 4px 6px; font-size: 11.5px; }
@@ -289,11 +306,14 @@
   display: flex; flex-direction: column; gap: 8px; min-width: 0;
 }
 
-/* Container Responsive Upgrades (>= 420px / Fullscreen) */
-@container (min-width: 420px) {
+/* Container Responsive Upgrades (>= 390px / Fullscreen) */
+@container ren-panel (min-width: 390px) {
   .renaissance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
-  .market-subtab { font-size: 11.5px; padding: 7px 8px; }
+  .ren-targets-editor { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@container market-pro (min-width: 640px) {
+@container ren-panel (min-width: 560px) {
   .ren-targets-editor { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+@container market-pro (min-width: 420px) {
+  .market-subtab { font-size: 11.5px; padding: 7px 8px; }
 }

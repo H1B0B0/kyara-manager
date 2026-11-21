@@ -4,8 +4,9 @@
 .card {
   background: var(--panel);
   border: 1px solid var(--line);
-  border-radius: 11px;
+  border-radius: 10px;
   padding: 11px 12px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: border-color 0.15s ease;
 }
 .card:hover { border-color: var(--line2); }
@@ -68,7 +69,8 @@
   font-weight: 700;
   background: linear-gradient(135deg, #ff4d2e, #ff6a4d);
   border: 1px solid #ff7a45;
-  color: #fff;
+  color: #0e0d12;
+  font-weight: 800;
   border-radius: 8px;
   box-shadow: 0 4px 14px rgba(255, 77, 46, 0.35);
   cursor: pointer;
@@ -118,8 +120,9 @@
 .module-grid { display: flex; flex-direction: column; gap: 7px; }
 .module-row-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
 .module-card {
-  background: var(--panel); border: 1px solid var(--line); border-radius: 11px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
   padding: 10px 12px; display: flex; flex-direction: column; gap: 8px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
   transition: border-color 0.18s ease, background-color 0.18s ease;
 }
 .module-card:hover { border-color: var(--line2); background: var(--panel2); }
@@ -241,7 +244,7 @@
 .pity-banner {
   background: linear-gradient(135deg, rgba(168, 85, 247, 0.16), rgba(255, 77, 46, 0.12));
   border: 1px solid rgba(255, 77, 46, 0.45); border-radius: 10px;
-  padding: 9px 12px; display: flex; align-items: center; gap: 11px;
+  padding: 9px 12px; margin-bottom: 10px; display: flex; align-items: center; gap: 11px;
   animation: pityPulse 2.8s ease-in-out infinite;
 }
 .pity-banner[hidden] { display: none; }
@@ -252,3 +255,7 @@
 .pity-banner__content { min-width: 0; }
 .pity-banner__title { display: block; font-size: 12px; font-weight: 700; color: #ff9880; }
 .pity-banner__desc { margin: 2px 0 0; font-size: 11px; color: var(--fg2); line-height: 1.35; }
+.kyara-segmented__pill:focus-visible { outline: 2px solid var(--acc); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .status-beacon.is-active, .pity-banner { animation: none; }
+}

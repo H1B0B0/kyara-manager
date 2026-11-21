@@ -57,7 +57,7 @@ export const Navigation: React.FC<NavigationProps> = ({
             <span className="k-glyph" aria-hidden="true">{tab.glyph}</span>
             <span className="tab-label">{t(tab.labelKey)}</span>
             {tab.badge !== undefined && tab.badge > 0 && (
-              <span className="tab-badge">{tab.badge}</span>
+              <span className="tab-badge">{tab.badge > 99 ? '99+' : tab.badge}</span>
             )}
           </button>
         );

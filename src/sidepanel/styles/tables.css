@@ -18,10 +18,10 @@
 .data-table--duplicates {
   --label-col-1: "Personnage";
   --label-col-2: "Surplus";
-  --label-col-3: "Médiane 7j";
-  --label-col-4: "Prix (Net)";
-  --label-col-5: "Recyclage";
-  --label-col-6: "Décision";
+  --label-col-3: "Recyclage";
+  --label-col-4: "Marché / Conseillé";
+  --label-col-5: "Décision";
+  --label-col-6: "Action";
 }
 
 .data-table--market {
@@ -94,30 +94,7 @@
   display: none !important;
 }
 
-.empty-state-box {
-  padding: 24px 14px;
-  text-align: center;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  color: var(--mut);
-}
-
-.empty-state-box__icon {
-  font-size: 22px;
-  opacity: 0.6;
-}
-
-.empty-state-box__text {
-  margin: 0;
-  font-size: 11.5px;
-  color: var(--mut);
-  line-height: 1.4;
-}
-
-@container (width < 340px) {
+@container (width < 410px) {
   .data-table tr:has(.empty-cell),
   .data-table tbody tr:has(.empty-cell) {
     display: table-row !important;

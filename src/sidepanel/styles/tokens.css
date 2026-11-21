@@ -1,14 +1,14 @@
 /* Kyara Manager — Side Panel Stylesheet (Native Kyara.games Design System) */
 :root {
   color-scheme: dark;
-  --bg: #0e0d12;
-  --bg2: #121117;
-  --panel: #15141a;
-  --panel2: #17161d;
-  --raise: #1e1c26;
-  --line: #25232c;
-  --line2: #2e2b36;
-  --line3: #3a3742;
+  --bg: #0b0a0f;
+  --bg2: #100f16;
+  --panel: #13121a;
+  --panel2: #171620;
+  --raise: #1e1c28;
+  --line: #262430;
+  --line2: #322f3e;
+  --line3: #423e50;
   --fg: #edeae4;
   --fg2: #b7b2bd;
   --fg3: #c9c5ce;
@@ -89,8 +89,12 @@ body {
 
 /* Custom Scrollbars (modern-web-guidance: customize-scrollbar-color-and-thickness) */
 .app-main,
+.app-header,
 .table-wrapper,
-.journal-list {
+.journal-list,
+.renaissance-panel,
+.batch-preview-list,
+.best-pulls-grid {
   scrollbar-width: thin;
   scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
 }

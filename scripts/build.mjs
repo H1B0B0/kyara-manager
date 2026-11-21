@@ -68,6 +68,10 @@ fs.copyFileSync(
   path.join(rootDir, 'src/content/content.css'),
   path.join(contentOutDir, 'content.css')
 );
+fs.copyFileSync(
+  path.join(rootDir, 'src/content/in-page.css'),
+  path.join(contentOutDir, 'in-page.css')
+);
 
 // 4. Copy icons and manifest.json
 console.log('📋 [4/4] Copying Assets & Manifest...');

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { BuyOrderOpportunity } from '../../../types/kyara';
 import type { KyaraSettings } from '../../../types/settings';
 import { RarityPill } from '../common/RarityPill';
@@ -38,7 +38,14 @@ export const BuyOrdersPanel: React.FC<BuyOrdersPanelProps> = ({
   const [placingId, setPlacingId] = useState<number | null>(null);
   const [placingBatch, setPlacingBatch] = useState(false);
 
-  const discountPct = settings.buyOrderDiscountPct ?? 25;
+  const settingsDiscount = settings.buyOrderDiscountPct ?? 25;
+  const [discountPct, setDiscountPct] = useState(settingsDiscount);
+  const sliderTimerRef = useRef<number | null>(null);
+  useEffect(() => { setDiscountPct(settingsDiscount); }, [settingsDiscount]);
+  const commitDiscount = (val: number) => {
+    if (sliderTimerRef.current) window.clearTimeout(sliderTimerRef.current);
+    onUpdateSettings({ buyOrderDiscountPct: val });
+  };
   const totalBidCost = useMemo(() => opportunities.reduce((sum, op) => sum + (op.suggestedBid || 0), 0), [opportunities]);
 
   const handleScan = async () => {
@@ -121,7 +128,14 @@ export const BuyOrdersPanel: React.FC<BuyOrdersPanelProps> = ({
           <span className="bo-slider-label">Remise</span>
           <input
             type="range" min={10} max={60} step={1} value={discountPct}
-            onChange={(e) => onUpdateSettings({ buyOrderDiscountPct: Number(e.target.value) })}
+            onChange={(e) => {
+              const v = Number(e.target.value);
+              setDiscountPct(v);
+              if (sliderTimerRef.current) window.clearTimeout(sliderTimerRef.current);
+              sliderTimerRef.current = window.setTimeout(() => onUpdateSettings({ buyOrderDiscountPct: v }), 280);
+            }}
+            onPointerUp={(e) => commitDiscount(Number((e.target as HTMLInputElement).value))}
+            onBlur={(e) => commitDiscount(Number(e.target.value))}
             className="bo-slider" aria-label="Pourcentage de remise personnalisé"
           />
           <span className="bo-discount-val font-mono">-{discountPct}%</span>

@@ -40,6 +40,11 @@ export const App: React.FC = () => {
     if (!isOverlay) return;
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
+        const tag = (event.target as HTMLElement | null)?.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
+          (event.target as HTMLElement).blur();
+          return;
+        }
         window.parent.postMessage({ type: 'km:close-overlay' }, '*');
       }
     };
@@ -52,9 +57,11 @@ export const App: React.FC = () => {
     setActiveTab(tab);
   };
 
+  const toastTimerRef = React.useRef<number | null>(null);
   const showToast = (msg: string) => {
     setToastMessage(msg);
-    setTimeout(() => {
+    if (toastTimerRef.current) window.clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = window.setTimeout(() => {
       setToastMessage((current) => (current === msg ? null : current));
     }, 3200);
   };

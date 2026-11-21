@@ -175,6 +175,7 @@ async function buildDashboardSnapshot({
       duplicateEntries.push(entry.characterId !== undefined ? entry : { ...entry, characterId: cid });
     }
   }
+  runtimeCache.ownedIds = ownedSet;
 
   const dupeIds = duplicateEntries.map((e) => Number(e.characterId ?? e.id));
   const [, packPools] = await Promise.all([

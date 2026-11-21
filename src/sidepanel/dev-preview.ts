@@ -190,7 +190,7 @@ const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.3.2' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.4.0' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -359,14 +359,28 @@ function handleMessage(cmd: any): any {
     return { ok: true, boughtCount: 1, dealsFound: nextMw.dealsFound, marketWatch: nextMw };
   }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
-  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'no_update', currentVersion: '2.3.2' } }); return { ok: true }; }
+  if (type === 'km:update-check') {
+    notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' } });
+    return { ok: true };
+  }
+  if (type === 'km:update-apply') {
+    notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' } });
+    return { ok: true, kmUpdate: store.kmUpdate };
+  }
+  if (type === 'km:update-dismiss') {
+    notifyStorage({ kmUpdate: { ...store.kmUpdate, dismissedVersion: store.kmUpdate?.availableVersion } });
+    return { ok: true };
+  }
   return { ok: true, data: {} };
 }
 
 function installChromeMock() {
+  if (typeof window !== 'undefined' && window.location.search.includes('kmUpdate=available')) {
+    store.kmUpdate = { status: 'available', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' };
+  }
   (globalThis as any).chrome = {
     runtime: {
-      lastError: null, getManifest: () => ({ version: '2.3.2', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
+      lastError: null, getManifest: () => ({ version: '2.4.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
       sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },
@@ -447,6 +461,12 @@ function mountPreviewStudioBar() {
     btnLive.innerText = active ? 'Simulation : On' : 'Simulation : Off';
   };
   updateLiveBtn(false);
+  const btnUpd = document.createElement('button'); btnUpd.style.cssText = btnStyle(false); btnUpd.innerText = 'Pop-up Maj';
+  btnUpd.onclick = () => {
+    const isAvail = store.kmUpdate?.status === 'available' || store.kmUpdate?.status === 'installing';
+    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.4.0' } : { status: 'available', currentVersion: '2.4.0', availableVersion: '2.5.0', source: 'cws' } });
+    btnUpd.style.cssText = btnStyle(!isAvail);
+  };
   const simulateStep = () => {
     liveIndex = (liveIndex + 1) % 4; const nowTs = Date.now();
     if (liveIndex === 0) {
@@ -463,7 +483,7 @@ function mountPreviewStudioBar() {
   };
   btnLive.onclick = () => { if (simTimer) { clearInterval(simTimer); simTimer = null; updateLiveBtn(false); } else { updateLiveBtn(true); simulateStep(); simTimer = setInterval(simulateStep, 4000); } };
   const sep = document.createElement('span'); sep.style.cssText = 'width:1px;height:14px;background:rgba(255,255,255,0.15);margin:0 2px;';
-  bar.append(btn365, btn440, btnOverlay, sep, btnLive); document.body.appendChild(bar);
+  bar.append(btn365, btn440, btnOverlay, sep, btnLive, btnUpd); document.body.appendChild(bar);
   const initialOverlay = window.location.search.includes('mode=overlay') || window.location.search.includes('mode=full');
   applyMode(initialOverlay ? 'overlay' : '365px');
 }

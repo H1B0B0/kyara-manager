@@ -1,5 +1,11 @@
 import { mergeSettings, type KyaraSettings } from '../types/settings';
-import { checkForUpdate, updateAvailable, applyPendingUpdate } from './updates';
+import {
+  checkForUpdate,
+  updateAvailable,
+  applyPendingUpdate,
+  pollForUpdateSilently,
+  dismissUpdateNotification
+} from './updates';
 
 const ALARM_NAME = 'kyara-manager-tick';
 const KYARA_URL_PATTERNS = ['https://kyara.games/*', 'https://*.kyara.games/*'];
@@ -122,6 +128,7 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 chrome.runtime.onStartup.addListener(async () => {
   await ensureAlarm();
   await updateBadgeFromState();
+  void pollForUpdateSilently().catch(() => {});
 });
 
 chrome.runtime.onUpdateAvailable.addListener((details) => {
@@ -132,6 +139,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
   await updateBadgeFromState();
   await applyPendingUpdate();
+  void pollForUpdateSilently().catch(() => {});
   const { settings } = (await chrome.storage.local.get('settings')) as { settings?: KyaraSettings };
   if (!settings?.masterEnabled) return;
   await sendToKyaraTab({ type: 'km:alarm-tick' });
@@ -154,7 +162,18 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
       }
 
       if (message.type === 'km:update-check') {
-        await checkForUpdate();
+        await checkForUpdate({ includeRemote: Boolean(message.includeRemote) });
+        sendResponse({ ok: true });
+        return;
+      }
+      if (message.type === 'km:update-apply') {
+        await applyPendingUpdate();
+        const { kmUpdate } = (await chrome.storage.local.get('kmUpdate')) as { kmUpdate?: any };
+        sendResponse({ ok: true, kmUpdate });
+        return;
+      }
+      if (message.type === 'km:update-dismiss') {
+        await dismissUpdateNotification();
         sendResponse({ ok: true });
         return;
       }
