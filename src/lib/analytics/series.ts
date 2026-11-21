@@ -20,6 +20,12 @@ function getPriceEntry(
   return collectionPrices instanceof Map ? collectionPrices.get(id) : collectionPrices[id];
 }
 
+function pickPositive(v: unknown): number | null {
+  if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 /**
  * Compute per-series completion progress, prioritizing nearly complete and affordable series.
  */
@@ -27,7 +33,8 @@ export function computeSeriesProgress(
   catalogById: Map<number, any> | Record<number, any>,
   ownedSet: Set<number> | number[] | null | undefined,
   collectionPrices: Map<number, any> | Record<number, any> | null | undefined = null,
-  limit = 25
+  limit = 25,
+  rarityAvgPrices?: Record<string, number> | null
 ): SeriesProgress[] {
   const ownedIds =
     ownedSet instanceof Set
@@ -63,9 +70,13 @@ export function computeSeriesProgress(
       acc.owned += 1;
     } else {
       const priceEntry = getPriceEntry(collectionPrices, id);
-      const rawMedian = priceEntry?.median7d;
+      const cardPrice =
+        pickPositive(priceEntry?.median7d) ??
+        pickPositive(priceEntry?.median30d) ??
+        pickPositive(priceEntry?.lastPrice);
       const estimatedPrice =
-        (typeof rawMedian === 'number' && Number.isFinite(rawMedian) ? rawMedian : null) ??
+        cardPrice ??
+        pickPositive(rarityAvgPrices?.[rarity]) ??
         RARITY_PRICE_FLOORS[rarity] ??
         5;
 

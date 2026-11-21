@@ -1,14 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { mockChrome } from './chrome';
 import {
+  ALL_PLAYABLE_GAMES,
+  DAILY_GAMES,
   chooseBestDailyHandIndices,
+  chooseBestRaidTeamIndices,
   extractCardIdFromUrl,
+  findBlindTestMatch,
+  matchBlindTestChoice,
   matchCharacterChoice,
+  pickExpeditionNextIndex,
   pickMostLovedWinner,
+  pickThreeArcsLineIndex,
   recommendArcadeLot,
   shouldHitKyara21,
   type DailyHandCard
 } from '../src/lib/analytics/games-solver';
+import { normalizeSettings, type KyaraGameId } from '../src/types/settings';
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
@@ -118,5 +126,134 @@ describe('games solver & room farmer', () => {
     mocks.api.mockResolvedValue({ enabled: true, blocked: null, balance: 120, today: 60, dayCap: 60, week: 120, weekCap: 300 });
     const cappedRes = await executeAutoGames({ me: { id: 1 } }, { manual: false });
     expect(cappedRes.playedGames).toBe(0);
+  });
+
+  it('exposes DAILY_GAMES & ALL_PLAYABLE_GAMES and validates all 12 game slugs + all in normalizeSettings', () => {
+    const expectedSlugs: KyaraGameId[] = [
+      'main-du-jour',
+      'raid-du-jour',
+      'expedition',
+      'trois-arcs',
+      'main-kyara',
+      'raid',
+      'kyara-21',
+      'qui-est-ce',
+      'serie-express',
+      'blind-test',
+      'memoire',
+      'plus-aime'
+    ];
+
+    expect([...DAILY_GAMES]).toEqual(['main-du-jour', 'raid-du-jour']);
+    expect(ALL_PLAYABLE_GAMES).toHaveLength(10);
+    const combined = new Set<string>([...DAILY_GAMES, ...ALL_PLAYABLE_GAMES]);
+    expect(combined.size).toBe(12);
+    for (const slug of expectedSlugs) {
+      expect(combined.has(slug)).toBe(true);
+    }
+
+    for (const target of ['all', ...expectedSlugs] as KyaraGameId[]) {
+      expect(normalizeSettings({ autoGamesTargetGame: target }).autoGamesTargetGame).toBe(target);
+    }
+    expect(normalizeSettings({ autoGamesTargetGame: 'unknown-slug' as any }).autoGamesTargetGame).toBe('all');
+  });
+
+  it('chooses top 5 raid cards by power, rarity and series synergy', () => {
+    const raidPool = [
+      { attack: 20, health: 100, rarity: 'C' as const, series: 'Misc' },
+      { attack: 90, health: 500, rarity: 'M' as const, series: 'Jujutsu Kaisen' },
+      { attack: 75, health: 400, rarity: 'L' as const, series: 'Jujutsu Kaisen' },
+      { attack: 60, health: 300, rarity: 'E' as const, series: 'Jujutsu Kaisen' },
+      { attack: 55, health: 250, rarity: 'R' as const, series: 'Jujutsu Kaisen' },
+      { attack: 52, health: 200, rarity: 'R' as const, series: 'Jujutsu Kaisen' },
+      { attack: 68, health: 300, rarity: 'E' as const, series: 'One Piece' }
+    ];
+    expect(chooseBestRaidTeamIndices(raidPool)).toEqual([1, 2, 3, 4, 5]);
+
+    const distinctSeriesPool = [
+      { attack: 10, health: 100, rarity: 'C' as const, series: 'S1' },
+      { attack: 80, health: 400, rarity: 'M' as const, series: 'S2' },
+      { attack: 40, health: 200, rarity: 'R' as const, series: 'S3' },
+      { attack: 70, health: 350, rarity: 'L' as const, series: 'S4' },
+      { attack: 60, health: 300, rarity: 'E' as const, series: 'S5' },
+      { attack: 55, health: 250, rarity: 'E' as const, series: 'S6' },
+      { attack: 30, health: 150, rarity: 'U' as const, series: 'S7' }
+    ];
+    expect(chooseBestRaidTeamIndices(distinctSeriesPool)).toEqual([1, 2, 3, 4, 5]);
+    expect(chooseBestRaidTeamIndices([])).toEqual([]);
+    expect(chooseBestRaidTeamIndices(distinctSeriesPool, 0)).toEqual([]);
+  });
+
+  it('matches normalized series clues in findBlindTestMatch and matchBlindTestChoice', () => {
+    const choices = ['Bleach', 'Démon Slayer', 'One Piece', 'Jujutsu Kaisen'];
+
+    expect(findBlindTestMatch('  DeMoN   SLAYER  ', choices)).toEqual({ index: 1, confident: true });
+    expect(matchBlindTestChoice('  DeMoN   SLAYER  ', choices)).toBe(1);
+
+    expect(findBlindTestMatch('Opening 1 — Jujutsu Kaisen (Arc Shibuya)', choices)).toEqual({
+      index: 3,
+      confident: true
+    });
+    expect(findBlindTestMatch('Theme de Gojo Satoru', choices, catalog)).toEqual({
+      index: 3,
+      confident: true
+    });
+    expect(findBlindTestMatch('Piste inconnue sans indice', choices, catalog)).toEqual({
+      index: 0,
+      confident: false
+    });
+    expect(findBlindTestMatch('Bleach', [])).toEqual({ index: -1, confident: false });
+  });
+
+  it('picks optimal open arc in pickThreeArcsLineIndex and highest-priority node in pickExpeditionNextIndex', () => {
+    expect(
+      pickThreeArcsLineIndex([
+        { myPower: 100, oppPower: 40, openSlots: 2 },
+        { myPower: 40, oppPower: 50, openSlots: 2 },
+        { myPower: 10, oppPower: 70, openSlots: 3 }
+      ])
+    ).toBe(1);
+
+    expect(
+      pickThreeArcsLineIndex([
+        { myPower: 90, oppPower: 40, openSlots: 1 },
+        { myPower: 55, oppPower: 45, openSlots: 1 },
+        { myPower: 10, oppPower: 90, openSlots: 2 }
+      ])
+    ).toBe(1);
+
+    expect(
+      pickThreeArcsLineIndex([
+        { myPower: 40, oppPower: 50, openSlots: 0 },
+        { myPower: 20, oppPower: 60, openSlots: 1 }
+      ])
+    ).toBe(1);
+    expect(pickThreeArcsLineIndex([{ myPower: 10, oppPower: 20, openSlots: 0 }])).toBe(-1);
+
+    expect(
+      pickExpeditionNextIndex([
+        { label: 'Boss Final', selectable: true },
+        { label: 'Combat', selectable: true },
+        { label: 'Boutique mystère', selectable: true },
+        { label: 'Sanctuaire de soin', selectable: true },
+        { label: 'Trésor caché', selectable: true }
+      ])
+    ).toBe(4);
+
+    expect(
+      pickExpeditionNextIndex([
+        { label: 'Coffre légendaire', selectable: false },
+        { label: 'Combat Elite', selectable: true },
+        { label: 'Camp de repos', selectable: true }
+      ])
+    ).toBe(2);
+
+    expect(
+      pickExpeditionNextIndex([
+        { label: 'Combat Elite', selectable: true },
+        { label: 'Combat standard', selectable: true }
+      ])
+    ).toBe(1);
+    expect(pickExpeditionNextIndex([])).toBe(-1);
   });
 });

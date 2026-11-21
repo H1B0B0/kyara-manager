@@ -22,10 +22,20 @@ export function evaluateDuplicate(
   const spare = computeSpareCopies(collectionEntry, activeListedQty, keepCopies);
   const recyclableSpare = computeRecyclableCopies(collectionEntry, activeListedQty, keepCopies);
 
-  const median7d = Number.isFinite(marketStats.median7d) && marketStats.median7d > 0 ? marketStats.median7d : null;
-  const median30d = Number.isFinite(marketStats.median30d) && marketStats.median30d > 0 ? marketStats.median30d : null;
-  const referenceMedian = median7d ?? median30d ?? null;
-  const sales7d = Number.isFinite(marketStats.sales7d) && marketStats.sales7d >= 0 ? marketStats.sales7d : null;
+  const pickPositive = (v: unknown): number | null => {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 ? n : null;
+  };
+  const median7d = pickPositive(marketStats?.median7d);
+  const median30d = pickPositive(marketStats?.median30d);
+  const lastPrice = pickPositive(marketStats?.lastPrice);
+  const referenceMedian = median7d ?? median30d ?? lastPrice ?? null;
+  const rawSales7d = marketStats?.sales7d;
+  const sales7d =
+    rawSales7d !== null && rawSales7d !== undefined && rawSales7d !== '' && Number.isFinite(Number(rawSales7d)) && Number(rawSales7d) >= 0
+      ? Number(rawSales7d)
+      : null;
 
   const liveDepth: LiveMarketDepth | null =
     marketStats.liveDepth ||

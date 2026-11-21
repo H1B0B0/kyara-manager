@@ -136,8 +136,8 @@ export const BestPullsShowcase: React.FC<BestPullsShowcaseProps> = ({ pulls, onC
                 <span className="pull-card__series">{pull.series || 'Autre'}</span>
                 <div className="pull-card__foot">
                   <span className="pull-card__pack">{pull.packName}</span>
-                  {pull.medianPrice !== undefined && (
-                    <span className="pull-card__val">~{pull.medianPrice} ◆</span>
+                  {Number.isFinite(Number(pull.medianPrice)) && Number(pull.medianPrice) > 0 && (
+                    <span className="pull-card__val">~{Math.round(Number(pull.medianPrice)).toLocaleString('fr-FR')} ◆</span>
                   )}
                 </div>
               </div>

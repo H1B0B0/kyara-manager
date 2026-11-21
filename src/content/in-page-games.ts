@@ -1,12 +1,30 @@
 import { runtimeCache } from './cache';
 import { toggleCockpitOverlay } from './overlay';
 import { navigateSpaTo } from './automation/spa-navigator';
-import { chooseBestDailyHandIndices, extractCardIdFromUrl, matchCharacterChoice, pickMostLovedWinner } from '../lib/analytics/games-solver';
+import {
+  chooseBestDailyHandIndices,
+  chooseBestRaidTeamIndices,
+  extractCardIdFromUrl,
+  findBlindTestMatch,
+  matchCharacterChoice,
+  pickExpeditionNextIndex,
+  pickMostLovedWinner,
+  pickThreeArcsLineIndex
+} from '../lib/analytics/games-solver';
+import {
+  extractBlindTestDom,
+  extractThreeArcsState,
+  findButtonByText,
+  parseHandSlotsDom,
+  parseRaidPoolCards
+} from './automation/games-extra';
 import type { EnhancerContext } from './in-page-bars';
-import type { Rarity } from '../types/kyara';
 
 const HINT_CLASS = 'km-game-hint';
+const KM_IGNORE_SEL = '#km-inpage-games-bar, .km-inpage-bar, #km-floating-hud, #km-cockpit-overlay';
 const memoryNotes = new Map<number, string>();
+let lastPath = '';
+let lastSig = '';
 
 function pill(text: string, variant = ''): HTMLElement {
   const span = document.createElement('span');
@@ -47,13 +65,17 @@ function runCmdBtn(button: HTMLButtonElement, payload: Record<string, any>, done
 export function renderGamesBar(ctx: EnhancerContext): void {
   const main = document.querySelector('main');
   if (!main) return;
+  const path = window.location.pathname || '';
+  const segments = path.split('/').filter(Boolean);
+  const isMiniGame = segments.length >= 2 && segments[0] === 'jouer' && segments[1] !== 'comptoir';
   const existing = document.getElementById('km-inpage-games-bar');
-  if (existing && main.firstElementChild === existing) return;
+  if (existing && main.firstElementChild === existing && existing.dataset.mini === (isMiniGame ? '1' : '0')) return;
   existing?.remove();
 
   const bar = document.createElement('section');
   bar.id = 'km-inpage-games-bar';
   bar.className = 'km-inpage-bar';
+  bar.dataset.mini = isMiniGame ? '1' : '0';
   bar.setAttribute('aria-label', 'Kyara Manager — Salle de Jeux');
 
   const left = document.createElement('div');
@@ -90,9 +112,6 @@ export function renderGamesBar(ctx: EnhancerContext): void {
   const actions = document.createElement('div');
   actions.className = 'km-inpage-bar__actions';
 
-  const isMiniGame = (window.location.pathname || '').split('/').filter(Boolean).length >= 2 &&
-    !window.location.pathname.startsWith('/jouer/comptoir');
-
   if (isMiniGame) {
     actions.appendChild(
       btn('Résoudre manche', false, (b) => runCmdBtn(b, { type: 'km:cmd:solve-current-game' }, 'Joué !'))
@@ -113,13 +132,42 @@ function clearPreviousHints(): void {
   document.querySelectorAll('.km-slot-recommended').forEach((el) => el.classList.remove('km-slot-recommended'));
 }
 
+function beginAnnotation(sig: string): boolean {
+  if (sig && sig === lastSig && document.querySelector(`.${HINT_CLASS}, .km-slot-recommended`)) {
+    return false;
+  }
+  lastSig = sig;
+  clearPreviousHints();
+  return true;
+}
+
+function markWin(el: HTMLElement, label: string): void {
+  el.classList.add('km-slot-recommended');
+  const badge = document.createElement('span');
+  badge.className = `${HINT_CLASS} km-game-hint--win`;
+  badge.textContent = label;
+  el.appendChild(badge);
+}
+
 /**
- * Passively highlights winning answers, rank # popularity, optimal Daily Hand combos,
- * and memorized pairs on `/jouer/*` when `autoGamesSolverOverlay` is enabled.
+ * Passively highlights winning answers, rank # popularity, optimal hands/teams,
+ * expedition paths, Three Arcs lanes, and memorized pairs on `/jouer/*`.
  */
 export function annotateActiveMiniGame(ctx: EnhancerContext): void {
-  if (ctx.settings?.autoGamesSolverOverlay === false) return;
+  if (ctx.settings?.autoGamesSolverOverlay === false) {
+    if (lastSig || document.querySelector(`.${HINT_CLASS}, .km-slot-recommended`)) {
+      clearPreviousHints();
+      lastSig = '';
+    }
+    return;
+  }
   const path = window.location.pathname || '';
+  if (path !== lastPath) {
+    clearPreviousHints();
+    if (!path.startsWith('/jouer/memoire')) memoryNotes.clear();
+    lastPath = path;
+    lastSig = '';
+  }
   const catalog = runtimeCache.catalogById;
 
   if (path.startsWith('/jouer/plus-aime') && catalog) {
@@ -129,19 +177,21 @@ export function annotateActiveMiniGame(ctx: EnhancerContext): void {
       Boolean(el.querySelector('img[src*="/cards/"]') || el.querySelector('.pf-name'))
     );
     if (candidates.length < 2) return;
-    clearPreviousHints();
     const ids = candidates.map((c) => extractCardIdFromUrl(c.querySelector<HTMLImageElement>('img')?.src));
     const names = candidates.map((c) => c.querySelector('.pf-name')?.textContent?.trim() || c.textContent?.trim() || '');
+    const sig = `${path}:${ids.join(',')}:${names.join('|')}`;
+    if (!beginAnnotation(sig)) return;
     const { winnerIndex, ranks } = pickMostLovedWinner(ids, names, catalog);
-
     candidates.forEach((card, idx) => {
-      const badge = document.createElement('span');
       const rankLabel = ranks[idx] !== null ? `#${ranks[idx]}` : '#?';
-      badge.className = `${HINT_CLASS} ${idx === winnerIndex ? 'km-game-hint--win' : 'km-game-hint--lose'}`;
-      badge.textContent = idx === winnerIndex ? `👑 ${rankLabel} Plus aimé` : rankLabel;
-      card.classList.add('km-slot-recommended');
-      if (idx !== winnerIndex) card.classList.remove('km-slot-recommended');
-      card.appendChild(badge);
+      if (idx === winnerIndex) {
+        markWin(card, `👑 ${rankLabel} Plus aimé`);
+      } else {
+        const badge = document.createElement('span');
+        badge.className = `${HINT_CLASS} km-game-hint--lose`;
+        badge.textContent = rankLabel;
+        card.appendChild(badge);
+      }
     });
     return;
   }
@@ -155,41 +205,126 @@ export function annotateActiveMiniGame(ctx: EnhancerContext): void {
       (b) => !b.querySelector('img[src*="/cards/"]') && (b.innerText || '').trim().length > 0
     );
     if (!clueIds.length || !choiceBtns.length) return;
-    const idx = matchCharacterChoice(
-      clueIds,
-      choiceBtns.map((b) => (b.innerText || b.textContent || '').trim()),
-      catalog,
-      path.startsWith('/jouer/serie-express') ? 'series' : 'character'
-    );
+    const labels = choiceBtns.map((b) => (b.innerText || b.textContent || '').trim());
+    const idx = matchCharacterChoice(clueIds, labels, catalog, path.startsWith('/jouer/serie-express') ? 'series' : 'character');
     if (idx >= 0) {
-      clearPreviousHints();
-      const badge = document.createElement('span');
-      badge.className = `${HINT_CLASS} km-game-hint--win`;
-      badge.textContent = '✓ Réponse';
-      choiceBtns[idx].classList.add('km-slot-recommended');
-      choiceBtns[idx].appendChild(badge);
+      if (!beginAnnotation(`${path}:${clueIds.join(',')}:${labels.join('|')}:${idx}`)) return;
+      markWin(choiceBtns[idx], '✓ Réponse');
     }
     return;
   }
 
-  if (path.startsWith('/jouer/main-du-jour')) {
-    const slots = Array.from(document.querySelectorAll<HTMLButtonElement>('main div.hand button.slot'));
-    if (!slots.length) return;
-    const cards = slots.map((slot) => {
-      const name = slot.querySelector('.pf-name')?.textContent?.trim() || '';
-      const rawR = (slot.querySelector('.pf-seal')?.textContent?.trim() || 'C').toUpperCase();
-      const rarity: Rarity = (['C', 'U', 'R', 'E', 'L', 'M'].includes(rawR) ? rawR : 'C') as Rarity;
-      const series = slot.querySelector('.pf-ser')?.textContent?.trim() || '';
-      const family = slot.querySelector('.pf-rib')?.getAttribute('title')?.trim() || '';
-      return { name, series, family, rarity };
+  if (path.startsWith('/jouer/main-du-jour') || path.startsWith('/jouer/main-kyara')) {
+    const { cards, slots } = parseHandSlotsDom();
+    if (!cards.length) return;
+    const best = chooseBestDailyHandIndices(cards);
+    const sig = `${path}:${cards.map((c) => `${c.name}-${c.rarity}`).join('|')}:${best.join(',')}`;
+    if (!beginAnnotation(sig)) return;
+    best.forEach((idx) => {
+      if (slots[idx]) markWin(slots[idx], '★ Combo');
     });
-    const best = new Set(chooseBestDailyHandIndices(cards));
-    clearPreviousHints();
-    slots.forEach((slot, idx) => {
-      if (best.has(idx)) {
-        slot.classList.add('km-slot-recommended');
+    return;
+  }
+
+  if (path.startsWith('/jouer/raid-du-jour') || path.startsWith('/jouer/raid')) {
+    const poolBtns = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.arena .draft .pool button.pick, main .pool button.pick')
+    );
+    if (poolBtns.length > 0) {
+      const cards = parseRaidPoolCards(poolBtns);
+      const best = chooseBestRaidTeamIndices(cards, 5);
+      const sig = `${path}:pool:${poolBtns.length}:${best.join(',')}`;
+      if (!beginAnnotation(sig)) return;
+      best.forEach((idx, pos) => {
+        if (poolBtns[idx]) markWin(poolBtns[idx], `⚔ Raid #${pos + 1}`);
+      });
+      return;
+    }
+    const finishBtn = findButtonByText(
+      document.querySelector('.panel.game.fighting') || document,
+      /^(Finish(?:\s*[×x]\d+)?|Terminer(?:\s*[×x]\d+)?)$/i
+    );
+    if (finishBtn && beginAnnotation(`${path}:fight:${finishBtn.textContent}`)) {
+      markWin(finishBtn, '⚡ Terminer');
+    }
+    return;
+  }
+
+  if (path.startsWith('/jouer/expedition')) {
+    const picker = document.querySelector('.picker');
+    if (picker) {
+      const cardBtns = Array.from(picker.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')).filter(
+        (b) => !b.closest(`.foot, .pk-head, .tabs, ${KM_IGNORE_SEL}`) && b.getAttribute('aria-pressed') !== 'true' && Boolean(b.querySelector('.tcg.pf, .pf-name, img'))
+      );
+      if (cardBtns.length > 0) {
+        const best = chooseBestRaidTeamIndices(parseRaidPoolCards(cardBtns), 5);
+        if (!beginAnnotation(`${path}:picker:${cardBtns.length}:${best.join(',')}`)) return;
+        best.forEach((idx) => {
+          if (cardBtns[idx]) markWin(cardBtns[idx], '⚔ Équipe');
+        });
+        return;
       }
-    });
+    }
+
+    const mapNodes = Array.from(
+      document.querySelectorAll<HTMLButtonElement>('.path.wide button, .arena .screen .map button')
+    ).filter((b) => !b.closest(`.tabs, ${KM_IGNORE_SEL}`) && !/Pick the team|Choisir l'équipe/i.test(b.textContent || ''));
+    if (mapNodes.length > 0) {
+      const nodes = mapNodes.map((b) => ({
+        label: (b.getAttribute('aria-label') || b.getAttribute('title') || b.innerText || b.textContent || '').trim(),
+        selectable: !b.disabled && b.getAttribute('aria-disabled') !== 'true' && !/\b(locked|done|visited)\b/i.test(b.className)
+      }));
+      const idx = pickExpeditionNextIndex(nodes);
+      if (idx >= 0) {
+        if (!beginAnnotation(`${path}:map:${nodes.map((n) => `${n.label}${n.selectable ? 1 : 0}`).join('|')}:${idx}`)) return;
+        markWin(mapNodes[idx], '★ Recommandé');
+      }
+      return;
+    }
+
+    const actionBtn = findButtonByText(
+      document.querySelector('.arena') || document,
+      /^(Pick the team|Choisir l'équipe|Finish(?:\s*[×x]\d+)?|Terminer(?:\s*[×x]\d+)?|Claim|Récupérer|Heal|Soigner|Continue|Continuer)$/i
+    );
+    if (actionBtn && beginAnnotation(`${path}:act:${actionBtn.textContent}`)) {
+      markWin(actionBtn, '▶ Action');
+    }
+    return;
+  }
+
+  if (path.startsWith('/jouer/trois-arcs')) {
+    const { arcs, lines } = extractThreeArcsState();
+    const kyaraBtn = document.querySelector<HTMLButtonElement>('.who.me-who .acts button.btn-acc.kyara:not(:disabled)');
+    if (arcs.length > 0) {
+      const bestLine = pickThreeArcsLineIndex(lines);
+      const sig = `${path}:${lines.map((l) => `${l.myPower}/${l.oppPower}/${l.openSlots}`).join('|')}:k${kyaraBtn ? 1 : 0}:${bestLine}`;
+      if (!beginAnnotation(sig)) return;
+      if (bestLine >= 0 && arcs[bestLine]) {
+        const target = arcs[bestLine].querySelector<HTMLElement>('button.side.me:not(:disabled)') || arcs[bestLine];
+        markWin(target, `★ Ligne ${bestLine + 1}`);
+      }
+      if (kyaraBtn) markWin(kyaraBtn, '⚡ Kyara !');
+      return;
+    }
+    const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.gi .modes.stack button:not(:disabled)'));
+    const aiBtn =
+      modeBtns.find((b) => /Against the computer|Contre l'ordinateur|VS AI|Contre l'IA|Bot/i.test(b.innerText || b.textContent || '')) ||
+      modeBtns.find((b) => /Learn to play|Apprendre|Tutoriel|Tutorial/i.test(b.innerText || b.textContent || ''));
+    if (aiBtn && beginAnnotation(`${path}:mode:${aiBtn.textContent}`)) {
+      markWin(aiBtn, '▶ Solo IA');
+    }
+    return;
+  }
+
+  if (path.startsWith('/jouer/blind-test')) {
+    const { choiceBtns, hintText } = extractBlindTestDom(catalog || new Map());
+    if (!choiceBtns.length) return;
+    const labels = choiceBtns.map((b) => (b.innerText || b.textContent || '').trim());
+    const match = findBlindTestMatch(hintText, labels, catalog || undefined);
+    if (match.confident && choiceBtns[match.index]) {
+      if (!beginAnnotation(`${path}:${hintText}:${labels.join('|')}:${match.index}`)) return;
+      markWin(choiceBtns[match.index], '♪ Réponse');
+    }
     return;
   }
 
@@ -204,9 +339,7 @@ export function annotateActiveMiniGame(ctx: EnhancerContext): void {
       const sig = img?.src ? `id:${extractCardIdFromUrl(img.src) || img.src}` : name ? `name:${name}` : null;
       if (sig) memoryNotes.set(idx, sig);
       const remembered = memoryNotes.get(idx);
-      if (remembered && !seenKeys.has(remembered)) {
-        seenKeys.set(remembered, nextPairNum++);
-      }
+      if (remembered && !seenKeys.has(remembered)) seenKeys.set(remembered, nextPairNum++);
       if (remembered && !sig && !tile.disabled && !tile.querySelector(`.${HINT_CLASS}`)) {
         const badge = document.createElement('span');
         badge.className = `${HINT_CLASS} km-game-hint--win`;

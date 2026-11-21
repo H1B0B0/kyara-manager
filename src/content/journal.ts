@@ -1,5 +1,5 @@
 import type { CumulativeStats, HourlyChakraBucket } from '../types/journal';
-import { runtimeCache } from './cache';
+import * as cacheModule from './cache';
 import { RARITY_PRICE_FLOORS } from '../lib/analytics/constants';
 import { computeNetProceeds } from '../lib/analytics/fees';
 
@@ -108,26 +108,60 @@ export async function appendJournal(kind: string, text: string, details: any = n
   });
 }
 
+const PULL_RARITY_WEIGHT: Record<string, number> = { M: 6, L: 5, E: 4, R: 3, U: 2, C: 1 };
+
 export async function recordBestPulls(cards: any[], packName: string): Promise<void> {
   if (!Array.isArray(cards) || cards.length === 0) return;
+  const runtimeCache = cacheModule.runtimeCache as any;
+  const eligible: Array<{ card: any; cid: number; rarity: string }> = [];
+  for (const card of cards) {
+    const cid = Number(card?.id ?? card?.characterId);
+    if (!Number.isFinite(cid) || cid <= 0) continue;
+    const rarity = String(card?.rarity || 'C').toUpperCase();
+    if (!['M', 'L', 'E', 'R'].includes(rarity) && !card?.isNew) continue;
+    eligible.push({ card, cid, rarity });
+  }
+  if (eligible.length === 0) return;
+
+  const missingIds = Array.from(
+    new Set(
+      [...eligible]
+        .sort((a, b) => (PULL_RARITY_WEIGHT[b.rarity] || 0) - (PULL_RARITY_WEIGHT[a.rarity] || 0))
+        .filter(({ cid }) => {
+          const p = runtimeCache?.collectionPrices?.get?.(cid);
+          const m = Number(p?.median7d ?? p?.median30d ?? p?.lastPrice);
+          return !Number.isFinite(m) || m <= 0;
+        })
+        .map(({ cid }) => cid)
+    )
+  );
+
+  let hydrateFn: any;
+  try { hydrateFn = (cacheModule as any).hydrateCharacterPrices; } catch {}
+  if (missingIds.length > 0 && typeof hydrateFn === 'function') {
+    await hydrateFn(missingIds, { fallbackDetailIds: missingIds, detailLimit: 10 }).catch(() => {});
+  }
+
   await navigator.locks.request('kyara-manager-pulls', async () => {
     try {
       const { kmBestPulls } = (await chrome.storage.local.get('kmBestPulls')) as { kmBestPulls?: any[] };
       const existing = Array.isArray(kmBestPulls) ? kmBestPulls : [];
       const now = Date.now();
-      const RARITY_WEIGHT: Record<string, number> = { M: 6, L: 5, E: 4, R: 3, U: 2, C: 1 };
 
       const newEntries: any[] = [];
-      for (const c of cards) {
-        const cid = Number(c.id ?? c.characterId);
-        if (!Number.isFinite(cid)) continue;
-        const r = (c.rarity || 'C').toUpperCase();
-        if (!['M', 'L', 'E', 'R'].includes(r) && !c.isNew) continue;
-
-        const catalogCard = runtimeCache.catalogById?.get(cid) || { name: '', series: '', image: '' };
-        const priceInfo = runtimeCache.collectionPrices?.get(cid);
-        const medianPrice = Number.isFinite(priceInfo?.median7d)
-          ? priceInfo!.median7d
+      for (const { card: c, cid, rarity: r } of eligible) {
+        const catalogCard = runtimeCache?.catalogById?.get?.(cid) || { name: '', series: '', image: '' };
+        const priceInfo = runtimeCache?.collectionPrices?.get?.(cid);
+        const rawReal =
+          priceInfo?.median7d ??
+          priceInfo?.median30d ??
+          priceInfo?.lastPrice ??
+          c?.medianPrice ??
+          c?.price;
+        const parsedReal = Number(rawReal);
+        const hasRealPrice = Number.isFinite(parsedReal) && parsedReal > 0;
+        const medianPrice = hasRealPrice
+          ? parsedReal
           : (RARITY_PRICE_FLOORS[r as keyof typeof RARITY_PRICE_FLOORS] || 5);
 
         newEntries.push({
@@ -139,7 +173,8 @@ export async function recordBestPulls(cards: any[], packName: string): Promise<v
           pulledAt: now,
           isNew: Boolean(c.isNew),
           image: c.image || (catalogCard as any).image || `https://cdn.kyara.games/cards/${cid}.webp`,
-          medianPrice
+          medianPrice,
+          ...(hasRealPrice ? {} : { isFloorFallback: true })
         });
       }
 
@@ -147,8 +182,8 @@ export async function recordBestPulls(cards: any[], packName: string): Promise<v
 
       const combined = [...newEntries, ...existing];
       combined.sort((a, b) => {
-        const wA = RARITY_WEIGHT[a.rarity] || 0;
-        const wB = RARITY_WEIGHT[b.rarity] || 0;
+        const wA = PULL_RARITY_WEIGHT[a.rarity] || 0;
+        const wB = PULL_RARITY_WEIGHT[b.rarity] || 0;
         if (wB !== wA) return wB - wA;
         return b.pulledAt - a.pulledAt;
       });

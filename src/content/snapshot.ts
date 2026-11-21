@@ -1,5 +1,5 @@
 import { kyaraApi } from './api';
-import { ensureCatalog, ensurePackPools, ensureCollectionPrices, runtimeCache } from './cache';
+import * as cacheModule from './cache';
 import { state, loadSettings } from './state';
 import { recordConfirmedSale } from './journal';
 import { clearRepriceHint } from './automation/reprice';
@@ -15,8 +15,106 @@ import { computeRenaissanceSummary } from '../lib/analytics/renaissance';
 import { computeSeriesProgress } from '../lib/analytics/series';
 import { generateDailyWishlist } from '../lib/analytics/wishlist';
 import { yieldIfNeeded } from '../lib/analytics/fees';
-import { DEFAULT_RECYCLE_VALUES, RARITIES } from '../lib/analytics/constants';
+import { DEFAULT_RECYCLE_VALUES, RARITIES, RARITY_PRICE_FLOORS } from '../lib/analytics/constants';
 import type { Rarity } from '../types/kyara';
+
+const RARITY_ORDER: Record<string, number> = { M: 5, L: 4, E: 3, R: 2, U: 1, C: 0 };
+
+function collectPriorityMissingIds(
+  catalogById: Map<number, any>,
+  ownedSet: Set<number>,
+  excludeSet: Set<number>,
+  maxIds = 600
+): number[] {
+  if (!(catalogById instanceof Map) || catalogById.size === 0 || maxIds <= 0) return [];
+  const groups = new Map<string, { owned: number; total: number; missing: Array<{ id: number; r: string }> }>();
+  const highMissing: Array<{ id: number; r: string }> = [];
+  for (const [cid, card] of catalogById.entries()) {
+    const id = Number(card?.characterId ?? card?.id ?? cid);
+    if (!Number.isFinite(id) || id <= 0) continue;
+    const series = String(card?.series || 'Autre').trim() || 'Autre';
+    const r = String(card?.rarity || 'C').toUpperCase();
+    const g = groups.get(series) || { owned: 0, total: 0, missing: [] };
+    groups.set(series, g);
+    g.total += 1;
+    if (ownedSet.has(id)) g.owned += 1;
+    else if (!excludeSet.has(id)) {
+      g.missing.push({ id, r });
+      if (r === 'M' || r === 'L' || r === 'E') highMissing.push({ id, r });
+    }
+  }
+  const ranked = [...groups.values()]
+    .filter((g) => g.total >= 3 && g.missing.length > 0)
+    .sort((a, b) => b.owned / b.total - a.owned / a.total || a.missing.length - b.missing.length);
+  const picked = new Set<number>();
+  const byRarity = (a: { r: string }, b: { r: string }) => (RARITY_ORDER[b.r] || 0) - (RARITY_ORDER[a.r] || 0);
+  for (const g of ranked) {
+    if (picked.size >= Math.min(maxIds, 420)) break;
+    for (const m of g.missing.sort(byRarity)) {
+      picked.add(m.id);
+      if (picked.size >= Math.min(maxIds, 420)) break;
+    }
+  }
+  for (const m of highMissing.sort(byRarity)) {
+    if (picked.size >= maxIds) break;
+    picked.add(m.id);
+  }
+  return Array.from(picked);
+}
+
+function buildFallbackDetailIds(
+  bestPulls: any[],
+  activeListings: any[],
+  ownedSet: Set<number>,
+  wishlist: any[],
+  catalogById: Map<number, any>,
+  prices: Map<number, any>
+): number[] {
+  const out = new Set<number>();
+  const maybeAdd = (cid: number, rarity: string, storedPrice?: unknown) => {
+    if (!Number.isFinite(cid) || cid <= 0) return;
+    const p = prices.get(cid);
+    const med = Number(p?.median7d ?? p?.median30d ?? p?.lastPrice);
+    const floor = RARITY_PRICE_FLOORS[rarity as Rarity];
+    const sp = Number(storedPrice);
+    if (!Number.isFinite(med) || med <= 0 || (p?.source !== 'detail' && floor !== undefined && (med === floor || (sp === floor && med === floor)))) {
+      out.add(cid);
+    }
+  };
+  const pulls = [...bestPulls].sort((a, b) => (RARITY_ORDER[String(b?.rarity || 'C')] || 0) - (RARITY_ORDER[String(a?.rarity || 'C')] || 0));
+  for (const p of pulls) maybeAdd(Number(p?.characterId), String(p?.rarity || catalogById.get(Number(p?.characterId))?.rarity || 'C').toUpperCase(), p?.medianPrice);
+  for (const l of activeListings) {
+    const cid = Number(l?.character?.id ?? l?.characterId);
+    const r = String(l?.character?.rarity || catalogById.get(cid)?.rarity || 'C').toUpperCase();
+    if (r === 'M' || r === 'L') maybeAdd(cid, r);
+  }
+  for (const cid of ownedSet) {
+    const r = String(catalogById.get(cid)?.rarity || '').toUpperCase();
+    if (r === 'M' || r === 'L') maybeAdd(cid, r);
+  }
+  for (const w of wishlist) {
+    const cid = Number(w?.characterId ?? w?.id);
+    maybeAdd(cid, String(w?.rarity || catalogById.get(cid)?.rarity || 'C').toUpperCase());
+  }
+  return Array.from(out);
+}
+
+function rehydrateBestPulls(bestPulls: any[], prices: Map<number, any>): { list: any[]; changed: boolean } {
+  let changed = false;
+  const list = bestPulls.map((pull) => {
+    const cid = Number(pull?.characterId);
+    const p = cid > 0 ? (prices.get(cid) as any) : null;
+    const realMedian = Number(p?.median7d ?? p?.median30d ?? p?.lastPrice);
+    if (Number.isFinite(realMedian) && realMedian > 0 && (pull?.medianPrice !== realMedian || pull?.isFloorFallback)) {
+      changed = true;
+      const next = { ...pull, medianPrice: realMedian };
+      delete next.isFloorFallback;
+      return next;
+    }
+    return pull;
+  });
+  return { list, changed };
+}
 
 export function extractActiveListings(myMarket: any, now = Date.now()): any[] {
   const rawListings = Array.isArray(myMarket?.listings) ? myMarket.listings : [];
@@ -104,6 +202,7 @@ async function buildDashboardSnapshot({
     return unauthState;
   }
 
+  const { ensureCatalog, ensurePackPools, ensureCollectionPrices, runtimeCache } = cacheModule;
   const [config, collection, myMarket, packs, catalogById, arcade] = await Promise.all([
     kyaraApi('/config', { auth: false }).catch(() => ({ recycle: DEFAULT_RECYCLE_VALUES })),
     kyaraApi('/me/collection?lean=1'),
@@ -179,16 +278,48 @@ async function buildDashboardSnapshot({
   }
   runtimeCache.ownedIds = ownedSet;
 
-  const dupeIds = duplicateEntries.map((e) => Number(e.characterId ?? e.id));
-  const [, packPools] = await Promise.all([
-    ensureCollectionPrices(dupeIds, forcePrices),
+  const storedMeta = (await chrome.storage.local.get(['kmBestPulls', 'kmWishlist', 'kmPinnedCards', 'kmDashboard'])) as {
+    kmBestPulls?: any[];
+    kmWishlist?: any[];
+    kmPinnedCards?: number[];
+    kmDashboard?: any;
+  };
+  const bestPullsList = Array.isArray(storedMeta?.kmBestPulls) ? storedMeta.kmBestPulls : [];
+  const wishlistList = Array.isArray(storedMeta?.kmWishlist) ? storedMeta.kmWishlist : [];
+
+  const primarySet = new Set<number>(ownedSet);
+  const addId = (raw: unknown) => {
+    const cid = Number(raw);
+    if (Number.isFinite(cid) && cid > 0) primarySet.add(cid);
+  };
+  for (const p of bestPullsList) addId(p?.characterId);
+  for (const w of wishlistList) addId(w?.characterId ?? w?.id);
+  for (const l of activeListings) addId(l?.character?.id ?? l?.characterId);
+
+  const primaryIds = Array.from(primarySet);
+  const priorityMissingIds = collectPriorityMissingIds(catalogById, ownedSet, primarySet, 600);
+  const fallbackDetailIds = buildFallbackDetailIds(bestPullsList, activeListings, ownedSet, wishlistList, catalogById, runtimeCache.collectionPrices);
+  const safeExport = <T>(read: () => T): T | undefined => {
+    try { return read(); } catch { return undefined; }
+  };
+  const hydrateFn = safeExport(() => (cacheModule as any).hydrateCharacterPrices);
+  const fairPlayFn = safeExport(() => (cacheModule as any).ensureFairPlayPrices);
+
+  const [, , packPools] = await Promise.all([
+    typeof hydrateFn === 'function'
+      ? hydrateFn(primaryIds, { force: forcePrices, fallbackDetailIds, detailLimit: 30 })
+      : ensureCollectionPrices(primaryIds, forcePrices),
+    priorityMissingIds.length > 0 && typeof fairPlayFn === 'function' ? fairPlayFn(priorityMissingIds, forcePrices) : Promise.resolve(),
     ensurePackPools(packs, false)
   ]);
+
+  const { list: updatedBestPulls, changed: bestPullsChanged } = rehydrateBestPulls(bestPullsList, runtimeCache.collectionPrices);
+  if (bestPullsChanged) await chrome.storage.local.set({ kmBestPulls: updatedBestPulls }).catch(() => {});
 
   const rarityBuckets: Record<string, number[]> = { C: [], U: [], R: [], E: [], L: [], M: [] };
   for (const [cid, p] of runtimeCache.collectionPrices.entries()) {
     const ch = catalogById.get(cid);
-    const val = p.median7d ?? p.median30d;
+    const val = p.median7d ?? p.median30d ?? (p as any).lastPrice;
     if (ch && RARITY_BucketsHas(rarityBuckets, ch.rarity) && Number.isFinite(val) && val! > 0) {
       rarityBuckets[ch.rarity].push(val!);
     }
@@ -201,8 +332,7 @@ async function buildDashboardSnapshot({
     }
   }
 
-  const { kmPinnedCards } = (await chrome.storage.local.get('kmPinnedCards')) as { kmPinnedCards?: number[] };
-  const pinnedSet = new Set<number>((kmPinnedCards || []).map(Number));
+  const pinnedSet = new Set<number>((storedMeta?.kmPinnedCards || []).map(Number));
   for (const entry of Array.isArray(collection) ? collection : []) {
     if (entry?.pinned) {
       const cid = Number(entry.characterId ?? entry.id);
@@ -246,18 +376,17 @@ async function buildDashboardSnapshot({
     state.currentSettings
   );
 
-  const { kmWishlist } = (await chrome.storage.local.get('kmWishlist')) as { kmWishlist?: any[] };
-  const wishlistMap = new Map((Array.isArray(kmWishlist) ? kmWishlist : []).map((w: any) => [Number(w.characterId), w]));
+  const wishlistMap = new Map(wishlistList.map((w: any) => [Number(w.characterId), w]));
   const dailyWishlistSuggestions = generateDailyWishlist(
     catalogById,
     ownedSet,
     runtimeCache.collectionPrices,
-    20
+    20,
+    runtimeCache.rarityAvgPrices
   );
 
-  const stored = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
-  const sameAccount = String(stored?.kmDashboard?.me?.id) === String(me.id);
-  const marketWatch = sameAccount ? stored?.kmDashboard?.marketWatch : undefined;
+  const sameAccount = String(storedMeta?.kmDashboard?.me?.id) === String(me.id);
+  const marketWatch = sameAccount ? storedMeta?.kmDashboard?.marketWatch : undefined;
   let deals: any[] = [];
   let trades: any[] = [];
   if (scanMarketDeals) {
@@ -271,8 +400,8 @@ async function buildDashboardSnapshot({
     deals = dealsRes;
     trades = tradesRes;
   } else {
-    deals = sameAccount ? stored?.kmDashboard?.deals || [] : [];
-    trades = sameAccount ? stored?.kmDashboard?.trades || [] : [];
+    deals = sameAccount ? storedMeta?.kmDashboard?.deals || [] : [];
+    trades = sameAccount ? storedMeta?.kmDashboard?.trades || [] : [];
   }
 
   const validRebirth = rebirthData && typeof rebirthData === 'object' && !Array.isArray(rebirthData) ? rebirthData : null;
@@ -284,7 +413,13 @@ async function buildDashboardSnapshot({
     validRebirth || bootstrap?.rebirth || bootstrap?.renaissance || config?.rebirth || null,
     { boostersOpened: me.boostersOpened ?? 0, activeListings, collection, recycleMap }
   );
-  const seriesProgress = computeSeriesProgress(catalogById, ownedSet, runtimeCache.collectionPrices, 25);
+  const seriesProgress = computeSeriesProgress(
+    catalogById,
+    ownedSet,
+    runtimeCache.collectionPrices,
+    25,
+    runtimeCache.rarityAvgPrices
+  );
   const rarityBreakdown = Object.fromEntries(
     RARITIES.map((r) => [
       r,
@@ -343,8 +478,9 @@ async function buildDashboardSnapshot({
     boosters: boosterRankings,
     deals: deals.slice(0, 100),
     trades: trades.slice(0, 30),
-    wishlist: Array.isArray(kmWishlist) ? kmWishlist : [],
+    wishlist: wishlistList,
     wishlistSuggestions: dailyWishlistSuggestions,
+    bestPulls: updatedBestPulls,
     claimableMissions: progress?.claimable ?? 0,
     arcade,
     ...(marketWatch ? { marketWatch } : {})

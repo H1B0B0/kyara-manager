@@ -6,17 +6,28 @@ import { isInterrupted } from '../safety';
 import { sleep } from '../utils';
 import { navigateSpaTo } from './spa-navigator';
 import {
+  ALL_PLAYABLE_GAMES,
   chooseBestDailyHandIndices,
   extractCardIdFromUrl,
   matchCharacterChoice,
   pickMostLovedWinner,
   recommendArcadeLot,
-  shouldHitKyara21,
-  type DailyHandCard
+  shouldHitKyara21
 } from '../../lib/analytics/games-solver';
 import type { ArcadeSummary, Rarity } from '../../types/kyara';
+import type { KyaraGameId } from '../../types/settings';
+import {
+  findButtonByText,
+  hasDiscordGate,
+  isDailyRaidAlreadyPlayed,
+  markDailyRaidPlayed,
+  parseHandSlotsDom,
+  solveExtraMiniGameRound
+} from './games-extra';
 
 const RARITY_21_AVG: Record<Rarity, number> = { C: 3, U: 5.5, R: 7.5, E: 9, L: 10, M: 11 };
+const REPLAY_BTN_RE = /^(?:Play again|Rejouer|Try again|Réessayer|New game|Nouvelle partie|New expedition|Nouvelle expédition|Rematch|Revanche)$/i;
+let allGamesCursor = 0;
 
 export async function fetchArcadeSummary(): Promise<ArcadeSummary | null> {
   try {
@@ -64,49 +75,37 @@ async function isDailyHandAlreadyPlayed(meId: string | number | undefined): Prom
   }
 }
 
-function findButtonByText(root: ParentNode, re: RegExp): HTMLButtonElement | null {
-  const buttons = Array.from(root.querySelectorAll<HTMLButtonElement>('button:not(:disabled)'));
-  return buttons.find((b) => re.test((b.innerText || b.textContent || '').trim())) || null;
-}
-
-function hasDiscordGate(): boolean {
-  const errEl = document.querySelector('main .wait .ko, main .err');
-  const txt = errEl?.textContent || '';
-  return /discord/i.test(txt);
-}
-
-async function clickSoloStartIfNeeded(): Promise<'started' | 'blocked' | 'already'> {
+async function clickSoloStartIfNeeded(gameSlug?: string): Promise<'started' | 'blocked' | 'already'> {
   if (hasDiscordGate()) return 'blocked';
-  const startBtn = findButtonByText(
-    document,
-    /^(Play solo|Jouer solo|Jouer en solo|Play again|Rejouer|Try again|Réessayer)$/i
-  );
+
+  if (gameSlug === 'trois-arcs') {
+    const modeBtns = Array.from(document.querySelectorAll<HTMLButtonElement>('.gi .modes.stack button:not(:disabled)'));
+    const aiBtn =
+      modeBtns.find((b) => /Against the computer|Contre l'ordinateur|VS AI|Contre l'IA|Bot/i.test(b.innerText || b.textContent || '')) ||
+      modeBtns.find((b) => /Learn to play|Apprendre|Tutoriel|Tutorial/i.test(b.innerText || b.textContent || '')) ||
+      findButtonByText(document, REPLAY_BTN_RE);
+    if (aiBtn) {
+      aiBtn.click();
+      await sleep(650);
+      return hasDiscordGate() ? 'blocked' : 'started';
+    }
+    return 'already';
+  }
+
+  const startBtn =
+    document.querySelector<HTMLButtonElement>('.gi .modes button.mode.main:not(:disabled)') ||
+    findButtonByText(document, /^(Play solo|Jouer solo|Jouer en solo)$/i) ||
+    findButtonByText(document, REPLAY_BTN_RE);
   if (startBtn) {
     startBtn.click();
     await sleep(650);
-    if (hasDiscordGate()) return 'blocked';
-    return 'started';
+    return hasDiscordGate() ? 'blocked' : 'started';
   }
   return 'already';
 }
 
-function parseDailyHandDom(): { cards: DailyHandCard[]; slots: HTMLButtonElement[] } {
-  if (typeof document === 'undefined') return { cards: [], slots: [] };
-  const slots = Array.from(document.querySelectorAll<HTMLButtonElement>('main div.hand button.slot'));
-  const cards: DailyHandCard[] = slots.map((slot) => {
-    const name = slot.querySelector('.pf-name')?.textContent?.trim() || '';
-    const rarityEl = slot.querySelector('.pf-seal');
-    const rawR = (rarityEl?.textContent?.trim() || 'C').toUpperCase();
-    const rarity: Rarity = (['C', 'U', 'R', 'E', 'L', 'M'].includes(rawR) ? rawR : 'C') as Rarity;
-    const series = slot.querySelector('.pf-ser')?.textContent?.trim() || '';
-    const family = slot.querySelector('.pf-rib')?.getAttribute('title')?.trim() || '';
-    return { name, series, family, rarity };
-  });
-  return { cards, slots };
-}
-
 export async function solveDailyHandStep(): Promise<boolean> {
-  const { cards, slots } = parseDailyHandDom();
+  const { cards, slots } = parseHandSlotsDom();
   if (!cards.length) return false;
   const pick = new Set(chooseBestDailyHandIndices(cards));
   for (let i = 0; i < slots.length; i += 1) {
@@ -124,12 +123,14 @@ export async function solveDailyHandStep(): Promise<boolean> {
   return true;
 }
 
-export async function solveActiveMiniGameRound(catalogById: Map<number, any>, memoryState?: Map<number, string>): Promise<boolean> {
+export async function solveActiveMiniGameRound(
+  catalogById: Map<number, any>,
+  memoryState?: Map<number, string>,
+  meId?: string | number
+): Promise<boolean> {
   if (typeof window === 'undefined' || typeof document === 'undefined') return false;
   const path = window.location.pathname || '';
-  if (path.startsWith('/jouer/main-du-jour')) {
-    return solveDailyHandStep();
-  }
+  if (path.startsWith('/jouer/main-du-jour')) return solveDailyHandStep();
 
   if (path.startsWith('/jouer/plus-aime')) {
     const arena = document.querySelector('main .arena');
@@ -170,19 +171,16 @@ export async function solveActiveMiniGameRound(catalogById: Map<number, any>, me
   if (path.startsWith('/jouer/memoire') && memoryState) {
     const tiles = Array.from(document.querySelectorAll<HTMLButtonElement>('main .felt button'));
     if (tiles.length < 4) return false;
-
     const sig = (el: HTMLButtonElement): string | null => {
       const img = el.querySelector<HTMLImageElement>('img[src*="/cards/"]');
       if (img?.src) return `id:${extractCardIdFromUrl(img.src) || img.src}`;
       const name = el.querySelector('.pf-name')?.textContent?.trim();
       return name ? `name:${name}` : null;
     };
-
     tiles.forEach((t, idx) => {
       const s = sig(t);
       if (s && !t.disabled) memoryState.set(idx, s);
     });
-
     const activeTiles = tiles
       .map((el, idx) => ({ el, idx }))
       .filter(({ el }) => !el.disabled && el.getAttribute('aria-disabled') !== 'true');
@@ -197,7 +195,6 @@ export async function solveActiveMiniGameRound(catalogById: Map<number, any>, me
         byKey.set(key, arr);
       }
     }
-
     for (const pair of byKey.values()) {
       if (pair.length >= 2) {
         tiles[pair[0]].click();
@@ -214,7 +211,6 @@ export async function solveActiveMiniGameRound(catalogById: Map<number, any>, me
     await sleep(280);
     const s1 = sig(tiles[pick[0].idx]);
     if (s1) memoryState.set(pick[0].idx, s1);
-
     const mate = activeTiles.find(({ idx }) => idx !== pick[0].idx && memoryState.get(idx) === s1);
     const secondIdx = mate ? mate.idx : pick[1].idx;
     tiles[secondIdx].click();
@@ -235,19 +231,58 @@ export async function solveActiveMiniGameRound(catalogById: Map<number, any>, me
     let sum = 0;
     let softM = 0;
     for (const c of cards.slice(-6)) {
-      const cls = c.className;
-      const rMatch = cls.match(/\bp-([CURELM])\b/i);
+      const rMatch = c.className.match(/\bp-([CURELM])\b/i);
       const r = (rMatch ? rMatch[1].toUpperCase() : 'R') as Rarity;
       sum += RARITY_21_AVG[r] || 6;
       if (r === 'M') softM += 1;
     }
-    const wantHit = shouldHitKyara21(sum, softM);
-    (wantHit ? hitBtn : standBtn).click();
+    (shouldHitKyara21(sum, softM) ? hitBtn : standBtn).click();
     await sleep(450);
     return true;
   }
 
-  return false;
+  return solveExtraMiniGameRound(path, catalogById, meId);
+}
+
+async function playGameRuns(
+  slug: string,
+  runs: number,
+  catalogById: Map<number, any>,
+  meId?: string | number
+): Promise<{ played: number; blocked: boolean }> {
+  const ok = await navigateSpaTo(`/jouer/${encodeURIComponent(slug)}`);
+  if (!ok) return { played: 0, blocked: false };
+  await sleep(450);
+  if (hasDiscordGate()) return { played: 0, blocked: true };
+
+  let played = 0;
+  for (let run = 0; run < runs && !isInterrupted(); run += 1) {
+    const startRes = await clickSoloStartIfNeeded(slug);
+    if (startRes === 'blocked') return { played, blocked: true };
+
+    const memState = new Map<number, string>();
+    let didMove = false;
+    let idleSteps = 0;
+    for (let step = 0; step < 45 && !isInterrupted(); step += 1) {
+      if (hasDiscordGate()) return { played, blocked: true };
+      if (didMove && findButtonByText(document, REPLAY_BTN_RE)) break;
+      const stepOk = await solveActiveMiniGameRound(catalogById, memState, meId);
+      if (stepOk) {
+        didMove = true;
+        idleSteps = 0;
+      } else {
+        idleSteps += 1;
+        if (idleSteps >= 8) break;
+        await sleep(360);
+      }
+    }
+    if (didMove) {
+      played += 1;
+      if (slug === 'raid-du-jour') markDailyRaidPlayed(meId);
+    }
+    await sleep(450);
+  }
+  return { played, blocked: false };
 }
 
 export async function executeAutoGames(
@@ -260,7 +295,7 @@ export async function executeAutoGames(
     return { playedGames: 0, ticketsEarned: 0, blocked: arcadeBefore?.blocked || 'disabled', arcade: arcadeBefore };
   }
 
-  const targetGame = options.gameId || state.currentSettings.autoGamesTargetGame || 'plus-aime';
+  const targetGame = (options.gameId || state.currentSettings.autoGamesTargetGame || 'all') as KyaraGameId;
   const today = arcadeBefore.today;
   const dayCap = arcadeBefore.dayCap || 60;
   const week = arcadeBefore.week;
@@ -272,9 +307,10 @@ export async function executeAutoGames(
   }
 
   const catalogById = await ensureCatalog(false).catch(() => new Map<number, any>());
+  const meId = dashboard?.me?.id;
 
   if (options.solveOnce) {
-    const solved = await solveActiveMiniGameRound(catalogById, new Map());
+    const solved = await solveActiveMiniGameRound(catalogById, new Map(), meId);
     const after = await fetchArcadeSummary();
     return {
       playedGames: solved ? 1 : 0,
@@ -296,17 +332,18 @@ export async function executeAutoGames(
 
   let playedGames = 0;
   const previousPath = typeof location !== 'undefined' ? location.pathname : '';
+  const dailyEnabled = state.currentSettings.autoGamesDailyEnabled !== false;
+  const allowDaily = dailyEnabled || (Boolean(options.manual) && (targetGame === 'main-du-jour' || targetGame === 'raid-du-jour'));
 
-  // 1. Daily Hand (10 bonus tickets + stars) if unplayed today
-  if (state.currentSettings.autoGamesDailyEnabled !== false && (!options.gameId || options.gameId === 'main-du-jour')) {
-    const already = await isDailyHandAlreadyPlayed(dashboard?.me?.id);
+  if (allowDaily && (targetGame === 'main-du-jour' || targetGame === 'all' || !options.gameId)) {
+    const already = await isDailyHandAlreadyPlayed(meId);
     if (!already && !isInterrupted()) {
       const ok = await navigateSpaTo('/jouer/main-du-jour');
       if (ok) {
         await sleep(500);
         let acted = false;
         for (let hand = 0; hand < 4 && !isInterrupted(); hand += 1) {
-          if (!(await solveDailyHandStep())) break;
+          if (hasDiscordGate() || !(await solveDailyHandStep())) break;
           acted = true;
           await sleep(500);
         }
@@ -315,27 +352,31 @@ export async function executeAutoGames(
     }
   }
 
-  // 2. Solo ticket farming loop on target mini-game (max 2 runs in auto, 5 on manual)
-  const maxRuns = options.manual ? 5 : 2;
-  if (!isInterrupted() && targetGame !== 'main-du-jour' && (today < dayCap && week < weekCap)) {
-    const ok = await navigateSpaTo(`/jouer/${encodeURIComponent(targetGame)}`);
-    if (ok) {
-      for (let run = 0; run < maxRuns && !isInterrupted(); run += 1) {
-        const startRes = await clickSoloStartIfNeeded();
-        if (startRes === 'blocked') break;
+  if (allowDaily && (targetGame === 'raid-du-jour' || targetGame === 'all' || !options.gameId)) {
+    const alreadyRaid = await isDailyRaidAlreadyPlayed(meId);
+    if (!alreadyRaid && !isInterrupted()) {
+      const res = await playGameRuns('raid-du-jour', 1, catalogById, meId);
+      playedGames += res.played;
+    }
+  }
 
-        const memState = new Map<number, string>();
-        let didMove = false;
-        for (let step = 0; step < 30 && !isInterrupted(); step += 1) {
-          if (hasDiscordGate()) break;
-          if (findButtonByText(document, /^(Play again|Rejouer)$/i)) break;
-          const stepOk = await solveActiveMiniGameRound(catalogById, memState);
-          if (stepOk) didMove = true;
-          else await sleep(400);
+  const maxRuns = options.manual ? 5 : 2;
+  if (!isInterrupted() && targetGame !== 'main-du-jour' && targetGame !== 'raid-du-jour' && today < dayCap && week < weekCap) {
+    if (targetGame === 'all') {
+      let soloPlayed = 0;
+      for (let tries = 0; tries < ALL_PLAYABLE_GAMES.length && soloPlayed < maxRuns && !isInterrupted(); tries += 1) {
+        const slug = ALL_PLAYABLE_GAMES[allGamesCursor % ALL_PLAYABLE_GAMES.length];
+        allGamesCursor = (allGamesCursor + 1) % ALL_PLAYABLE_GAMES.length;
+        const res = await playGameRuns(slug, 1, catalogById, meId);
+        if (res.blocked) continue;
+        if (res.played > 0) {
+          playedGames += res.played;
+          soloPlayed += 1;
         }
-        if (didMove) playedGames += 1;
-        await sleep(500);
       }
+    } else {
+      const res = await playGameRuns(targetGame, maxRuns, catalogById, meId);
+      playedGames += res.played;
     }
   }
 

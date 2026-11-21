@@ -38,34 +38,34 @@ const makeDup = (id: number, name: string, series: string, rarity: Rarity, count
 });
 
 const mockDuplicates: PreviewCard[] = [
-  makeDup(1001, 'Makima', 'Chainsaw Man', 'M', 2, 3, 30, 195, 220, 195, 181, 12, '12 v/7j', 'patient', 'VENDRE', 'SELL', 'Forte valeur Mythique', '#ff4655'),
-  makeDup(1002, 'Gojo Satoru', 'Jujutsu Kaisen', 'L', 3, 4, 15, 82, 88, 80, 74, 28, '28 v/7j (Élevée)', 'patient', 'VENDRE', 'SELL', 'Top-tier JJK forte rotation', '#ffaa00'),
-  makeDup(1003, 'Lelouch Lamperouge', 'Code Geass', 'L', 4, 5, 12, 42, 45, 40, 37, 19, '19 v/7j', 'normal', 'VENDRE', 'SELL', 'Prix optimal Médiane 20', '#ffaa00'),
-  makeDup(1004, 'Zero Two', 'Darling in the Franxx', 'E', 9, 10, 8, 28, 30, 27, 25, 34, '34 v/7j (Hyper-active)', 'normal', 'VENDRE', 'SELL', 'Forte vélocité garantie', '#a855f7'),
-  makeDup(1005, 'Tanjiro Kamado', 'Demon Slayer', 'R', 18, 19, 4, 9, 12, 9, 7, 46, '46 v/7j', 'fast', 'VENDRE', 'SELL', 'Écoulement rapide Demon Slayer', '#3b82f6'),
+  makeDup(1001, 'Makima', 'Chainsaw Man', 'M', 2, 3, 30, 1790, 1890, 1840, 1747, 12, '12 v/7j', 'patient', 'VENDRE', 'SELL', 'Forte valeur Mythique', '#ff4655'),
+  makeDup(1002, 'Gojo Satoru', 'Jujutsu Kaisen', 'L', 3, 4, 15, 320, 340, 330, 312, 28, '28 v/7j (Élevée)', 'patient', 'VENDRE', 'SELL', 'Top-tier JJK forte rotation', '#ffaa00'),
+  makeDup(1003, 'Lelouch Lamperouge', 'Code Geass', 'L', 4, 5, 12, 245, 265, 255, 241, 19, '19 v/7j', 'normal', 'VENDRE', 'SELL', 'Prix optimal Médiane 20', '#ffaa00'),
+  makeDup(1004, 'Zero Two', 'Darling in the Franxx', 'E', 9, 10, 8, 88, 95, 90, 84, 34, '34 v/7j (Hyper-active)', 'normal', 'VENDRE', 'SELL', 'Forte vélocité garantie', '#a855f7'),
+  makeDup(1005, 'Tanjiro Kamado', 'Demon Slayer', 'R', 18, 19, 4, 24, 28, 25, 23, 46, '46 v/7j', 'fast', 'VENDRE', 'SELL', 'Écoulement rapide Demon Slayer', '#3b82f6'),
   makeDup(1006, 'Natsu Dragneel', 'Fairy Tail', 'R', 25, 26, 4, 4, 5, 4, 2, 8, '8 v/7j (Lente)', 'fast', 'RECYCLER', 'RECYCLE', 'Net proceeds nul après frais', '#3b82f6'),
   makeDup(1007, 'Genos', 'One Punch Man', 'U', 38, 39, 2, 2, 3, 2, 1, 14, '14 v/7j', 'fast', 'RECYCLER', 'RECYCLE', 'Prix plancher, recyclage conseillé', '#10b981'),
   makeDup(1008, 'Ichigo Kurosaki', 'Bleach', 'C', 42, 43, 1, 2, 2, 2, 1, 6, '6 v/7j', 'fast', 'RECYCLER', 'RECYCLE', 'Marché saturé au plancher', '#9ca3af')
 ];
 
 const mockActiveListings: PreviewListing[] = [
-  { id: 'lst-1', listingId: 'lst-1', characterId: 1003, cardId: 1003, name: 'Lelouch Lamperouge', rarity: 'L', price: 42, listedAt: now - 600000, createdAt: new Date(now - 600000).toISOString() },
-  { id: 'lst-2', listingId: 'lst-2', characterId: 1004, cardId: 1004, name: 'Zero Two', rarity: 'E', price: 28, listedAt: now - 4500000, createdAt: new Date(now - 4500000).toISOString() },
-  { id: 'lst-3', listingId: 'lst-3', characterId: 1005, cardId: 1005, name: 'Tanjiro Kamado', rarity: 'R', price: 14, listedAt: now - 720000, createdAt: new Date(now - 720000).toISOString() },
-  { id: 'lst-4', listingId: 'lst-4', characterId: 1002, cardId: 1002, name: 'Gojo Satoru', rarity: 'L', price: 85, listedAt: now - 5100000, createdAt: new Date(now - 5100000).toISOString() },
-  { id: 'lst-5', listingId: 'lst-5', characterId: 1009, cardId: 1009, name: 'Levi Ackerman', rarity: 'E', price: 32, listedAt: now - 480000, createdAt: new Date(now - 480000).toISOString() },
-  { id: 'lst-6', listingId: 'lst-6', characterId: 1001, cardId: 1001, name: 'Makima', rarity: 'M', price: 198, listedAt: now - 6600000, createdAt: new Date(now - 6600000).toISOString() }
+  { id: 'lst-1', listingId: 'lst-1', characterId: 1003, cardId: 1003, name: 'Lelouch Lamperouge', rarity: 'L', price: 255, listedAt: now - 600000, createdAt: new Date(now - 600000).toISOString() },
+  { id: 'lst-2', listingId: 'lst-2', characterId: 1004, cardId: 1004, name: 'Zero Two', rarity: 'E', price: 90, listedAt: now - 4500000, createdAt: new Date(now - 4500000).toISOString() },
+  { id: 'lst-3', listingId: 'lst-3', characterId: 1005, cardId: 1005, name: 'Tanjiro Kamado', rarity: 'R', price: 25, listedAt: now - 720000, createdAt: new Date(now - 720000).toISOString() },
+  { id: 'lst-4', listingId: 'lst-4', characterId: 1002, cardId: 1002, name: 'Gojo Satoru', rarity: 'L', price: 330, listedAt: now - 5100000, createdAt: new Date(now - 5100000).toISOString() },
+  { id: 'lst-5', listingId: 'lst-5', characterId: 1009, cardId: 1009, name: 'Levi Ackerman', rarity: 'E', price: 78, listedAt: now - 480000, createdAt: new Date(now - 480000).toISOString() },
+  { id: 'lst-6', listingId: 'lst-6', characterId: 1001, cardId: 1001, name: 'Makima', rarity: 'M', price: 1840, listedAt: now - 6600000, createdAt: new Date(now - 6600000).toISOString() }
 ];
 
 const mockDeals: MarketDeal[] = [
-  { listingId: 'deal-1', characterId: 1002, name: 'Gojo Satoru', series: 'Jujutsu Kaisen', rarity: 'L', buyPrice: 45, refMedian: 78, targetResalePrice: 75, flipProfit: 25, roiPct: 55, isGoodFlip: true, isMissing: false, discountPct: 42, sales7d: 18 },
-  { listingId: 'deal-2', characterId: 1005, name: 'Tanjiro Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 5, refMedian: 11, targetResalePrice: 10, flipProfit: 3, roiPct: 60, isGoodFlip: true, isMissing: true, isRenaissanceNeed: true, discountPct: 55, sales7d: 34 },
-  { listingId: 'deal-3', characterId: 2003, name: 'Mikasa Ackerman', series: 'Attack on Titan', rarity: 'E', buyPrice: 20, refMedian: 35, targetResalePrice: 33, flipProfit: 10, roiPct: 50, isGoodFlip: true, isMissing: true, discountPct: 43, sales7d: 16 },
-  { listingId: 'deal-4', characterId: 2001, name: 'Roronoa Zoro', series: 'One Piece', rarity: 'L', buyPrice: 52, refMedian: 72, targetResalePrice: 70, flipProfit: 14, roiPct: 27, isGoodFlip: true, isMissing: false, discountPct: 28, sales7d: 22, isWishlistMatch: true },
-  { listingId: 'deal-5', characterId: 2004, name: 'Ryomen Sukuna', series: 'Jujutsu Kaisen', rarity: 'M', buyPrice: 140, refMedian: 210, targetResalePrice: 200, flipProfit: 46, roiPct: 33, isGoodFlip: true, isMissing: false, discountPct: 33, sales7d: 9 },
+  { listingId: 'deal-1', characterId: 1002, name: 'Gojo Satoru', series: 'Jujutsu Kaisen', rarity: 'L', buyPrice: 210, refMedian: 340, targetResalePrice: 330, flipProfit: 102, roiPct: 49, isGoodFlip: true, isMissing: false, discountPct: 38, sales7d: 18 },
+  { listingId: 'deal-2', characterId: 1005, name: 'Tanjiro Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 12, refMedian: 28, targetResalePrice: 25, flipProfit: 11, roiPct: 92, isGoodFlip: true, isMissing: true, isRenaissanceNeed: true, discountPct: 57, sales7d: 34 },
+  { listingId: 'deal-3', characterId: 2003, name: 'Mikasa Ackerman', series: 'Attack on Titan', rarity: 'E', buyPrice: 48, refMedian: 82, targetResalePrice: 78, flipProfit: 25, roiPct: 52, isGoodFlip: true, isMissing: true, discountPct: 41, sales7d: 16 },
+  { listingId: 'deal-4', characterId: 2001, name: 'Roronoa Zoro', series: 'One Piece', rarity: 'L', buyPrice: 195, refMedian: 285, targetResalePrice: 275, flipProfit: 65, roiPct: 33, isGoodFlip: true, isMissing: false, discountPct: 32, sales7d: 22, isWishlistMatch: true },
+  { listingId: 'deal-5', characterId: 2004, name: 'Ryomen Sukuna', series: 'Jujutsu Kaisen', rarity: 'M', buyPrice: 980, refMedian: 1480, targetResalePrice: 1420, flipProfit: 368, roiPct: 38, isGoodFlip: true, isMissing: false, discountPct: 34, sales7d: 9 },
   { listingId: 'deal-6', characterId: 2005, name: 'Denji', series: 'Chainsaw Man', rarity: 'C', buyPrice: 2, refMedian: null, targetResalePrice: null, flipProfit: null, roiPct: null, isGoodFlip: false, isMissing: true, isRenaissanceNeed: true, discountPct: 33, sales7d: 24 },
   { listingId: 'deal-7', characterId: 2006, name: 'Megumi Fushiguro', series: 'Jujutsu Kaisen', rarity: 'U', buyPrice: 3, refMedian: 6, targetResalePrice: 5, flipProfit: 1, roiPct: 33, isGoodFlip: false, isMissing: true, discountPct: 50, sales7d: 19 },
-  { listingId: 'deal-8', characterId: 2007, name: 'Nezuko Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 6, refMedian: 13, targetResalePrice: 12, flipProfit: 4, roiPct: 67, isGoodFlip: true, isMissing: true, isRenaissanceNeed: true, discountPct: 54, sales7d: 29 }
+  { listingId: 'deal-8', characterId: 2007, name: 'Nezuko Kamado', series: 'Demon Slayer', rarity: 'R', buyPrice: 11, refMedian: 24, targetResalePrice: 22, flipProfit: 9, roiPct: 82, isGoodFlip: true, isMissing: true, isRenaissanceNeed: true, discountPct: 54, sales7d: 29 }
 ];
 
 const mockTrades: ProfitableTrade[] = [
@@ -87,22 +87,23 @@ const mockBoosters: BoosterRecommendations & { boosterTargets: BoosterPack[] } =
 };
 
 const mockWishlist: WishlistItem[] = [
-  { characterId: 2001, name: 'Roronoa Zoro', series: 'One Piece', rarity: 'L', budgetChakra: 60, lowestMarketPrice: 52, bestListingId: 'deal-4', addedAt: now - 86400000 },
-  { characterId: 2002, name: 'Naruto Uzumaki', series: 'Naruto', rarity: 'E', budgetChakra: 25, lowestMarketPrice: 32, bestListingId: null, addedAt: now - 43200000 },
-  { characterId: 1001, name: 'Makima', series: 'Chainsaw Man', rarity: 'M', budgetChakra: 190, lowestMarketPrice: 195, bestListingId: 'lst-6', addedAt: now - 12000000 }
+  { characterId: 2001, name: 'Roronoa Zoro', series: 'One Piece', rarity: 'L', budgetChakra: 220, lowestMarketPrice: 195, bestListingId: 'deal-4', addedAt: now - 86400000 },
+  { characterId: 2002, name: 'Naruto Uzumaki', series: 'Naruto', rarity: 'E', budgetChakra: 65, lowestMarketPrice: 84, bestListingId: null, addedAt: now - 43200000 },
+  { characterId: 1001, name: 'Makima', series: 'Chainsaw Man', rarity: 'M', budgetChakra: 1650, lowestMarketPrice: 1790, bestListingId: 'lst-6', addedAt: now - 12000000 }
 ];
 
 const mockWishlistSuggestions: WishlistSuggestion[] = [
-  { characterId: 3001, name: 'Rukia Kuchiki', series: 'Bleach', rarity: 'E', completionPct: 91, refMedian: 24, priorityScore: 88 },
-  { characterId: 3002, name: 'Erza Scarlet', series: 'Fairy Tail', rarity: 'L', completionPct: 88, refMedian: 60, priorityScore: 82 },
-  { characterId: 3003, name: 'Rimuru Tempest', series: 'Slime', rarity: 'E', completionPct: 85, refMedian: 28, priorityScore: 78 },
-  { characterId: 3004, name: 'Killua Zoldyck', series: 'Hunter x Hunter', rarity: 'E', completionPct: 80, refMedian: 32, priorityScore: 74 }
+  { characterId: 3001, name: 'Rukia Kuchiki', series: 'Bleach', rarity: 'E', completionPct: 91, refMedian: 72, priorityScore: 88 },
+  { characterId: 3002, name: 'Erza Scarlet', series: 'Fairy Tail', rarity: 'L', completionPct: 88, refMedian: 275, priorityScore: 82 },
+  { characterId: 3003, name: 'Rimuru Tempest', series: 'Slime', rarity: 'E', completionPct: 85, refMedian: 86, priorityScore: 78 },
+  { characterId: 3004, name: 'Killua Zoldyck', series: 'Hunter x Hunter', rarity: 'E', completionPct: 80, refMedian: 94, priorityScore: 74 }
 ];
 
 const mockBestPulls: AutopilotPullRecord[] = [
-  { characterId: 1004, name: 'Zero Two', rarity: 'L', series: 'Darling in the Franxx', packName: 'Pack Mecha Horizon', pulledAt: now - 2400000, isNew: true, medianPrice: 65, image: cardSvg('#ffaa00', 'L') },
-  { characterId: 1003, name: 'Lelouch Lamperouge', rarity: 'L', series: 'Code Geass', packName: 'Pack Mecha Horizon', pulledAt: now - 10800000, isNew: false, medianPrice: 55, image: cardSvg('#ffaa00', 'L') },
-  { characterId: 1001, name: 'Makima', rarity: 'M', series: 'Chainsaw Man', packName: 'Pack Dark Fantasy', pulledAt: now - 21600000, isNew: true, medianPrice: 220, image: cardSvg('#ff4655', 'M') }
+  { characterId: 1001, name: 'Makima', rarity: 'M', series: 'Chainsaw Man', packName: 'Pack Dark Fantasy', pulledAt: now - 2400000, isNew: true, medianPrice: 1890, image: cardSvg('#ff4655', 'M') },
+  { characterId: 1010, name: 'Shinji Ikari', rarity: 'M', series: 'Neon Genesis Evangelion', packName: 'Pack Mecha Horizon', pulledAt: now - 7200000, isNew: true, medianPrice: 1225, image: cardSvg('#ff4655', 'M') },
+  { characterId: 1002, name: 'Gojo Satoru', rarity: 'L', series: 'Jujutsu Kaisen', packName: 'Pack Shonen Legends', pulledAt: now - 14400000, isNew: false, medianPrice: 340, image: cardSvg('#ffaa00', 'L') },
+  { characterId: 1004, name: 'Zero Two', rarity: 'E', series: 'Darling in the Franxx', packName: 'Pack Mecha Horizon', pulledAt: now - 21600000, isNew: false, medianPrice: 95, image: cardSvg('#a855f7', 'E') }
 ];
 
 const baseHour = Math.floor(now / 3600000) * 3600000;
@@ -121,10 +122,10 @@ const mockCumulativeStats: CumulativeStats = {
 };
 
 const mockJournal: JournalItem[] = [
-  { type: 'sell', message: 'Mise en vente : Lelouch Lamperouge à 42 ◆ (Médiane 20)', ts: now - 180000 },
+  { type: 'sell', message: 'Mise en vente : Lelouch Lamperouge à 255 ◆ (Médiane 265)', ts: now - 180000 },
   { type: 'recycle', message: 'Turbo Liquidité : 5 cartes communes recyclées (+10 ◆)', ts: now - 900000 },
-  { type: 'booster', message: 'Booster Pack Mecha Horizon ouvert en live : Zero Two (Épique !)', ts: now - 2520000 },
-  { type: 'market', message: 'Opportunité saisie : Gojo Satoru à 45 ◆ (-42% sous la cote)', ts: now - 4500000 },
+  { type: 'booster', message: 'Booster Pack Dark Fantasy ouvert en live : Makima (Mythique · 1890 ◆ !)', ts: now - 2520000 },
+  { type: 'market', message: 'Opportunité saisie : Gojo Satoru à 210 ◆ (-38% sous la cote)', ts: now - 4500000 },
   { type: 'afk', message: 'Anti-AFK : Présence confirmée automatiquement', ts: now - 7200000 }
 ];
 
@@ -164,10 +165,10 @@ function buildRenaissance(ownedMap: Record<Rarity, number>, targetOverrides: Par
 }
 
 const mockSeriesProgress: SeriesProgress[] = [
-  { series: 'Chainsaw Man', owned: 24, total: 25, missingCount: 1, completionPct: 96, estimatedCostToComplete: 18, missingCards: [{ characterId: 4001, name: 'Kobeni Higashiyama', rarity: 'E', estimatedPrice: 18 }] },
-  { series: 'Jujutsu Kaisen', owned: 44, total: 47, missingCount: 3, completionPct: 94, estimatedCostToComplete: 92, missingCards: [{ characterId: 4002, name: 'Yuta Okkotsu', rarity: 'L', estimatedPrice: 68 }, { characterId: 4003, name: 'Panda', rarity: 'R', estimatedPrice: 9 }, { characterId: 4004, name: 'Toge Inumaki', rarity: 'E', estimatedPrice: 15 }] },
-  { series: 'Demon Slayer', owned: 35, total: 38, missingCount: 3, completionPct: 92, estimatedCostToComplete: 31, missingCards: [{ characterId: 4005, name: 'Kyojuro Rengoku', rarity: 'E', estimatedPrice: 19 }, { characterId: 4006, name: 'Inosuke Hashibira', rarity: 'R', estimatedPrice: 7 }, { characterId: 4007, name: 'Zenitsu Agatsuma', rarity: 'R', estimatedPrice: 5 }] },
-  { series: 'Frieren', owned: 22, total: 25, missingCount: 3, completionPct: 88, estimatedCostToComplete: 84, missingCards: [{ characterId: 4008, name: 'Serie', rarity: 'L', estimatedPrice: 58 }, { characterId: 4009, name: 'Stark', rarity: 'E', estimatedPrice: 16 }, { characterId: 4010, name: 'Himmel', rarity: 'R', estimatedPrice: 10 }] }
+  { series: 'Chainsaw Man', owned: 24, total: 25, missingCount: 1, completionPct: 96, estimatedCostToComplete: 62, missingCards: [{ characterId: 4001, name: 'Kobeni Higashiyama', rarity: 'E', estimatedPrice: 62 }] },
+  { series: 'Jujutsu Kaisen', owned: 44, total: 47, missingCount: 3, completionPct: 94, estimatedCostToComplete: 382, missingCards: [{ characterId: 4002, name: 'Yuta Okkotsu', rarity: 'L', estimatedPrice: 290 }, { characterId: 4003, name: 'Panda', rarity: 'R', estimatedPrice: 22 }, { characterId: 4004, name: 'Toge Inumaki', rarity: 'E', estimatedPrice: 70 }] },
+  { series: 'Demon Slayer', owned: 35, total: 38, missingCount: 3, completionPct: 92, estimatedCostToComplete: 118, missingCards: [{ characterId: 4005, name: 'Kyojuro Rengoku', rarity: 'E', estimatedPrice: 78 }, { characterId: 4006, name: 'Inosuke Hashibira', rarity: 'R', estimatedPrice: 21 }, { characterId: 4007, name: 'Zenitsu Agatsuma', rarity: 'R', estimatedPrice: 19 }] },
+  { series: 'Frieren', owned: 22, total: 25, missingCount: 3, completionPct: 88, estimatedCostToComplete: 332, missingCards: [{ characterId: 4008, name: 'Serie', rarity: 'L', estimatedPrice: 240 }, { characterId: 4009, name: 'Stark', rarity: 'E', estimatedPrice: 68 }, { characterId: 4010, name: 'Himmel', rarity: 'R', estimatedPrice: 24 }] }
 ];
 
 const mockSettings: KyaraSettings & { sellPace?: string } = {
@@ -190,7 +191,7 @@ const store: Record<string, any> = {
   kmDashboard: mockDashboard, 'km:dashboard': mockDashboard, settings: mockSettings, kmSettings: mockSettings, 'km:settings': mockSettings,
   kmCumulativeStats: mockCumulativeStats, 'km:cumulative_stats': mockCumulativeStats, kmJournal: mockJournal, 'km:activity_journal': mockJournal,
   kmWishlist: mockWishlist, 'km:wishlist': mockWishlist, kmBestPulls: mockBestPulls, 'km:best_pulls': mockBestPulls,
-  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.5.0' }
+  kmPinnedCards: [1001], kmUpdate: { status: 'idle', currentVersion: '2.6.0' }
 };
 
 const storageListeners = new Set<(changes: Record<string, chrome.storage.StorageChange>, area: string) => void>();
@@ -266,7 +267,7 @@ function handleMessage(cmd: any): any {
   }
   if (['km:cmd:open-pack', 'km:cmd:open-recommended', 'km:open-booster'].includes(type)) {
     const me = { ...store.kmDashboard.me, freePacks: Math.max(0, store.kmDashboard.me.freePacks - 1), pity: (store.kmDashboard.me.pity + 1) % 250 };
-    const pull: AutopilotPullRecord = { characterId: 1003, name: 'Lelouch Lamperouge', rarity: 'L', series: 'Code Geass', packName: cmd?.packName || 'Pack Mecha Horizon', pulledAt: Date.now(), isNew: false, medianPrice: 55, image: cardSvg('#ffaa00', 'L') };
+    const pull: AutopilotPullRecord = { characterId: 1003, name: 'Lelouch Lamperouge', rarity: 'L', series: 'Code Geass', packName: cmd?.packName || 'Pack Mecha Horizon', pulledAt: Date.now(), isNew: false, medianPrice: 265, image: cardSvg('#ffaa00', 'L') };
     const bestPulls = [pull, ...store.kmBestPulls];
     notifyStorage({ kmDashboard: { ...store.kmDashboard, me, bestPulls }, kmBestPulls: bestPulls, kmJournal: [{ type: 'booster' as const, message: `Booster ${cmd?.packName || 'Shonen'} ouvert en live : ${pull.name} (Légendaire !)`, ts: Date.now() }, ...store.kmJournal], kmCumulativeStats: { ...store.kmCumulativeStats, boostersOpenedCount: store.kmCumulativeStats.boostersOpenedCount + 1, legendariesPulledCount: store.kmCumulativeStats.legendariesPulledCount + 1 } });
     return { ok: true, data: { opened: 1, newCards: 0 }, openRes: { openedCount: 1, newCardsCount: 0 } };
@@ -322,10 +323,10 @@ function handleMessage(cmd: any): any {
     const pct = Math.max(10, Math.min(60, Number(cmd?.discountPct ?? store.settings?.buyOrderDiscountPct ?? 25)));
     const mult = (100 - pct) / 100;
     const ops: BuyOrderOpportunity[] = [
-      { characterId: 2002, name: 'Naruto Uzumaki', series: 'Naruto', rarity: 'E', median7d: 32, lowestFixed: 32, bestExistingBid: 18, suggestedBid: Math.max(2, Math.round(32 * mult)), savingsPct: pct, source: 'wishlist' },
-      { characterId: 4002, name: 'Yuta Okkotsu', series: 'Jujutsu Kaisen', rarity: 'L', median7d: 68, lowestFixed: 72, bestExistingBid: 42, suggestedBid: Math.max(2, Math.round(68 * mult)), savingsPct: pct, source: 'series' },
-      { characterId: 4005, name: 'Kyojuro Rengoku', series: 'Demon Slayer', rarity: 'E', median7d: 24, lowestFixed: 25, bestExistingBid: null, suggestedBid: Math.max(2, Math.round(24 * mult)), savingsPct: pct, source: 'series' },
-      { characterId: 5101, name: 'Power', series: 'Chainsaw Man', rarity: 'R', median7d: 12, lowestFixed: 14, bestExistingBid: 6, suggestedBid: Math.max(2, Math.round(12 * mult)), savingsPct: pct, source: 'renaissance' }
+      { characterId: 2002, name: 'Naruto Uzumaki', series: 'Naruto', rarity: 'E', median7d: 84, lowestFixed: 88, bestExistingBid: 48, suggestedBid: Math.max(2, Math.round(84 * mult)), savingsPct: pct, source: 'wishlist' },
+      { characterId: 4002, name: 'Yuta Okkotsu', series: 'Jujutsu Kaisen', rarity: 'L', median7d: 290, lowestFixed: 305, bestExistingBid: 185, suggestedBid: Math.max(2, Math.round(290 * mult)), savingsPct: pct, source: 'series' },
+      { characterId: 4005, name: 'Kyojuro Rengoku', series: 'Demon Slayer', rarity: 'E', median7d: 78, lowestFixed: 82, bestExistingBid: null, suggestedBid: Math.max(2, Math.round(78 * mult)), savingsPct: pct, source: 'series' },
+      { characterId: 5101, name: 'Power', series: 'Chainsaw Man', rarity: 'R', median7d: 26, lowestFixed: 29, bestExistingBid: 14, suggestedBid: Math.max(2, Math.round(26 * mult)), savingsPct: pct, source: 'renaissance' }
     ];
     return { ok: true, opportunities: ops };
   }
@@ -359,34 +360,33 @@ function handleMessage(cmd: any): any {
     return { ok: true, boughtCount: 1, dealsFound: nextMw.dealsFound, marketWatch: nextMw };
   }
   if (type === 'km:cmd:run-games-farm') {
+    const gid = String(cmd?.gameId || store.settings?.autoGamesTargetGame || 'all');
+    const LABELS: Record<string, [string, number, number]> = {
+      all: ['Rotation 12 jeux', 5, 18], 'main-du-jour': ['Main du Jour', 1, 10], 'raid-du-jour': ['Raid du Jour', 1, 8],
+      expedition: ['L\'Expédition', 2, 12], 'trois-arcs': ['Les Trois Arcs', 3, 9], 'main-kyara': ['Main Kyara', 3, 9],
+      raid: ['Kyara Raid', 3, 9], 'kyara-21': ['Kyara 21', 3, 9], 'qui-est-ce': ['Qui est-ce ?', 3, 9],
+      'serie-express': ['Série Express', 3, 9], 'blind-test': ['Blind Test', 3, 9], memoire: ['Mémoire', 3, 9], 'plus-aime': ['Plus aimé', 3, 9]
+    };
+    const [label, playedGames, ticketsEarned] = LABELS[gid] || [gid, 3, 9];
     const cur = store.kmDashboard.arcade;
-    const arcade = { ...cur, today: Math.min(cur.dayCap, cur.today + 9), week: Math.min(cur.weekCap, cur.week + 9), balance: cur.balance + 9, canBuyLot: cur.balance + 9 >= (cur.bestLotPrice || 200) };
-    notifyStorage({ kmDashboard: { ...store.kmDashboard, arcade }, kmJournal: [{ type: 'info' as const, message: `Salle de Jeux (${cmd?.gameId || 'plus-aime'}) : 3 parties, +9 🎟 (Solde ${arcade.balance} 🎟)`, ts: Date.now() }, ...store.kmJournal] });
-    return { ok: true, playedGames: 3, ticketsEarned: 9, arcade };
+    const arcade = { ...cur, today: Math.min(cur.dayCap, cur.today + ticketsEarned), week: Math.min(cur.weekCap, cur.week + ticketsEarned), balance: cur.balance + ticketsEarned, canBuyLot: cur.balance + ticketsEarned >= (cur.bestLotPrice || 200) };
+    notifyStorage({ kmDashboard: { ...store.kmDashboard, arcade }, kmJournal: [{ type: 'info' as const, message: `Salle de Jeux (${label}) : ${playedGames} partie(s), +${ticketsEarned} 🎟 (Solde ${arcade.balance} 🎟)`, ts: Date.now() }, ...store.kmJournal] });
+    return { ok: true, playedGames, ticketsEarned, arcade };
   }
   if (type === 'km:cmd:reset-roi') { notifyStorage({ kmCumulativeStats: { ...DEFAULT_CUMULATIVE_STATS, startedAt: Date.now() } }); return { ok: true }; }
-  if (type === 'km:update-check') {
-    notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' } });
-    return { ok: true };
-  }
-  if (type === 'km:update-apply') {
-    notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' } });
-    return { ok: true, kmUpdate: store.kmUpdate };
-  }
-  if (type === 'km:update-dismiss') {
-    notifyStorage({ kmUpdate: { ...store.kmUpdate, dismissedVersion: store.kmUpdate?.availableVersion } });
-    return { ok: true };
-  }
+  if (type === 'km:update-check') { notifyStorage({ kmUpdate: { status: 'available', currentVersion: '2.6.0', availableVersion: '2.7.0', source: 'cws' } }); return { ok: true }; }
+  if (type === 'km:update-apply') { notifyStorage({ kmUpdate: { status: 'installing', currentVersion: '2.6.0', availableVersion: '2.7.0', source: 'cws' } }); return { ok: true, kmUpdate: store.kmUpdate }; }
+  if (type === 'km:update-dismiss') { notifyStorage({ kmUpdate: { ...store.kmUpdate, dismissedVersion: store.kmUpdate?.availableVersion } }); return { ok: true }; }
   return { ok: true, data: {} };
 }
 
 function installChromeMock() {
   if (typeof window !== 'undefined' && window.location.search.includes('kmUpdate=available')) {
-    store.kmUpdate = { status: 'available', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' };
+    store.kmUpdate = { status: 'available', currentVersion: '2.6.0', availableVersion: '2.7.0', source: 'cws' };
   }
   (globalThis as any).chrome = {
     runtime: {
-      lastError: null, getManifest: () => ({ version: '2.5.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
+      lastError: null, getManifest: () => ({ version: '2.6.0', name: 'Kyara Manager', side_panel: { default_path: 'sidepanel/index.html' } }), getURL: (p: string) => p,
       sendMessage: (cmd: any, cb?: (res: any) => void) => { const res = handleMessage(cmd); if (cb) setTimeout(() => cb(res), 15); return Promise.resolve(res); },
       onMessage: { addListener: () => {}, removeListener: () => {} }
     },
@@ -457,7 +457,7 @@ function mountPreviewStudioBar() {
   const btnUpd = document.createElement('button'); btnUpd.style.cssText = btnStyle(false); btnUpd.innerText = 'Pop-up Maj';
   btnUpd.onclick = () => {
     const isAvail = store.kmUpdate?.status === 'available' || store.kmUpdate?.status === 'installing';
-    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.5.0' } : { status: 'available', currentVersion: '2.5.0', availableVersion: '2.6.0', source: 'cws' } });
+    notifyStorage({ kmUpdate: isAvail ? { status: 'idle', currentVersion: '2.6.0' } : { status: 'available', currentVersion: '2.6.0', availableVersion: '2.7.0', source: 'cws' } });
     btnUpd.style.cssText = btnStyle(!isAvail);
   };
   const simulateStep = () => {
@@ -465,7 +465,7 @@ function mountPreviewStudioBar() {
     if (liveIndex === 0) {
       notifyStorage({ kmDashboard: { ...store.kmDashboard, me: { ...store.kmDashboard.me, chakra: store.kmDashboard.me.chakra + 28 } }, kmCumulativeStats: { ...store.kmCumulativeStats, chakraFromSales: store.kmCumulativeStats.chakraFromSales + 28, cardsSold: store.kmCumulativeStats.cardsSold + 1 }, kmJournal: [{ type: 'sell' as const, message: 'Vente confirmée en direct : Zero Two pour 28 ◆ (+25 ◆ net)', ts: nowTs }, ...store.kmJournal.slice(0, 19)] });
     } else if (liveIndex === 1) {
-      const pull: AutopilotPullRecord = { characterId: 1002, name: 'Gojo Satoru', rarity: 'L', series: 'Jujutsu Kaisen', packName: 'Pack Shonen Legends', pulledAt: nowTs, isNew: false, medianPrice: 85, image: cardSvg('#ffaa00', 'L') };
+      const pull: AutopilotPullRecord = { characterId: 1002, name: 'Gojo Satoru', rarity: 'L', series: 'Jujutsu Kaisen', packName: 'Pack Shonen Legends', pulledAt: nowTs, isNew: false, medianPrice: 340, image: cardSvg('#ffaa00', 'L') };
       const bestPulls = [pull, ...store.kmBestPulls.slice(0, 9)];
       notifyStorage({ kmDashboard: { ...store.kmDashboard, me: { ...store.kmDashboard.me, pity: (store.kmDashboard.me.pity + 1) % 250 }, bestPulls }, kmBestPulls: bestPulls, kmJournal: [{ type: 'booster' as const, message: 'Tirage live : Gojo Satoru (Légendaire) tiré du Pack Shonen !', ts: nowTs }, ...store.kmJournal.slice(0, 19)] });
     } else if (liveIndex === 2) {

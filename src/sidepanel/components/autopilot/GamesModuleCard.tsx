@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import type { DashboardState } from '../../../types/kyara';
-import type { KyaraSettings } from '../../../types/settings';
+import type { KyaraGameId, KyaraSettings } from '../../../types/settings';
 import { sendCommand } from '../../hooks/useDashboard';
 import { CollapsibleModuleCard } from './CollapsibleModuleCard';
 
@@ -13,12 +13,20 @@ export interface GamesModuleCardProps {
   onToast: (msg: string) => void;
 }
 
-const GAME_OPTIONS: Array<{ id: NonNullable<KyaraSettings['autoGamesTargetGame']>; label: string }> = [
-  { id: 'plus-aime', label: 'Plus aimé (Rang # · Rapide)' },
+const GAME_OPTIONS: Array<{ id: KyaraGameId; label: string }> = [
+  { id: 'all', label: 'Tous les jeux (Rotation auto)' },
+  { id: 'main-du-jour', label: 'Main du Jour (Poker quotidien)' },
+  { id: 'raid-du-jour', label: 'Raid du Jour (Équipe quotidienne)' },
+  { id: 'expedition', label: 'L\'Expédition (Donjon tactique)' },
+  { id: 'trois-arcs', label: 'Les Trois Arcs (Duel 3 lignes)' },
+  { id: 'main-kyara', label: 'Main Kyara (Poker solo)' },
+  { id: 'raid', label: 'Kyara Raid (Combat d\'équipe)' },
+  { id: 'kyara-21', label: 'Kyara 21 (Blackjack IA)' },
   { id: 'qui-est-ce', label: 'Qui est-ce ? (4 choix)' },
   { id: 'serie-express', label: 'Série Express (4 choix)' },
-  { id: 'memoire', label: 'Mémoire (Paires mémorisées)' },
-  { id: 'kyara-21', label: 'Kyara 21 (Blackjack IA)' }
+  { id: 'blind-test', label: 'Blind Test (Musiques anime)' },
+  { id: 'memoire', label: 'Mémoire (8 paires)' },
+  { id: 'plus-aime', label: 'Plus aimé (Rang # · Rapide)' }
 ];
 
 /** Cockpit module controlling the Salle de Jeux (`/jouer`) ticket farmer and live visual solver. */
@@ -40,7 +48,7 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
   const handleFarmNow = async () => {
     setFarming(true);
     onToast('Farm Salle de Jeux en cours…');
-    const res = await (sendCommand({ type: 'km:cmd:run-games-farm', gameId: settings.autoGamesTargetGame || 'plus-aime' } as any) as Promise<any>);
+    const res = await (sendCommand({ type: 'km:cmd:run-games-farm', gameId: settings.autoGamesTargetGame || 'all' } as any) as Promise<any>);
     setFarming(false);
     if (res?.ok) {
       const played = res.playedGames ?? 0;
@@ -59,7 +67,7 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
       onToggleExpand={onToggleExpand} onToggleSwitch={(v) => onUpdateSettings({ autoGamesEnabled: v })}
     >
       <p className="module-card__desc">
-        Joue la Main du Jour (+10 🎟) et le mini-jeu cible jusqu&apos;à {dayCap} 🎟/jour pour débloquer Boosters Dorés, Lot Légendaire (200 🎟) et Sceau Mythique (1000 🎟).
+        Joue les quotidiens (Main &amp; Raid du Jour) et les 12 mini-jeux jusqu&apos;à {dayCap} 🎟/jour pour débloquer Boosters Dorés, Lot Légendaire (200 🎟) et Sceau Mythique (1000 🎟).
       </p>
 
       {arcade?.blocked === 'guest' && (
@@ -89,8 +97,8 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
       <div className="strategy-selector-row">
         <label htmlFor="sel-games-target" className="strategy-selector-label">Mini-jeu farmé :</label>
         <select
-          id="sel-games-target" value={settings.autoGamesTargetGame || 'plus-aime'}
-          onChange={(e) => onUpdateSettings({ autoGamesTargetGame: e.target.value as KyaraSettings['autoGamesTargetGame'] })}
+          id="sel-games-target" value={settings.autoGamesTargetGame || 'all'}
+          onChange={(e) => onUpdateSettings({ autoGamesTargetGame: e.target.value as KyaraGameId })}
           className="select select--xs" title="Mini-jeu solo farmé automatiquement pour les tickets"
         >
           {GAME_OPTIONS.map((opt) => (

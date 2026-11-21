@@ -1,11 +1,18 @@
 import { Rarity, WishlistSuggestion } from '../../types/kyara';
 import { RARITY_PRICE_FLOORS } from './constants';
 
+function pickPositive(v: unknown): number | null {
+  if (v === null || v === undefined || v === '' || typeof v === 'boolean') return null;
+  const n = Number(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function generateDailyWishlist(
   catalogById: Map<number, any> | Record<number, any>,
   ownedSet: Set<number> | number[] | null,
   collectionPrices: Map<number, any> | Record<number, any>,
-  limit = 20
+  limit = 20,
+  rarityAvgPrices?: Record<string, number> | null
 ): WishlistSuggestion[] {
   const entries = catalogById instanceof Map ? Array.from(catalogById.entries()) : Object.entries(catalogById || {});
   const seriesStats = new Map<string, { total: number; owned: number }>();
@@ -34,8 +41,17 @@ export function generateDailyWishlist(
     const completionPct = st && st.total > 0 ? (st.owned / st.total) * 100 : 0;
 
     const priceData = collectionPrices instanceof Map ? collectionPrices.get(numId) : collectionPrices?.[numId];
-    const median7d = Number.isFinite(priceData?.median7d) ? priceData.median7d : Number(RARITY_PRICE_FLOORS[rarity] ?? 5);
-    const sales7d = Number.isFinite(priceData?.sales7d) ? priceData.sales7d : 0;
+    const median7d =
+      pickPositive(priceData?.median7d) ??
+      pickPositive(priceData?.median30d) ??
+      pickPositive(priceData?.lastPrice) ??
+      pickPositive(rarityAvgPrices?.[rarity]) ??
+      Number(RARITY_PRICE_FLOORS[rarity] ?? 5);
+    const rawSales = priceData?.sales7d;
+    const sales7d =
+      rawSales !== null && rawSales !== undefined && rawSales !== '' && Number.isFinite(Number(rawSales))
+        ? Number(rawSales)
+        : 0;
 
     const affordabilityScore = Math.max(0, 100 - Math.min(100, median7d));
     const liquidityScore = Math.min(100, sales7d * 10);

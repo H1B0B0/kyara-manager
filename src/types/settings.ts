@@ -14,6 +14,21 @@ export type PricingStrategy =
 export type SellMode = 'adaptive' | 'fast' | 'normal' | 'patient';
 export type SellTier = 'fast' | 'normal' | 'patient';
 
+export type KyaraGameId =
+  | 'all'
+  | 'plus-aime'
+  | 'qui-est-ce'
+  | 'serie-express'
+  | 'blind-test'
+  | 'memoire'
+  | 'kyara-21'
+  | 'main-du-jour'
+  | 'main-kyara'
+  | 'raid-du-jour'
+  | 'raid'
+  | 'expedition'
+  | 'trois-arcs';
+
 export interface KyaraSettings {
   masterEnabled: boolean;
   autoSellEnabled: boolean;
@@ -68,7 +83,7 @@ export interface KyaraSettings {
   autoGamesEnabled?: boolean;
   autoGamesDailyEnabled?: boolean;
   autoGamesSolverOverlay?: boolean;
-  autoGamesTargetGame?: 'plus-aime' | 'qui-est-ce' | 'serie-express' | 'memoire' | 'kyara-21';
+  autoGamesTargetGame?: KyaraGameId;
   antiAfkEnabled: boolean;
   refreshIntervalMinutes: number;
   loopIntervalSec?: number;
@@ -131,7 +146,7 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   autoGamesEnabled: true,
   autoGamesDailyEnabled: true,
   autoGamesSolverOverlay: true,
-  autoGamesTargetGame: 'plus-aime',
+  autoGamesTargetGame: 'all',
   antiAfkEnabled: true,
   refreshIntervalMinutes: 5,
   loopIntervalSec: 45,
@@ -224,9 +239,23 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   settings.autoGamesEnabled = raw.autoGamesEnabled !== false;
   settings.autoGamesDailyEnabled = raw.autoGamesDailyEnabled !== false;
   settings.autoGamesSolverOverlay = raw.autoGamesSolverOverlay !== false;
-  const validGames = ['plus-aime', 'qui-est-ce', 'serie-express', 'memoire', 'kyara-21'];
-  settings.autoGamesTargetGame = validGames.includes(String(raw.autoGamesTargetGame))
-    ? (raw.autoGamesTargetGame as KyaraSettings['autoGamesTargetGame'])
+  const validGames: KyaraGameId[] = [
+    'all',
+    'plus-aime',
+    'qui-est-ce',
+    'serie-express',
+    'blind-test',
+    'memoire',
+    'kyara-21',
+    'main-du-jour',
+    'main-kyara',
+    'raid-du-jour',
+    'raid',
+    'expedition',
+    'trois-arcs'
+  ];
+  settings.autoGamesTargetGame = validGames.includes(raw.autoGamesTargetGame as KyaraGameId)
+    ? (raw.autoGamesTargetGame as KyaraGameId)
     : DEFAULT_SETTINGS.autoGamesTargetGame;
   const rawDiscount = settings.buyOrderDiscountPct;
   const parsedDiscount =
