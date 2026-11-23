@@ -45,8 +45,9 @@ export function isOnGamesArea(pathname?: string): boolean {
 }
 
 /**
- * Serializes SPA/DOM driving between `'games'` and `'boosters'` via an exclusive Web Lock
- * so they can never navigate or click in the same Kyara origin at the same time.
+ * Serializes SPA/DOM driving between `'games'` and `'boosters'` per tab via `localSpaQueue`
+ * so they remain strictly exclusive within the same tab without blocking other Kyara tabs
+ * (e.g. the dedicated background games tab and the main user tab run truly in parallel).
  */
 export async function runSpaPilotTask<T>(owner: SpaPilotOwner, task: () => Promise<T>): Promise<T> {
   if (state.updatePending || state.disposed) {
@@ -67,10 +68,6 @@ export async function runSpaPilotTask<T>(owner: SpaPilotOwner, task: () => Promi
       state.spaPilotOwner = previousOwner;
     }
   };
-
-  if (typeof navigator !== 'undefined' && navigator?.locks?.request) {
-    return navigator.locks.request('kyara-manager-spa-ui', { ifAvailable: false }, async () => runGuarded());
-  }
 
   const prev = localSpaQueue;
   let release!: () => void;

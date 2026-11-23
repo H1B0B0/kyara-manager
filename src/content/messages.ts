@@ -313,6 +313,7 @@ export function setupMessageListener(): () => void {
           const dedicatedTab = Boolean(message.dedicatedTab);
           const res = await runSpaPilotTask('games', async () => {
             state.isGamesRunning = true;
+            state.abortWhenMasterOff = !isManual;
             try {
               const baseDashboard = await refreshDashboardSnapshot({ forcePrices: false });
               return await executeAutoGames(baseDashboard, {
@@ -321,6 +322,7 @@ export function setupMessageListener(): () => void {
                 dedicatedTab
               });
             } finally {
+              state.abortWhenMasterOff = false;
               state.isGamesRunning = false;
             }
           });

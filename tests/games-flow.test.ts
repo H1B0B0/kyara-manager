@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mockChrome } from './chrome';
+import { mockChrome, mockLocks } from './chrome';
 
 const mocks = vi.hoisted(() => ({
   api: vi.fn(),
@@ -988,5 +988,75 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     // Once button.slot disappears, the replay button indicates the finished screen
     main.replaceChildren(linkBtn);
     expect(isGameFinishedScreen('main-du-jour')).toBe(true);
+  });
+
+  it('uses wall-clock deadline in humanSleep so 1Hz throttled timers do not multiply duration by 4x', async () => {
+    setGamesFastModeForTest(false);
+    let now = 1_000_000;
+    let timerCalls = 0;
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    const timeoutSpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: (...args: any[]) => void, ms?: number) => {
+      timerCalls += 1;
+      // Simulate Chrome background tab 1Hz throttling: any <= 1000ms timer fires after 1000ms wall clock
+      now += Math.max(Number(ms) || 0, 1000);
+      queueMicrotask(() => fn());
+      return timerCalls as unknown as ReturnType<typeof setTimeout>;
+    }) as typeof setTimeout);
+
+    try {
+      const start = Date.now();
+      await humanSleep(2000, 2000);
+      const elapsed = Date.now() - start;
+      expect(timerCalls).toBe(2);
+      expect(elapsed).toBe(2000);
+    } finally {
+      timeoutSpy.mockRestore();
+      nowSpy.mockRestore();
+    }
+  });
+
+  it('serializes runSpaPilotTask locally per tab without acquiring an origin-wide Web Lock', async () => {
+    mockChrome();
+    const { request } = mockLocks();
+    const { runSpaPilotTask } = await import('../src/content/operations');
+
+    const order: string[] = [];
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve; });
+
+    const p1 = runSpaPilotTask('games', async () => {
+      order.push('games:start');
+      await firstGate;
+      order.push('games:end');
+      return 'g';
+    });
+    const p2 = runSpaPilotTask('boosters', async () => {
+      order.push('boosters:start');
+      order.push('boosters:end');
+      return 'b';
+    });
+
+    await new Promise((r) => setTimeout(r, 10));
+    expect(order).toEqual(['games:start']);
+    releaseFirst();
+
+    expect(await Promise.all([p1, p2])).toEqual(['g', 'b']);
+    expect(order).toEqual(['games:start', 'games:end', 'boosters:start', 'boosters:end']);
+    expect(request).not.toHaveBeenCalled();
+  });
+
+  it('waits on /jouer/serie-express and /jouer/qui-est-ce when no card image is mounted yet instead of blind-clicking choice[0]', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/serie-express');
+    const c1 = dom.btn('Naruto', { className: 'choice' });
+    const c2 = dom.btn('Jujutsu Kaisen', { className: 'choice' });
+    const arena = dom.el('div', { className: 'arena' }, [
+      dom.el('div', { className: 'choices' }, [c1, c2])
+    ]);
+    dom.doc.body.replaceChildren(dom.el('main', {}, [arena]));
+
+    expect(await solveSoloQuizStep('/jouer/serie-express', catalog)).toBe(true);
+    expect(c1.clickCount).toBe(0);
+    expect(c2.clickCount).toBe(0);
   });
 });

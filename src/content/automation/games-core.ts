@@ -41,11 +41,12 @@ export async function humanSleep(minMs: number, maxMs = minMs): Promise<void> {
   if (fastForTestMode || safeInterrupted()) return;
   const lo = Math.max(0, minMs);
   const hi = Math.max(lo, maxMs);
-  let remaining = Math.round(lo + ((Math.random() + Math.random()) / 2) * (hi - lo));
-  while (remaining > 0 && !safeInterrupted()) {
-    const step = Math.min(remaining, 250);
-    await sleep(step);
-    remaining -= step;
+  const targetMs = Math.round(lo + ((Math.random() + Math.random()) / 2) * (hi - lo));
+  const deadline = Date.now() + targetMs;
+  while (!safeInterrupted()) {
+    const left = deadline - Date.now();
+    if (left <= 0) break;
+    await sleep(Math.min(left, 250));
   }
 }
 

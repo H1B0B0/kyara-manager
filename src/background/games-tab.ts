@@ -1,6 +1,6 @@
 const WORKER_TAB_STORAGE_KEY = 'kmGameWorkerTabId';
 const GAMES_HUB_URL = 'https://kyara.games/jouer';
-const TAB_LOAD_TIMEOUT_MS = 8000;
+const TAB_LOAD_TIMEOUT_MS = 15000;
 const TAB_POLL_MS = 400;
 
 let cachedWorkerTabId: number | null = null;

@@ -137,11 +137,16 @@ function isMemoryAllFound(): boolean {
   return tiles.length >= 2 && tiles.every((t) => t.classList.contains('found'));
 }
 
+function isGamesAborted(manual = false): boolean {
+  return isInterrupted() || (!manual && state.currentSettings.autoGamesEnabled === false);
+}
+
 async function playGameRuns(
   slug: string,
   runs: number,
   catalogById: Map<number, any>,
-  meId?: string | number
+  meId?: string | number,
+  manual = false
 ): Promise<{ played: number; blocked: boolean }> {
   const targetPath = `/jouer/${encodeURIComponent(slug)}`;
   if (!(await navigateSpaTo(targetPath, { owner: 'games' }))) return { played: 0, blocked: false };
@@ -151,7 +156,7 @@ async function playGameRuns(
   const isOnGamePath = () => typeof window !== 'undefined' && (window.location.pathname || '').startsWith(targetPath);
   let played = 0;
 
-  for (let run = 0; run < runs && !isInterrupted(); run += 1) {
+  for (let run = 0; run < runs && !isGamesAborted(manual); run += 1) {
     if (!isOnGamePath()) return { played, blocked: false };
     const runStartedAt = Date.now();
     if ((await clickSoloStartIfNeeded(slug)) === 'blocked') return { played, blocked: true };
@@ -162,7 +167,7 @@ async function playGameRuns(
     let idleSteps = 0;
     let memoryFoundTicks = 0;
 
-    for (let step = 0; step < 140 && !isInterrupted(); step += 1) {
+    for (let step = 0; step < 140 && !isGamesAborted(manual); step += 1) {
       if (!isOnGamePath()) return { played, blocked: false };
       if (hasDiscordGate()) return { played, blocked: true };
       if (didMove && isGameFinishedScreen(slug)) {
@@ -205,14 +210,14 @@ async function playGameRuns(
     await humanSleep(1800, 2500);
     const minRunMs = MIN_RUN_MS[slug] ?? 0;
     const elapsed = Date.now() - runStartedAt;
-    if (minRunMs > 0 && elapsed < minRunMs && !isInterrupted()) {
+    if (minRunMs > 0 && elapsed < minRunMs && !isGamesAborted(manual)) {
       await humanSleep(minRunMs - elapsed, minRunMs - elapsed + 1000);
     }
 
     played += 1;
     if (slug === 'raid-du-jour') markDailyRaidPlayed(meId);
 
-    if (run + 1 < runs && !isInterrupted()) {
+    if (run + 1 < runs && !isGamesAborted(manual)) {
       const replayBtn = findButtonByText(document.querySelector('main') || document, REPLAY_BTN_RE);
       if (replayBtn) {
         replayBtn.click();
@@ -272,44 +277,45 @@ export async function executeAutoGames(
     }
 
     let playedGames = 0;
+    const manual = Boolean(options.manual);
     const previousPath = typeof location !== 'undefined' ? location.pathname : '';
     const dailyEnabled = state.currentSettings.autoGamesDailyEnabled !== false;
-    const allowDaily = dailyEnabled || (Boolean(options.manual) && (targetGame === 'main-du-jour' || targetGame === 'raid-du-jour'));
+    const allowDaily = dailyEnabled || (manual && (targetGame === 'main-du-jour' || targetGame === 'raid-du-jour'));
 
     if (allowDaily && (targetGame === 'main-du-jour' || targetGame === 'all' || !options.gameId)) {
-      if (!(await isDailyHandAlreadyPlayed(meId)) && !isInterrupted()) {
-        playedGames += (await playGameRuns('main-du-jour', 1, catalogById, meId)).played;
+      if (!(await isDailyHandAlreadyPlayed(meId)) && !isGamesAborted(manual)) {
+        playedGames += (await playGameRuns('main-du-jour', 1, catalogById, meId, manual)).played;
       }
     }
     if (allowDaily && (targetGame === 'raid-du-jour' || targetGame === 'all' || !options.gameId)) {
-      if (!(await isDailyRaidAlreadyPlayed(meId)) && !isInterrupted()) {
-        playedGames += (await playGameRuns('raid-du-jour', 1, catalogById, meId)).played;
+      if (!(await isDailyRaidAlreadyPlayed(meId)) && !isGamesAborted(manual)) {
+        playedGames += (await playGameRuns('raid-du-jour', 1, catalogById, meId, manual)).played;
       }
     }
 
-    const maxRuns = options.manual ? 5 : 2;
-    if (!isInterrupted() && targetGame !== 'main-du-jour' && targetGame !== 'raid-du-jour' && today < dayCap && week < weekCap) {
+    const maxRuns = manual ? 5 : 2;
+    if (!isGamesAborted(manual) && targetGame !== 'main-du-jour' && targetGame !== 'raid-du-jour' && today < dayCap && week < weekCap) {
       if (playedGames > 0) await humanSleep(2000, 3400);
       if (targetGame === 'all') {
         let soloPlayed = 0;
-        for (let tries = 0; tries < ALL_PLAYABLE_GAMES.length && soloPlayed < maxRuns && !isInterrupted(); tries += 1) {
+        for (let tries = 0; tries < ALL_PLAYABLE_GAMES.length && soloPlayed < maxRuns && !isGamesAborted(manual); tries += 1) {
           const slug = ALL_PLAYABLE_GAMES[allGamesCursor % ALL_PLAYABLE_GAMES.length];
           allGamesCursor = (allGamesCursor + 1) % ALL_PLAYABLE_GAMES.length;
-          const res = await playGameRuns(slug, 1, catalogById, meId);
+          const res = await playGameRuns(slug, 1, catalogById, meId, manual);
           if (res.blocked || !res.played) continue;
           playedGames += res.played;
           soloPlayed += 1;
-          if (soloPlayed < maxRuns && !isInterrupted()) await humanSleep(2000, 3400);
+          if (soloPlayed < maxRuns && !isGamesAborted(manual)) await humanSleep(2000, 3400);
         }
       } else {
-        playedGames += (await playGameRuns(targetGame, maxRuns, catalogById, meId)).played;
+        playedGames += (await playGameRuns(targetGame, maxRuns, catalogById, meId, manual)).played;
       }
     }
 
-    if (!options.manual && !options.dedicatedTab && previousPath && !previousPath.startsWith('/jouer') && typeof location !== 'undefined' && location.pathname !== previousPath) {
+    if (!manual && !options.dedicatedTab && previousPath && !previousPath.startsWith('/jouer') && typeof location !== 'undefined' && location.pathname !== previousPath) {
       await navigateSpaTo(previousPath, { owner: 'games' }).catch(() => false);
     }
-    if (playedGames > 0 && !isInterrupted()) await humanSleep(1500, 2200);
+    if (playedGames > 0 && !isGamesAborted(manual)) await humanSleep(1500, 2200);
 
     const arcadeAfter = await fetchArcadeSummary();
     const balanceNow = arcadeAfter?.balance ?? arcadeBefore.balance;

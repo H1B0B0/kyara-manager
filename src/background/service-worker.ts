@@ -198,6 +198,17 @@ chrome.runtime.onUpdateAvailable.addListener((details) => {
   void updateAvailable(details.version).catch(console.warn);
 });
 
+function isArcadeDoneOrBlocked(
+  arcade?: { blocked?: unknown; today?: number; dayCap?: number; week?: number; weekCap?: number } | null
+): boolean {
+  if (!arcade) return false;
+  return (
+    Boolean(arcade.blocked) ||
+    (arcade.today ?? 0) >= (arcade.dayCap ?? 60) ||
+    (arcade.week ?? 0) >= (arcade.weekCap ?? 300)
+  );
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name !== ALARM_NAME) return;
   await updateBadgeFromState();
@@ -209,20 +220,27 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     kmLastWorkerGamesAt?: number;
   };
   const settings = stored.settings;
-  if (!settings?.masterEnabled) return;
+  if (!settings?.masterEnabled) {
+    void closeGameWorkerTab().catch(() => {});
+    return;
+  }
 
   const tasks: Array<Promise<any>> = [
     sendToKyaraTab({ type: 'km:alarm-tick' }, { preferNonGame: true })
   ];
 
   const arcade = stored.kmDashboard?.arcade;
+  const shouldCloseDedicated =
+    !settings.autoGamesEnabled ||
+    settings.autoGamesDedicatedTab === false ||
+    isArcadeDoneOrBlocked(arcade);
+  if (shouldCloseDedicated) {
+    void closeGameWorkerTab().catch(() => {});
+  }
+
   const canFarmDedicated =
-    Boolean(settings.autoGamesEnabled) &&
-    settings.autoGamesDedicatedTab !== false &&
+    !shouldCloseDedicated &&
     Boolean(arcade?.enabled) &&
-    !arcade?.blocked &&
-    (arcade?.today ?? 0) < (arcade?.dayCap ?? 60) &&
-    (arcade?.week ?? 0) < (arcade?.weekCap ?? 300) &&
     Date.now() - (Number(stored.kmLastWorkerGamesAt) || 0) >= WORKER_GAMES_COOLDOWN_MS;
 
   if (canFarmDedicated) {
@@ -236,7 +254,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
           dedicatedTab: true
         },
         settings.autoGamesTargetGame
-      )
+      ).then((res) => {
+        if (isArcadeDoneOrBlocked(res?.arcade) || Boolean(res?.blocked)) {
+          void closeGameWorkerTab().catch(() => {});
+        }
+        return res;
+      })
     );
   }
 
@@ -246,6 +269,10 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
   if (areaName === 'local' && changes.settings) {
     await updateBadgeFromState();
+    const nextSettings = changes.settings.newValue as KyaraSettings | undefined;
+    if (!nextSettings?.masterEnabled || !nextSettings?.autoGamesEnabled || nextSettings?.autoGamesDedicatedTab === false) {
+      void closeGameWorkerTab().catch(() => {});
+    }
   }
 });
 

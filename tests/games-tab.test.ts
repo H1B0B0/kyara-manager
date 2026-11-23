@@ -144,4 +144,82 @@ describe('dedicated background games tab', () => {
       chrome.tabs.sendMessage.mock.calls.filter(([, payload]) => payload.type === 'km:cmd:run-games-farm')
     ).toHaveLength(0);
   });
+
+  it('closes the dedicated worker tab automatically when autoGamesEnabled turns false via storage.onChanged', async () => {
+    const { chrome } = mockChrome({
+      settings: {
+        masterEnabled: true,
+        autoGamesEnabled: true,
+        autoGamesDedicatedTab: true
+      }
+    });
+    const workerTab = { id: 91, url: 'https://kyara.games/jouer', active: false, pinned: true, status: 'complete' };
+    chrome.tabs.create.mockResolvedValue(workerTab);
+    chrome.tabs.get.mockResolvedValue(workerTab);
+    chrome.tabs.sendMessage.mockImplementation(async (_id: number, payload: any) => {
+      if (payload.type === 'km:ping') return { ok: true, version: chrome.runtime.getManifest().version };
+      return { ok: true };
+    });
+
+    await import('../src/background/service-worker');
+    const message = (payload: any) => new Promise<any>((resolve) => chrome.runtime.onMessage.emit(payload, {}, resolve));
+
+    // Open dedicated worker tab first
+    const farmRes = await message({ type: 'km:cmd:run-games-farm', gameId: 'memoire' });
+    expect(farmRes.ok).toBe(true);
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+
+    // Turning autoGamesEnabled off via storage.local.set triggers storage.onChanged and closes worker tab
+    await chrome.storage.local.set({
+      settings: {
+        masterEnabled: true,
+        autoGamesEnabled: false,
+        autoGamesDedicatedTab: true
+      }
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(91);
+  });
+
+  it('closes the dedicated worker tab in onAlarm when the 60/60 daily cap is reached', async () => {
+    const { chrome } = mockChrome({
+      settings: {
+        masterEnabled: true,
+        autoGamesEnabled: true,
+        autoGamesDedicatedTab: true,
+        autoGamesTargetGame: 'memoire'
+      },
+      kmDashboard: {
+        arcade: { enabled: true, blocked: null, today: 58, dayCap: 60, week: 120, weekCap: 300 }
+      }
+    });
+    const mainTab = { id: 10, url: 'https://kyara.games/collection', active: true, status: 'complete' };
+    const workerTab = { id: 92, url: 'https://kyara.games/jouer', active: false, pinned: true, status: 'complete' };
+    chrome.tabs.query.mockResolvedValue([mainTab]);
+    chrome.tabs.create.mockResolvedValue(workerTab);
+    chrome.tabs.get.mockResolvedValue(workerTab);
+    chrome.tabs.sendMessage.mockImplementation(async (_id: number, payload: any) => {
+      if (payload.type === 'km:ping') return { ok: true, version: chrome.runtime.getManifest().version };
+      return { ok: true, arcade: { enabled: true, blocked: null, today: 59, dayCap: 60, week: 121, weekCap: 300 } };
+    });
+
+    await import('../src/background/service-worker');
+
+    // First alarm opens worker tab while under cap (58/60)
+    await Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+
+    // Update cached dashboard to 60/60 cap reached -> next alarm must close the worker tab
+    await chrome.storage.local.set({
+      kmDashboard: {
+        arcade: { enabled: true, blocked: null, today: 60, dayCap: 60, week: 122, weekCap: 300 }
+      }
+    });
+    await Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(92);
+  });
 });

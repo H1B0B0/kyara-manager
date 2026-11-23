@@ -282,6 +282,10 @@ export async function solveSoloQuizStep(path: string, catalogById: Map<number, a
       const clueIds = Array.from(arena.querySelectorAll<HTMLImageElement>('img[src*="/cards/"]'))
         .map((img) => extractCardIdFromUrl(img.src))
         .filter((id): id is number => id !== null);
+      if (clueIds.length === 0) {
+        await humanSleep(450, 700);
+        return true;
+      }
       const mode = path.startsWith('/jouer/serie-express') ? 'series' : 'character';
       let idx = matchCharacterChoice(clueIds, enabledChoices.map(cleanBtnText), catalogById, mode);
       if (idx < 0 || idx >= enabledChoices.length) idx = 0;
