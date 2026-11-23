@@ -227,7 +227,7 @@ async function playGameRuns(
 
 export async function executeAutoGames(
   dashboard: any,
-  options: { manual?: boolean; gameId?: string; solveOnce?: boolean; _fastForTest?: boolean } = {}
+  options: { manual?: boolean; gameId?: string; solveOnce?: boolean; dedicatedTab?: boolean; _fastForTest?: boolean } = {}
 ): Promise<{ playedGames: number; ticketsEarned: number; blocked?: string | null; arcade?: ArcadeSummary | null }> {
   setGamesFastModeForTest(Boolean(options._fastForTest));
   try {
@@ -306,7 +306,7 @@ export async function executeAutoGames(
       }
     }
 
-    if (!options.manual && previousPath && !previousPath.startsWith('/jouer') && typeof location !== 'undefined' && location.pathname !== previousPath) {
+    if (!options.manual && !options.dedicatedTab && previousPath && !previousPath.startsWith('/jouer') && typeof location !== 'undefined' && location.pathname !== previousPath) {
       await navigateSpaTo(previousPath, { owner: 'games' }).catch(() => false);
     }
     if (playedGames > 0 && !isInterrupted()) await humanSleep(1500, 2200);

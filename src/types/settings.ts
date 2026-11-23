@@ -83,6 +83,7 @@ export interface KyaraSettings {
   autoGamesEnabled?: boolean;
   autoGamesDailyEnabled?: boolean;
   autoGamesSolverOverlay?: boolean;
+  autoGamesDedicatedTab?: boolean;
   autoGamesTargetGame?: KyaraGameId;
   antiAfkEnabled: boolean;
   refreshIntervalMinutes: number;
@@ -146,6 +147,7 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   autoGamesEnabled: true,
   autoGamesDailyEnabled: true,
   autoGamesSolverOverlay: true,
+  autoGamesDedicatedTab: true,
   autoGamesTargetGame: 'all',
   antiAfkEnabled: true,
   refreshIntervalMinutes: 5,
@@ -239,6 +241,7 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   settings.autoGamesEnabled = raw.autoGamesEnabled !== false;
   settings.autoGamesDailyEnabled = raw.autoGamesDailyEnabled !== false;
   settings.autoGamesSolverOverlay = raw.autoGamesSolverOverlay !== false;
+  settings.autoGamesDedicatedTab = raw.autoGamesDedicatedTab !== false;
   const validGames: KyaraGameId[] = [
     'all',
     'plus-aime',

@@ -309,11 +309,17 @@ export function setupMessageListener(): () => void {
         }
 
         if (message.type === 'km:cmd:run-games-farm') {
+          const isManual = message.manual !== false;
+          const dedicatedTab = Boolean(message.dedicatedTab);
           const res = await runSpaPilotTask('games', async () => {
             state.isGamesRunning = true;
             try {
               const baseDashboard = await refreshDashboardSnapshot({ forcePrices: false });
-              return await executeAutoGames(baseDashboard, { manual: true, gameId: message.gameId });
+              return await executeAutoGames(baseDashboard, {
+                manual: isManual,
+                gameId: message.gameId,
+                dedicatedTab
+              });
             } finally {
               state.isGamesRunning = false;
             }

@@ -12,7 +12,9 @@ export type ExtensionCommand =
   | { type: 'km:cmd:scan-deals' }
   | { type: 'km:cmd:reset-roi' }
   | { type: 'km:cmd:open-pack'; packId: string; packName: string; count?: number }
-  | { type: 'km:cmd:run-games-farm'; gameId?: string }
+  | { type: 'km:cmd:run-games-farm'; gameId?: string; manual?: boolean; dedicatedTab?: boolean }
+  | { type: 'km:cmd:close-games-tab' }
+  | { type: 'km:cmd:focus-games-tab' }
   | { type: 'km:cmd:solve-current-game' }
   | { type: 'km:cmd:single-sell'; characterId: number; price: number; durationHours?: number }
   | { type: 'km:cmd:single-recycle'; characterId: number; qty?: number; name?: string }

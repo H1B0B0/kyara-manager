@@ -45,6 +45,17 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
     ? 'Discord requis pour /jouer'
     : `${today}/${dayCap} 🎟 · Solde ${balance} 🎟${arcade?.bestLotLabel ? ` · ${arcade.bestLotLabel}` : ''}`;
 
+  const dedicatedTab = settings.autoGamesDedicatedTab !== false;
+
+  const handleCloseGamesTab = async () => {
+    const res = await (sendCommand({ type: 'km:cmd:close-games-tab' } as any) as Promise<any>);
+    onToast(res?.closed ? 'Onglet dédié Salle de Jeux fermé.' : 'Aucun onglet dédié Salle de Jeux ouvert.');
+  };
+
+  const handleFocusGamesTab = async () => {
+    await sendCommand({ type: 'km:cmd:focus-games-tab' } as any);
+  };
+
   const handleFarmNow = async () => {
     setFarming(true);
     onToast('Farm Salle de Jeux en cours…');
@@ -94,6 +105,15 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
         />
       </div>
 
+      <div className="switch-row switch-row--compact">
+        <label htmlFor="sw-autogames-dedicated" className="module-card__sublabel">Onglet dédié silencieux (arrière-plan, ne bloque pas Kyara)</label>
+        <input
+          type="checkbox" role="switch" id="sw-autogames-dedicated" className="switch switch--sm"
+          checked={dedicatedTab}
+          onChange={(e) => onUpdateSettings({ autoGamesDedicatedTab: e.target.checked })}
+        />
+      </div>
+
       <div className="strategy-selector-row">
         <label htmlFor="sel-games-target" className="strategy-selector-label">Mini-jeu farmé :</label>
         <select
@@ -111,13 +131,23 @@ export const GamesModuleCard: React.FC<GamesModuleCardProps> = ({
         <span className="mono-stat">
           Semaine : {week}/{weekCap} 🎟 · {arcade?.canBuyLot ? `✓ ${arcade.bestLotLabel} dispo !` : `${arcade?.bestLotLabel || 'Lot Lég.'} (${arcade?.bestLotPrice ?? 200} 🎟)`}
         </span>
-        <div style={{ display: 'flex', gap: '5px', flexShrink: 0 }}>
+        <div style={{ display: 'flex', gap: '5px', flexShrink: 0, flexWrap: 'nowrap' }}>
           <button
-            type="button" onClick={() => void chrome.tabs?.create({ url: 'https://kyara.games/jouer' })}
+            type="button" onClick={handleFocusGamesTab}
             className="btn btn--xs btn--ghost" style={{ whiteSpace: 'nowrap' }}
+            title={dedicatedTab ? "Afficher l'onglet dédié Salle de Jeux" : 'Ouvrir /jouer dans un onglet'}
           >
-            Ouvrir /jouer
+            {dedicatedTab ? 'Voir onglet' : 'Ouvrir /jouer'}
           </button>
+          {dedicatedTab && (
+            <button
+              type="button" onClick={handleCloseGamesTab}
+              className="btn btn--xs btn--ghost" style={{ whiteSpace: 'nowrap' }}
+              title="Fermer l'onglet dédié Salle de Jeux"
+            >
+              Fermer
+            </button>
+          )}
           <button
             type="button" onClick={handleFarmNow}
             disabled={farming || arcade?.blocked === 'guest'}

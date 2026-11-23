@@ -12,6 +12,7 @@ export function eventMock() {
 
 export function mockChrome(initial: Record<string, any> = {}) {
   const data = structuredClone(initial);
+  const sessionData: Record<string, any> = {};
   const onChanged = eventMock();
   const chromeMock = {
     runtime: {
@@ -31,9 +32,25 @@ export function mockChrome(initial: Record<string, any> = {}) {
           Object.assign(data, structuredClone(items));
           onChanged.emit(changes, 'local');
         })
-      }, onChanged
+      },
+      session: {
+        get: vi.fn(async (keys: string | string[]) => Object.fromEntries((Array.isArray(keys) ? keys : [keys]).map((key) => [key, sessionData[key]]))),
+        set: vi.fn(async (items: Record<string, any>) => { Object.assign(sessionData, structuredClone(items)); }),
+        remove: vi.fn(async (keys: string | string[]) => { (Array.isArray(keys) ? keys : [keys]).forEach((key) => { delete sessionData[key]; }); })
+      },
+      onChanged
     },
-    tabs: { query: vi.fn(async () => [] as any[]), sendMessage: vi.fn(async (_id: number, _payload: any): Promise<any> => ({ ok: true, busy: false })), update: vi.fn(), reload: vi.fn(), create: vi.fn() },
+    tabs: {
+      query: vi.fn(async () => [] as any[]),
+      get: vi.fn(async (id: number) => ({ id, url: 'https://kyara.games/jouer', status: 'complete' })),
+      sendMessage: vi.fn(async (_id: number, _payload: any): Promise<any> => ({ ok: true, busy: false })),
+      update: vi.fn(async (id: number, props: any) => ({ id, ...props })),
+      reload: vi.fn(),
+      create: vi.fn(async (opts: any) => ({ id: 99, url: opts?.url, status: 'complete', active: Boolean(opts?.active), pinned: Boolean(opts?.pinned) })),
+      remove: vi.fn(async () => {}),
+      onUpdated: eventMock(),
+      onRemoved: eventMock()
+    },
     sidePanel: { setPanelBehavior: vi.fn(async () => {}), open: vi.fn(async () => {}) },
     alarms: { get: vi.fn(async () => null), create: vi.fn(async () => {}), onAlarm: eventMock() },
     action: { setBadgeText: vi.fn(async () => {}), setBadgeBackgroundColor: vi.fn(async () => {}) },

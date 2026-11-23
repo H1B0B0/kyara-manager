@@ -1,4 +1,5 @@
 import { mergeSettings, type KyaraSettings } from '../types/settings';
+import type { DashboardState } from '../types/kyara';
 import type { UpdateState } from '../types/updates';
 import {
   checkForUpdate,
@@ -9,9 +10,16 @@ import {
   isCwsManaged,
   getCwsStoreUrl
 } from './updates';
+import {
+  getGameWorkerTabId,
+  ensureGameWorkerTab,
+  closeGameWorkerTab,
+  handleRemovedTab
+} from './games-tab';
 
 const ALARM_NAME = 'kyara-manager-tick';
 const KYARA_URL_PATTERNS = ['https://kyara.games/*', 'https://*.kyara.games/*'];
+const WORKER_GAMES_COOLDOWN_MS = 3 * 60 * 1000;
 
 chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
   console.warn('[Kyara Manager] setPanelBehavior warning:', err);
@@ -80,15 +88,37 @@ function isGamesTab(tab: chrome.tabs.Tab): boolean {
   }
 }
 
-async function findKyaraTabs({ preferNonGame = false }: { preferNonGame?: boolean } = {}): Promise<chrome.tabs.Tab[]> {
+export async function findKyaraTabs(
+  { preferNonGame = false, excludeGameWorker = true }: { preferNonGame?: boolean; excludeGameWorker?: boolean } = {}
+): Promise<chrome.tabs.Tab[]> {
   const tabs = await chrome.tabs.query({ url: KYARA_URL_PATTERNS });
-  return [...tabs].sort((a, b) => {
+  let list = [...tabs];
+  if (excludeGameWorker && list.length > 1) {
+    const workerTabId = await getGameWorkerTabId();
+    if (workerTabId !== null) {
+      const nonWorker = list.filter((t) => t.id !== workerTabId);
+      if (nonWorker.length > 0) list = nonWorker;
+    }
+  }
+  return list.sort((a, b) => {
     if (preferNonGame) {
       const gameDiff = Number(isGamesTab(a)) - Number(isGamesTab(b));
       if (gameDiff !== 0) return gameDiff;
     }
     return Number(Boolean(b.active)) - Number(Boolean(a.active));
   });
+}
+
+async function sendToGameWorkerTab(payload: any, targetGame?: string): Promise<any> {
+  const workerTabId = await ensureGameWorkerTab(injectContentScriptIfNeeded, targetGame);
+  if (workerTabId === null) {
+    return { ok: false, error: "Impossible d'ouvrir l'onglet dédié Salle de Jeux." };
+  }
+  try {
+    return (await chrome.tabs.sendMessage(workerTabId, payload)) || { ok: false, error: 'Réponse vide de la Salle de Jeux.' };
+  } catch {
+    return { ok: false, error: 'Connexion interrompue avec l’onglet dédié Salle de Jeux.' };
+  }
 }
 
 async function sendToKyaraTab(
@@ -146,12 +176,16 @@ chrome.runtime.onInstalled.addListener(async (details) => {
   });
   await ensureAlarm();
   await updateBadgeFromState();
-  const tabs = await findKyaraTabs();
+  const tabs = await findKyaraTabs({ excludeGameWorker: false });
   for (const tab of tabs) {
     if (tab.id !== undefined) {
       await injectContentScriptIfNeeded(tab.id);
     }
   }
+});
+
+chrome.tabs.onRemoved?.addListener((tabId) => {
+  void handleRemovedTab(tabId);
 });
 
 chrome.runtime.onStartup.addListener(async () => {
@@ -169,9 +203,44 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   await updateBadgeFromState();
   await applyPendingUpdate();
   void pollForUpdateSilently().catch(() => {});
-  const { settings } = (await chrome.storage.local.get('settings')) as { settings?: KyaraSettings };
+  const stored = (await chrome.storage.local.get(['settings', 'kmDashboard', 'kmLastWorkerGamesAt'])) as {
+    settings?: KyaraSettings;
+    kmDashboard?: DashboardState;
+    kmLastWorkerGamesAt?: number;
+  };
+  const settings = stored.settings;
   if (!settings?.masterEnabled) return;
-  await sendToKyaraTab({ type: 'km:alarm-tick' }, { preferNonGame: true });
+
+  const tasks: Array<Promise<any>> = [
+    sendToKyaraTab({ type: 'km:alarm-tick' }, { preferNonGame: true })
+  ];
+
+  const arcade = stored.kmDashboard?.arcade;
+  const canFarmDedicated =
+    Boolean(settings.autoGamesEnabled) &&
+    settings.autoGamesDedicatedTab !== false &&
+    Boolean(arcade?.enabled) &&
+    !arcade?.blocked &&
+    (arcade?.today ?? 0) < (arcade?.dayCap ?? 60) &&
+    (arcade?.week ?? 0) < (arcade?.weekCap ?? 300) &&
+    Date.now() - (Number(stored.kmLastWorkerGamesAt) || 0) >= WORKER_GAMES_COOLDOWN_MS;
+
+  if (canFarmDedicated) {
+    await chrome.storage.local.set({ kmLastWorkerGamesAt: Date.now() });
+    tasks.push(
+      sendToGameWorkerTab(
+        {
+          type: 'km:cmd:run-games-farm',
+          gameId: settings.autoGamesTargetGame || 'all',
+          manual: false,
+          dedicatedTab: true
+        },
+        settings.autoGamesTargetGame
+      )
+    );
+  }
+
+  await Promise.allSettled(tasks);
 });
 
 chrome.storage.onChanged.addListener(async (changes, areaName) => {
@@ -253,6 +322,38 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
           await chrome.tabs.create({ url: 'https://kyara.games' });
         }
         sendResponse({ ok: true });
+        return;
+      }
+
+      if (message.type === 'km:cmd:close-games-tab') {
+        const closed = await closeGameWorkerTab();
+        sendResponse({ ok: true, closed });
+        return;
+      }
+
+      if (message.type === 'km:cmd:focus-games-tab') {
+        const workerId = await getGameWorkerTabId();
+        if (workerId !== null) {
+          await chrome.tabs.update(workerId, { active: true });
+        } else {
+          await chrome.tabs.create({ url: 'https://kyara.games/jouer', active: true });
+        }
+        sendResponse({ ok: true, tabId: workerId });
+        return;
+      }
+
+      if (message.type === 'km:cmd:run-games-farm') {
+        const { settings } = (await chrome.storage.local.get('settings')) as { settings?: KyaraSettings };
+        if (settings?.autoGamesDedicatedTab !== false) {
+          const res = await sendToGameWorkerTab(
+            { ...message, manual: message.manual !== false, dedicatedTab: true },
+            message.gameId
+          );
+          sendResponse(res);
+          return;
+        }
+        const res = await sendToKyaraTab(message, { focusTab: false });
+        sendResponse(res);
         return;
       }
 

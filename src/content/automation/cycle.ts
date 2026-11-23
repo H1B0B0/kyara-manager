@@ -155,8 +155,10 @@ async function executeCycle(manual: boolean): Promise<any> {
 
     // Stage 4: Game Room Farming (Main du Jour + solo ticket grind)
     const skipAutoGamesForActiveSession = !manual && (state.isGamesRunning || isMiniGameRoute());
+    const delegateAutoGamesToWorkerTab = !manual && settings.autoGamesDedicatedTab !== false;
     if (
       !skipAutoGamesForActiveSession &&
+      !delegateAutoGamesToWorkerTab &&
       canContinue() &&
       settings.autoGamesEnabled &&
       dashboard?.arcade?.enabled &&
