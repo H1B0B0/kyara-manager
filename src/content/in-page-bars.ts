@@ -93,10 +93,20 @@ function actionBtn(text: string, primary = false, onClick?: (btn: HTMLButtonElem
   return btn;
 }
 
-function mountBarInMain(bar: HTMLElement): void {
+function mountBarInMain(bar: HTMLElement, sig: string, entityKey?: string): void {
   const main = document.querySelector('main');
   if (!main) return;
-  if (main.firstElementChild?.id === bar.id) return;
+  bar.dataset.kmSig = sig;
+  if (entityKey) bar.dataset.kmEntity = entityKey;
+  const existing = main.firstElementChild as HTMLElement | null;
+  if (
+    existing &&
+    existing.id === bar.id &&
+    (existing.dataset.kmSig === sig ||
+      (Boolean(entityKey) && existing.dataset.kmEntity === entityKey && Boolean(existing.querySelector('button:disabled'))))
+  ) {
+    return;
+  }
   BAR_IDS.forEach((id) => {
     if (id !== bar.id) document.getElementById(id)?.remove();
   });
@@ -144,12 +154,14 @@ function renderWikiBar(charId: number, ctx: EnhancerContext): void {
   else if (isOwned) left.appendChild(pill('Possédée', 'owned'));
   else left.appendChild(pill('Manquante', 'missing'));
 
-  const cachedMed = Number(
-    runtimeCache.collectionPrices.get(charId)?.median7d ??
-      runtimeCache.collectionPrices.get(charId)?.median30d
-  );
+  const getCachedMed = (): number | null => {
+    const p = runtimeCache.collectionPrices.get(charId);
+    const v = Number(p?.median7d ?? p?.median30d);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  };
+  const cachedMed = getCachedMed();
   const medPill = pill(
-    Number.isFinite(cachedMed) && cachedMed > 0 ? `Médiane 7j : ~${Math.round(cachedMed)} ◆` : 'Médiane : scan…',
+    cachedMed !== null ? `Médiane 7j : ~${Math.round(cachedMed)} ◆` : 'Médiane : scan…',
     'gold'
   );
   left.appendChild(medPill);
@@ -159,32 +171,35 @@ function renderWikiBar(charId: number, ctx: EnhancerContext): void {
   );
   if (isPinned) pinBtn.classList.add('is-active');
 
-  const initialBudget = Number.isFinite(cachedMed) && cachedMed > 0 ? Math.max(5, Math.round(cachedMed * 0.9)) : 20;
+  const initialBudget = cachedMed !== null ? Math.max(5, Math.round(cachedMed * 0.9)) : 20;
   const wishBtn = actionBtn(`★ + Envie (~${initialBudget} ◆)`, false, (b) => {
-    const m = Number(runtimeCache.collectionPrices.get(charId)?.median7d) || 20;
+    const m = getCachedMed();
+    const budgetChakra = m !== null ? Math.max(5, Math.round(m * 0.9)) : 20;
     sendBgCmd(
       b,
-      { type: 'km:cmd:wishlist-add', characterId: charId, name: cardName, budgetChakra: Math.max(5, Math.round(m * 0.9)), autoBuy: true },
+      { type: 'km:cmd:wishlist-add', characterId: charId, name: cardName, budgetChakra, autoBuy: true },
       'Ajoutée ★'
     );
   });
 
-  const initialBid = Number.isFinite(cachedMed) && cachedMed > 0 ? Math.max(1, Math.round(cachedMed * 0.75)) : 10;
+  const initialBid = cachedMed !== null ? Math.max(1, Math.round(cachedMed * 0.75)) : 10;
   const orderBtn = actionBtn(`Ordre -25% (${initialBid} ◆)`, true, (b) => {
-    const m = Number(runtimeCache.collectionPrices.get(charId)?.median7d) || 10;
+    const m = getCachedMed();
+    const price = m !== null ? Math.max(1, Math.round(m * 0.75)) : 10;
     sendBgCmd(
       b,
-      { type: 'km:cmd:place-buy-order', characterId: charId, price: Math.max(1, Math.round(m * 0.75)), name: cardName },
+      { type: 'km:cmd:place-buy-order', characterId: charId, price, name: cardName },
       'Ordre posé'
     );
   });
 
   actions.append(pinBtn, wishBtn, orderBtn, actionBtn('Cockpit', false, () => toggleCockpitOverlay()));
-  mountBarInMain(bar);
+  const sig = `wiki:${charId}:${isOwned ? 1 : 0}:${isWish ? 1 : 0}:${isPinned ? 1 : 0}:${cachedMed !== null ? Math.round(cachedMed) : 0}`;
+  mountBarInMain(bar, sig, `wiki:${charId}`);
 
-  if (!Number.isFinite(cachedMed) || cachedMed <= 0) {
+  if (cachedMed === null) {
     void probeWikiPrice(charId).then((med) => {
-      if (med && med > 0 && document.getElementById('km-inpage-wiki-bar')) {
+      if (med && med > 0 && bar.isConnected) {
         medPill.textContent = `Médiane 7j : ~${Math.round(med)} ◆`;
         wishBtn.textContent = `★ + Envie (~${Math.max(5, Math.round(med * 0.9))} ◆)`;
         orderBtn.textContent = `Ordre -25% (${Math.max(1, Math.round(med * 0.75))} ◆)`;
@@ -224,7 +239,9 @@ export function renderInPageBars(ctx: EnhancerContext): void {
       actionBtn('Scanner (6s)', true, (b) => sendBgCmd(b, { type: 'km:cmd:run-market-watch' }, 'Scan OK')),
       actionBtn('Lots / Séries', false, () => toggleCockpitOverlay())
     );
-    mountBarInMain(bar);
+    const hideOwned = document.body.classList.contains('km-hide-owned-cards') ? 1 : 0;
+    const hiMissing = document.body.classList.contains('km-highlight-missing') ? 1 : 0;
+    mountBarInMain(bar, `market:${dealsCount}:${hideOwned}:${hiMissing}`, 'market');
     return;
   }
 
@@ -243,7 +260,11 @@ export function renderInPageBars(ctx: EnhancerContext): void {
       actionBtn('Recyclage Turbo', false, (b) => sendBgCmd(b, { type: 'km:cmd:bulk-recycle' }, 'Recyclé')),
       actionBtn('Cockpit', false, () => toggleCockpitOverlay())
     );
-    mountBarInMain(bar);
+    mountBarInMain(
+      bar,
+      `collection:${cs.sellableDuplicatesCount ?? 0}:${cs.sellableNetTotal ?? 0}:${cs.recyclableDuplicatesCount ?? 0}:${cs.recyclableChakraTotal ?? 0}:${activeCount}:${maxSlots}`,
+      'collection'
+    );
     return;
   }
 
@@ -263,7 +284,11 @@ export function renderInPageBars(ctx: EnhancerContext): void {
       );
     }
     actions.appendChild(actionBtn('Acheter manquantes par lot', !ren.blockingListingsCount, () => toggleCockpitOverlay()));
-    mountBarInMain(bar);
+    mountBarInMain(
+      bar,
+      `rebirth:${Math.round(ren.overallPct ?? 0)}:${ren.rebirthPayoutChakra ?? 0}:${ren.blockingListingsCount ?? 0}`,
+      'rebirth'
+    );
     return;
   }
 
@@ -280,7 +305,11 @@ export function renderInPageBars(ctx: EnhancerContext): void {
       actionBtn(`Ouvrir ${rec.name}`, true, (b) => sendBgCmd(b, { type: 'km:cmd:open-recommended' }, 'Ouvert')),
       actionBtn('Cockpit', false, () => toggleCockpitOverlay())
     );
-    mountBarInMain(bar);
+    mountBarInMain(
+      bar,
+      `boosters:${rec.packId ?? rec.name}:${rec.expectedChakraValue}:${rec.probAtLeastOneNewPct}:${me.pity ?? 0}:${me.goldenIn ?? ''}`,
+      'boosters'
+    );
     return;
   }
 

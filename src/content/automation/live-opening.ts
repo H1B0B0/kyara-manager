@@ -362,10 +362,10 @@ export async function executeAutoOpenBoosters(
   }
 
   const baseTargetPack = state.currentSettings.renaissanceFocusEnabled && state.currentSettings.autoOpenMode !== 'custom'
-    ? boosters.recommendedRenaissance || boosters.recommendedNew
+    ? boosters.recommendedRenaissance || boosters.all?.[0] || boosters.recommendedNew
     : state.currentSettings.autoBoosterStrategy === 'ev' || state.currentSettings.autoOpenMode === 'recommended_ev'
       ? boosters.recommendedEv
-      : boosters.recommendedNew;
+      : boosters.all?.[0] || boosters.recommendedNew;
   let targetPack = baseTargetPack;
   if (boosters.isGoldenNext && boosters.recommendedGolden && state.currentSettings.autoOpenGoldenSniper !== false && !boosters.isPityNear && state.currentSettings.autoOpenMode !== 'custom') {
     targetPack = boosters.recommendedGolden;
@@ -399,7 +399,7 @@ export async function executeAutoOpenBoosters(
   const isGaugeFull = Number(dashboard?.me?.freePacks) >= Number(dashboard?.me?.freePacksMax ?? 10);
   const rawGoldenIn = dashboard?.me?.goldenIn;
   const goldenIn = rawGoldenIn !== null && rawGoldenIn !== undefined && rawGoldenIn !== '' ? Number(rawGoldenIn) : null;
-  const pity = Number(dashboard?.me?.pity ?? 0);
+  const pity = Number(dashboard?.me?.pity ?? boosters.pity ?? 0);
   const isSniperExact = Boolean(
     (boosters.isGoldenNext && state.currentSettings.autoOpenGoldenSniper !== false) ||
     (pity >= 249 && state.currentSettings.autoOpenPitySniper !== false)
@@ -422,6 +422,14 @@ export async function executeAutoOpenBoosters(
   ) {
     // Stop right before the 10th Golden Booster so it isn't burned inside a batch on a lower-EV pack
     countToOpen = Math.max(1, Math.min(countToOpen, goldenIn - 1));
+  }
+  if (
+    boosters.isPityNear &&
+    targetPack.packId === boosters.recommendedPity?.packId &&
+    baseTargetPack &&
+    baseTargetPack.packId !== targetPack.packId
+  ) {
+    countToOpen = Math.min(countToOpen, Math.max(1, 250 - pity));
   }
 
   if (deferredForGame) {

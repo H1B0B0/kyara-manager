@@ -1131,6 +1131,20 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     expect(bonusBtn.clickCount).toBe(1);
   });
 
+  it('clicks "Back on the road" in the EN expedition shop in solveExpeditionStep', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/expedition');
+
+    const backBtn = dom.btn('Back on the road', { className: 'btn btn-acc' });
+    dom.doc.body.replaceChildren(
+      dom.el('main', {}, [
+        dom.el('div', { className: 'arena' }, [dom.el('div', { className: 'shop' }, [backBtn])])
+      ])
+    );
+    expect(await solveExpeditionStep()).toBe(true);
+    expect(backBtn.clickCount).toBe(1);
+  });
+
   it('uses 2-pass unpick-then-pick in solveExpeditionStep when pre-selected cards fill the budget and disable stronger cards', async () => {
     setGamesFastModeForTest(true);
     dom.setPath('/jouer/expedition');

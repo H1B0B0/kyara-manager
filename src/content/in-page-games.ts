@@ -69,14 +69,24 @@ export function renderGamesBar(ctx: EnhancerContext): void {
   const path = window.location.pathname || '';
   const segments = path.split('/').filter(Boolean);
   const isMiniGame = segments.length >= 2 && segments[0] === 'jouer' && segments[1] !== 'comptoir';
-  const existing = document.getElementById('km-inpage-games-bar');
-  if (existing && main.firstElementChild === existing && existing.dataset.mini === (isMiniGame ? '1' : '0')) return;
+  const arcade = ctx.dashboard?.arcade;
+  const sig = `games:${path}:${isMiniGame ? 1 : 0}:${arcade ? `${arcade.today}/${arcade.dayCap}:${arcade.week}/${arcade.weekCap}:${arcade.balance}:${arcade.canBuyLot ? 1 : 0}:${arcade.bestLotLabel ?? ''}:${arcade.bestLotPrice ?? ''}` : 'none'}`;
+  const existing = document.getElementById('km-inpage-games-bar') as HTMLElement | null;
+  if (
+    existing &&
+    main.firstElementChild === existing &&
+    (existing.dataset.kmSig === sig ||
+      (existing.dataset.mini === (isMiniGame ? '1' : '0') && Boolean(existing.querySelector('button:disabled'))))
+  ) {
+    return;
+  }
   existing?.remove();
 
   const bar = document.createElement('section');
   bar.id = 'km-inpage-games-bar';
   bar.className = 'km-inpage-bar';
   bar.dataset.mini = isMiniGame ? '1' : '0';
+  bar.dataset.kmSig = sig;
   bar.setAttribute('aria-label', 'Kyara Manager — Salle de Jeux');
 
   const left = document.createElement('div');
@@ -89,7 +99,6 @@ export function renderGamesBar(ctx: EnhancerContext): void {
   title.textContent = 'Salle de Jeux & Lot';
   left.append(seal, title);
 
-  const arcade = ctx.dashboard?.arcade;
   if (arcade) {
     left.append(
       pill(`Jour : ${arcade.today}/${arcade.dayCap} 🎟`, arcade.today >= arcade.dayCap ? 'owned' : 'gold'),

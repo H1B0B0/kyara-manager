@@ -32,7 +32,7 @@ export * from './games-poker';
 const RARITY_SCORE: Record<Rarity, number> = { C: 1, U: 2, R: 3, E: 4, L: 5, M: 6 };
 const RAID_ALREADY_RE = /d[eé]j[aà] jou[eé]|already played|revenez demain|come back tomorrow/i;
 const EXPEDITION_LIMIT_RE = /plus de cases aujourd'hui|no cases left today/i;
-const EXPEDITION_CONT_RE = /^(?:Continuer|Continue|Reprendre la route|Back to route|Passer|Skip)\b/i;
+const EXPEDITION_CONT_RE = /^(?:Continuer|Continue|Reprendre la route|Back on the road|Back to route|Passer|Skip)\b/i;
 const EXPEDITION_TILE_ACT_RE = /^(?:Combattre|Affronter le boss|Entrer dans la boutique|Ouvrir le tr[eé]sor|Choisir un bonus|Fight|Face the boss|Enter the shop|Open the treasure|Choose a bonus|Boss|Shop|Treasure)\b/i;
 const EXPEDITION_INTRO_RE = /^(?:Choisir l'[eé]quipe|Pick the team|Play solo|Jouer solo|Jouer en solo)\b/i;
 const THREE_ARCS_AI_RE = /Contre l'ordinateur|Against the computer|VS AI|Contre l'IA|Bot/i;
