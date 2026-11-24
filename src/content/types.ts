@@ -30,6 +30,7 @@ export interface PriceInfo {
   sales7d: number | null;
   sales30d: number | null;
   at: number;
+  _marketPriceAt?: number;
 }
 
 export interface RuntimeCache {

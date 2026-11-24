@@ -1,11 +1,13 @@
 import { kyaraApi } from './api';
-import { ensureCatalog, ensureCollectionPrices, ensureFairPlayPrices, runtimeCache } from './cache';
+import { ensureCatalog, ensureCollectionPrices, ensureFairPlayPrices, PRICES_TTL_MS, runtimeCache } from './cache';
 import { state } from './state';
 import { notifyDesktop } from './utils';
 import { evaluateDeal } from '../lib/analytics/deals';
 import { evaluateWishlistMatch } from '../lib/analytics/wishlist';
 import { mapLimit } from '../lib/concurrency';
 import type { Rarity } from '../types/kyara';
+
+const MARKET_PRICE_NEG_CACHE_TTL_MS = 5 * 60 * 1000;
 
 let previousTradesCount = 0;
 let lastScannedListingsCount = 0;
@@ -98,14 +100,23 @@ export async function scanMarketDealsInternal(
     }
   }
   if (missingPriceIds.size > 0) {
-    const missingArr = Array.from(missingPriceIds);
-    await ensureCollectionPrices(missingArr, false);
-    await ensureFairPlayPrices(missingArr, false);
+    await ensureCollectionPrices(Array.from(missingPriceIds), false);
   }
 
-  const hasMedian7d = (cid: number): boolean => {
+  const priceCheckNow = Date.now();
+  const hasFreshPriceOrNegCache = (cid: number): boolean => {
     const p = runtimeCache.collectionPrices.get(cid);
-    return Boolean(p && Number.isFinite(Number(p.median7d)) && Number(p.median7d) > 0);
+    if (!p) return false;
+    const hasValidPrice =
+      (Number.isFinite(Number(p.median7d)) && Number(p.median7d) > 0) ||
+      (Number.isFinite(Number(p.median30d)) && Number(p.median30d) > 0);
+    if (hasValidPrice && priceCheckNow - Number(p.at || 0) <= PRICES_TTL_MS) {
+      return true;
+    }
+    if (p._marketPriceAt && priceCheckNow - p._marketPriceAt < MARKET_PRICE_NEG_CACHE_TTL_MS) {
+      return true;
+    }
+    return false;
   };
   const newestItems = Array.isArray(pages[0]?.items) ? pages[0].items : [];
   const cheapestItems = [...combined].sort((a, b) => (Number(a?.price) || Infinity) - (Number(b?.price) || Infinity));
@@ -115,7 +126,7 @@ export async function scanMarketDealsInternal(
     for (const candidate of [newestItems[i], cheapestItems[i]]) {
       if (!candidate || stillMissingSet.size >= 24) continue;
       const cid = Number(candidate.character?.id ?? candidate.characterId);
-      if (Number.isFinite(cid) && cid > 0 && !hasMedian7d(cid)) {
+      if (Number.isFinite(cid) && cid > 0 && !hasFreshPriceOrNegCache(cid)) {
         stillMissingSet.add(cid);
       }
     }
@@ -124,15 +135,31 @@ export async function scanMarketDealsInternal(
     await mapLimit(Array.from(stillMissingSet), 6, async (cid) => {
       const res = await kyaraApi(`/market/prices/${cid}`, { auth: false }).catch(() => null);
       if (!res || typeof res !== 'object') return;
+      const fetchedAt = Date.now();
+      const existing = runtimeCache.collectionPrices.get(cid);
       const m7 = Number(res.median7d);
       const m30 = Number(res.median30d);
-      if ((Number.isFinite(m7) && m7 > 0) || (Number.isFinite(m30) && m30 > 0)) {
+      const validM7 = Number.isFinite(m7) && m7 > 0 ? m7 : null;
+      const validM30 = Number.isFinite(m30) && m30 > 0 ? m30 : null;
+      if (validM7 || validM30) {
         runtimeCache.collectionPrices.set(cid, {
-          median7d: Number.isFinite(m7) && m7 > 0 ? m7 : null,
-          median30d: Number.isFinite(m30) && m30 > 0 ? m30 : null,
-          sales7d: Number.isFinite(Number(res.sales7d)) ? Number(res.sales7d) : 0,
-          sales30d: Number.isFinite(Number(res.sales30d)) ? Number(res.sales30d) : null,
-          at: Date.now()
+          ...existing,
+          median7d: validM7,
+          median30d: validM30,
+          sales7d: res.sales7d != null && Number.isFinite(Number(res.sales7d)) ? Number(res.sales7d) : 0,
+          sales30d: res.sales30d != null && Number.isFinite(Number(res.sales30d)) ? Number(res.sales30d) : null,
+          at: fetchedAt,
+          _marketPriceAt: fetchedAt
+        });
+      } else {
+        runtimeCache.collectionPrices.set(cid, {
+          ...existing,
+          median7d: existing?.median7d ?? null,
+          median30d: existing?.median30d ?? null,
+          sales7d: existing?.sales7d ?? 0,
+          sales30d: existing?.sales30d ?? null,
+          at: existing?.at ?? fetchedAt,
+          _marketPriceAt: fetchedAt
         });
       }
     });

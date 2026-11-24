@@ -29,7 +29,10 @@ export async function executeAutoBuy(
   }
 
   const ownedSet = new Set<number>();
-  const rawColl = await kyaraApi('/me/collection?lean=1');
+  const [rawColl, initialBoot] = await Promise.all([
+    kyaraApi('/me/collection?lean=1'),
+    kyaraApi('/me/bootstrap').catch(() => null)
+  ]);
   if (!Array.isArray(rawColl)) throw new Error('Collection indisponible. Achats suspendus.');
   for (const e of rawColl) {
     if (e.qty > 0) ownedSet.add(Number(e.characterId));
@@ -38,11 +41,15 @@ export async function executeAutoBuy(
   const { kmWishlist } = (await chrome.storage.local.get('kmWishlist')) as { kmWishlist?: any[] };
   const wishlistMap = new Map((Array.isArray(kmWishlist) ? kmWishlist : []).map((w: any) => [Number(w.characterId), w]));
 
-  let currentChakra = Number(dashboard?.me?.chakra ?? NaN);
-  if (!Number.isFinite(currentChakra)) {
-    const boot = await kyaraApi('/me/bootstrap').catch(() => null);
-    currentChakra = Number((boot?.me || boot)?.chakra ?? 0);
-  }
+  const rawBootChakra = (initialBoot?.me || initialBoot)?.chakra;
+  const bootChakra = rawBootChakra != null && rawBootChakra !== '' ? Number(rawBootChakra) : NaN;
+  const rawDashChakra = dashboard?.me?.chakra;
+  const dashChakra = rawDashChakra != null && rawDashChakra !== '' ? Number(rawDashChakra) : NaN;
+  let currentChakra = Number.isFinite(bootChakra)
+    ? bootChakra
+    : Number.isFinite(dashChakra)
+      ? dashChakra
+      : 0;
 
   const remainingByRarity: Partial<Record<Rarity, number>> = {};
   const renByRarity = dashboard?.renaissance?.byRarity;
@@ -184,9 +191,10 @@ export async function executeAutoBuy(
       if (!freshListing || freshListing.status !== 'active' || freshListing.isMine) continue;
       const freshPrice = freshListing.type === 'fixed' ? freshListing.price : freshListing.buyoutPrice;
       if (!Number.isFinite(freshPrice) || freshPrice <= 0 || freshPrice > deal.buyPrice) continue;
-      const balance = Number((bootstrap?.me || bootstrap)?.chakra);
+      const rawBalance = (bootstrap?.me || bootstrap)?.chakra;
+      const balance = rawBalance != null && rawBalance !== '' ? Number(rawBalance) : NaN;
       if (Number.isFinite(balance)) {
-        currentChakra = Math.min(currentChakra, balance);
+        currentChakra = balance;
       }
       if (currentChakra - freshPrice < minReserve) continue;
 
@@ -231,8 +239,15 @@ export async function executeAutoBuy(
         'km-buy'
       );
     } catch (err: any) {
-      if (err.code !== 'listing_closed' && err.status !== 404) {
-        await appendJournal('warn', `Achat annulé sur ${deal.name} : ${err.message}`);
+      const code = String(err?.code || '');
+      const status = Number(err?.status);
+      const isAlreadyGone =
+        status === 404 || status === 409 || code === 'listing_closed' || code === 'listing_already_sold';
+      if (!isAlreadyGone) {
+        await appendJournal('warn', `Achat annulé sur ${deal.name} : ${err?.message || code || 'erreur inconnue'}`);
+      }
+      if (code === 'pass_required' || code === 'market_locked' || code === 'insufficient_chakra') {
+        break;
       }
     }
   }

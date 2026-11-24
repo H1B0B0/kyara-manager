@@ -387,4 +387,122 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
       isGoodFlip: true
     });
   });
+
+  it('Test 11: scanMarketDealsInternal negative-caches /market/prices/:id for null/median30d-only cards and probes newly added cards', async () => {
+    let scanPass = 1;
+    const priceCalls: Record<number, number> = {};
+
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path.startsWith('/market/listings?')) {
+        const items: any[] = [
+          { id: 'l-illiquid', status: 'active', type: 'fixed', price: 10, character: { id: 7101, name: 'Illiquid Card', rarity: 'R' } },
+          { id: 'l-m30-only', status: 'active', type: 'fixed', price: 10, character: { id: 7102, name: 'Median30d Card', rarity: 'R' } }
+        ];
+        if (scanPass >= 2) {
+          items.push({ id: 'l-new-card', status: 'active', type: 'fixed', price: 12, character: { id: 7103, name: 'New Card', rarity: 'E' } });
+        }
+        return { items };
+      }
+      if (path.startsWith('/me/collection/prices')) return [];
+      if (path.startsWith('/fair-play/prices')) return {};
+      const m = path.match(/^\/market\/prices\/(\d+)$/);
+      if (m) {
+        const cid = Number(m[1]);
+        priceCalls[cid] = (priceCalls[cid] || 0) + 1;
+        if (cid === 7101) return { median7d: null, median30d: null, sales7d: 0, sales30d: 0 };
+        if (cid === 7102) return { median7d: null, median30d: 18, sales7d: 0, sales30d: 3 };
+        if (cid === 7103) return { median7d: 40, median30d: 38, sales7d: 5, sales30d: 12 };
+      }
+      return {};
+    });
+
+    await scanMarketDealsInternal(new Set(), new Map(), 1000);
+    expect(priceCalls).toEqual({ 7101: 1, 7102: 1 });
+    expect(runtimeCache.collectionPrices.get(7101)?._marketPriceAt).toBeTypeOf('number');
+    expect(runtimeCache.collectionPrices.get(7102)?.median30d).toBe(18);
+
+    scanPass = 2;
+    const deals2 = await scanMarketDealsInternal(new Set(), new Map(), 1000);
+    expect(priceCalls).toEqual({ 7101: 1, 7102: 1, 7103: 1 });
+    expect(deals2.some((d) => d.listingId === 'l-new-card' && d.refMedian === 40)).toBe(true);
+  });
+
+  it('Test 12: executeAutoBuy refreshes stale dashboard chakra from /me/bootstrap so buys proceed when balance recovered above reserve', async () => {
+    const { data } = mockChrome({ kmDashboard: { authenticated: true, me: { chakra: 190 } } });
+    state.currentSettings = normalizeSettings({
+      masterEnabled: true,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['C'],
+      autoBuyMissingEnabled: true,
+      autoBuyMinChakraReserve: 200
+    });
+
+    const bought: string[] = [];
+    const price = 4;
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path === '/me/bootstrap') return { me: { chakra: 500 } };
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-fresh-bal', status: 'active', type: 'fixed', price, character: { id: 8201, name: 'Fresh Balance Card', rarity: 'C' } }
+          ]
+        };
+      }
+      if (path === '/market/listings/l-fresh-bal') return { id: 'l-fresh-bal', status: 'active', type: 'fixed', price };
+      if (path === '/market/listings/l-fresh-bal/buy' && opts.method === 'POST') {
+        bought.push('l-fresh-bal');
+        return {};
+      }
+      return {};
+    });
+
+    const res = await executeAutoBuy({ me: { chakra: 190 } });
+    expect(res.boughtCount).toBe(1);
+    expect(bought).toEqual(['l-fresh-bal']);
+    expect(data.kmDashboard.me.chakra).toBe(500 - price);
+  });
+
+  it('Test 13: executeAutoBuy breaks immediately on fatal pass_required error without attempting remaining deals', async () => {
+    mockChrome({ kmDashboard: { authenticated: true, me: { chakra: 1000 } } });
+    state.currentSettings = normalizeSettings({
+      masterEnabled: true,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['C'],
+      autoBuyMissingEnabled: true,
+      autoBuyMinChakraReserve: 100
+    });
+
+    const buyCalls: string[] = [];
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path === '/me/bootstrap') return { me: { chakra: 1000 } };
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-fatal-1', status: 'active', type: 'fixed', price: 2, character: { id: 8301, name: 'Fatal 1', rarity: 'C' } },
+            { id: 'l-fatal-2', status: 'active', type: 'fixed', price: 3, character: { id: 8302, name: 'Fatal 2', rarity: 'C' } },
+            { id: 'l-fatal-3', status: 'active', type: 'fixed', price: 4, character: { id: 8303, name: 'Fatal 3', rarity: 'C' } }
+          ]
+        };
+      }
+      if (path === '/market/listings/l-fatal-1') return { id: 'l-fatal-1', status: 'active', type: 'fixed', price: 2 };
+      if (path === '/market/listings/l-fatal-2') return { id: 'l-fatal-2', status: 'active', type: 'fixed', price: 3 };
+      if (path === '/market/listings/l-fatal-3') return { id: 'l-fatal-3', status: 'active', type: 'fixed', price: 4 };
+      if (path.endsWith('/buy') && opts.method === 'POST') {
+        buyCalls.push(path);
+        const err: any = new Error('Pass requis');
+        err.code = 'pass_required';
+        err.status = 403;
+        throw err;
+      }
+      return {};
+    });
+
+    const res = await executeAutoBuy({ me: { chakra: 1000 } });
+    expect(res.dealsFound).toBe(3);
+    expect(res.boughtCount).toBe(0);
+    expect(buyCalls).toHaveLength(1);
+    expect(buyCalls[0]).toBe('/market/listings/l-fatal-1/buy');
+  });
 });
