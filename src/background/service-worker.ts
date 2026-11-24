@@ -20,6 +20,9 @@ import {
 const ALARM_NAME = 'kyara-manager-tick';
 const KYARA_URL_PATTERNS = ['https://kyara.games/*', 'https://*.kyara.games/*'];
 const WORKER_GAMES_COOLDOWN_MS = 3 * 60 * 1000;
+const WORKER_GAMES_INFLIGHT_TTL_MS = 8 * 60 * 1000;
+const WORKER_GAMES_INFLIGHT_KEY = 'kmWorkerGamesInFlightAt';
+let workerGamesInFlight = false;
 
 chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
   console.warn('[Kyara Manager] setPanelBehavior warning:', err);
@@ -107,6 +110,33 @@ export async function findKyaraTabs(
     }
     return Number(Boolean(b.active)) - Number(Boolean(a.active));
   });
+}
+
+async function isWorkerGamesInFlight(): Promise<boolean> {
+  if (workerGamesInFlight) return true;
+  try {
+    const stored = await chrome.storage.session?.get?.(WORKER_GAMES_INFLIGHT_KEY);
+    const startedAt = Number(stored?.[WORKER_GAMES_INFLIGHT_KEY]) || 0;
+    if (startedAt > 0 && Date.now() - startedAt < WORKER_GAMES_INFLIGHT_TTL_MS) return true;
+    if (startedAt > 0) await chrome.storage.session?.remove?.(WORKER_GAMES_INFLIGHT_KEY).catch(() => {});
+  } catch {}
+  return false;
+}
+
+async function runDedicatedGamesFarm(payload: any, targetGame?: string): Promise<any> {
+  workerGamesInFlight = true;
+  try {
+    await chrome.storage.session?.set?.({ [WORKER_GAMES_INFLIGHT_KEY]: Date.now() }).catch(() => {});
+    const res = await sendToGameWorkerTab(payload, targetGame);
+    if (isArcadeDoneOrBlocked(res?.arcade) || Boolean(res?.blocked)) {
+      void closeGameWorkerTab().catch(() => {});
+    }
+    return res;
+  } finally {
+    workerGamesInFlight = false;
+    await chrome.storage.session?.remove?.(WORKER_GAMES_INFLIGHT_KEY).catch(() => {});
+    await chrome.storage.local.set({ kmLastWorkerGamesAt: Date.now() }).catch(() => {});
+  }
 }
 
 async function sendToGameWorkerTab(payload: any, targetGame?: string): Promise<any> {
@@ -238,15 +268,16 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     void closeGameWorkerTab().catch(() => {});
   }
 
+  const inFlight = await isWorkerGamesInFlight();
   const canFarmDedicated =
     !shouldCloseDedicated &&
+    !inFlight &&
     Boolean(arcade?.enabled) &&
     Date.now() - (Number(stored.kmLastWorkerGamesAt) || 0) >= WORKER_GAMES_COOLDOWN_MS;
 
   if (canFarmDedicated) {
-    await chrome.storage.local.set({ kmLastWorkerGamesAt: Date.now() });
     tasks.push(
-      sendToGameWorkerTab(
+      runDedicatedGamesFarm(
         {
           type: 'km:cmd:run-games-farm',
           gameId: settings.autoGamesTargetGame || 'all',
@@ -254,12 +285,7 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
           dedicatedTab: true
         },
         settings.autoGamesTargetGame
-      ).then((res) => {
-        if (isArcadeDoneOrBlocked(res?.arcade) || Boolean(res?.blocked)) {
-          void closeGameWorkerTab().catch(() => {});
-        }
-        return res;
-      })
+      )
     );
   }
 
@@ -372,7 +398,7 @@ chrome.runtime.onMessage.addListener((message: any, sender: chrome.runtime.Messa
       if (message.type === 'km:cmd:run-games-farm') {
         const { settings } = (await chrome.storage.local.get('settings')) as { settings?: KyaraSettings };
         if (settings?.autoGamesDedicatedTab !== false) {
-          const res = await sendToGameWorkerTab(
+          const res = await runDedicatedGamesFarm(
             { ...message, manual: message.manual !== false, dedicatedTab: true },
             message.gameId
           );

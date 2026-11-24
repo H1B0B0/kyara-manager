@@ -222,4 +222,59 @@ describe('dedicated background games tab', () => {
 
     expect(chrome.tabs.remove).toHaveBeenCalledWith(92);
   });
+
+  it('prevents overlapping dedicated worker runs while in-flight and closes worker tab after manual run when capped', async () => {
+    const { chrome } = mockChrome({
+      settings: {
+        masterEnabled: true,
+        autoGamesEnabled: true,
+        autoGamesDedicatedTab: true,
+        autoGamesTargetGame: 'expedition'
+      },
+      kmDashboard: {
+        arcade: { enabled: true, blocked: null, today: 10, dayCap: 60, week: 40, weekCap: 300 }
+      }
+    });
+    const mainTab = { id: 10, url: 'https://kyara.games/collection', active: true, status: 'complete' };
+    const workerTab = { id: 93, url: 'https://kyara.games/jouer', active: false, pinned: true, status: 'complete' };
+    chrome.tabs.query.mockResolvedValue([mainTab]);
+    chrome.tabs.create.mockResolvedValue(workerTab);
+    chrome.tabs.get.mockResolvedValue(workerTab);
+
+    let resolveFirstRun!: (val: any) => void;
+    let farmCalls = 0;
+    chrome.tabs.sendMessage.mockImplementation(async (_id: number, payload: any) => {
+      if (payload.type === 'km:ping') return { ok: true, version: chrome.runtime.getManifest().version };
+      if (payload.type === 'km:cmd:run-games-farm') {
+        farmCalls += 1;
+        if (farmCalls === 1) {
+          return await new Promise((resolve) => { resolveFirstRun = resolve; });
+        }
+        return { ok: true, arcade: { enabled: true, blocked: null, today: 60, dayCap: 60, week: 120, weekCap: 300 } };
+      }
+      return { ok: true };
+    });
+
+    await import('../src/background/service-worker');
+    const message = (payload: any) => new Promise<any>((resolve) => chrome.runtime.onMessage.emit(payload, {}, resolve));
+
+    // Start first alarm run (remains in-flight)
+    const firstAlarm = Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(farmCalls).toBe(1);
+
+    // Second alarm while first is still in-flight must NOT dispatch another games farm run
+    await Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    expect(farmCalls).toBe(1);
+
+    // Finish first run
+    resolveFirstRun({ ok: true, arcade: { enabled: true, blocked: null, today: 12, dayCap: 60, week: 42, weekCap: 300 } });
+    await firstAlarm;
+
+    // Manual run returning capped arcade closes the dedicated worker tab
+    const manualRes = await message({ type: 'km:cmd:run-games-farm', gameId: 'expedition' });
+    expect(manualRes.ok).toBe(true);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(93);
+  });
 });

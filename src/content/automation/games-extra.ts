@@ -33,7 +33,7 @@ const RARITY_SCORE: Record<Rarity, number> = { C: 1, U: 2, R: 3, E: 4, L: 5, M: 
 const RAID_ALREADY_RE = /d[eé]j[aà] jou[eé]|already played|revenez demain|come back tomorrow/i;
 const EXPEDITION_LIMIT_RE = /plus de cases aujourd'hui|no cases left today/i;
 const EXPEDITION_CONT_RE = /^(?:Continuer|Continue|Reprendre la route|Back to route|Passer|Skip)\b/i;
-const EXPEDITION_TILE_ACT_RE = /^(?:Combattre|Affronter le boss|Entrer dans la boutique|Ouvrir le tr[eé]sor|Fight|Boss|Shop|Treasure)\b/i;
+const EXPEDITION_TILE_ACT_RE = /^(?:Combattre|Affronter le boss|Entrer dans la boutique|Ouvrir le tr[eé]sor|Choisir un bonus|Fight|Face the boss|Enter the shop|Open the treasure|Choose a bonus|Boss|Shop|Treasure)\b/i;
 const EXPEDITION_INTRO_RE = /^(?:Choisir l'[eé]quipe|Pick the team|Play solo|Jouer solo|Jouer en solo)\b/i;
 const THREE_ARCS_AI_RE = /Contre l'ordinateur|Against the computer|VS AI|Contre l'IA|Bot/i;
 const THREE_ARCS_TUTO_RE = /Apprendre [aà] jouer|Learn to play|Tutoriel|Tutorial/i;
@@ -83,6 +83,10 @@ function scoreCardButton(btn: HTMLButtonElement): number {
   return (RARITY_SCORE[parseRarityFromCardEl(btn)] || 1) * 100 + parsePower(btn.querySelector('.stats, .pow, b.mono') || btn);
 }
 
+function isCardPicked(btn: HTMLButtonElement): boolean {
+  return btn.getAttribute('aria-pressed') === 'true' || btn.classList.contains('picked');
+}
+
 function pickBestPerkButton(scope: ParentNode): HTMLButtonElement | null {
   const perks = Array.from(scope.querySelectorAll<HTMLButtonElement>('button.perk:not(:disabled)')).filter((b) => isButtonUsable(b));
   if (!perks.length) return null;
@@ -118,7 +122,7 @@ export async function solveRaidStep(isDaily = false, meId?: string | number): Pr
     return false;
   }
 
-  const perkBtn = pickBestPerkButton(main);
+  const perkBtn = pickBestPerkButton(document);
   if (perkBtn) {
     await humanSleep(650, 1100);
     if (safeInterrupted()) return false;
@@ -134,8 +138,17 @@ export async function solveRaidStep(isDaily = false, meId?: string | number): Pr
     const best = new Set(chooseBestRaidTeamIndices(parseRaidPoolCards(poolBtns), 5));
     for (let i = 0; i < poolBtns.length; i += 1) {
       if (safeInterrupted()) return false;
-      if (!poolBtns[i].disabled && (poolBtns[i].getAttribute('aria-pressed') === 'true') !== best.has(i)) {
-        poolBtns[i].click();
+      const btn = poolBtns[i];
+      if (!btn.disabled && isCardPicked(btn) && !best.has(i)) {
+        btn.click();
+        await humanSleep(180, 380);
+      }
+    }
+    for (let i = 0; i < poolBtns.length; i += 1) {
+      if (safeInterrupted()) return false;
+      const btn = poolBtns[i];
+      if (!btn.disabled && !isCardPicked(btn) && best.has(i)) {
+        btn.click();
         await humanSleep(180, 380);
       }
     }
@@ -153,7 +166,7 @@ export async function solveRaidStep(isDaily = false, meId?: string | number): Pr
 }
 
 function parseExpeditionCost(btn: HTMLButtonElement, rarity: Rarity): number {
-  const raw = btn.querySelector('.cost, [title*="Cost" i], [title*="Coût" i]')?.textContent || '';
+  const raw = btn.querySelector('.pcost, .cost, [title*="Cost" i], [title*="Coût" i]')?.textContent || '';
   const n = Number(raw.replace(/[^\d]/g, ''));
   return Number.isFinite(n) && n > 0 ? n : EXPEDITION_RARITY_COST[rarity] ?? 1;
 }
@@ -167,7 +180,7 @@ export async function solveExpeditionStep(): Promise<boolean> {
   );
   if (limitDisabled || isGameFinishedScreen('expedition')) return false;
 
-  const perkBtn = pickBestPerkButton(main);
+  const perkBtn = pickBestPerkButton(document);
   if (perkBtn) {
     await humanSleep(650, 1100);
     if (safeInterrupted()) return false;
@@ -199,8 +212,15 @@ export async function solveExpeditionStep(): Promise<boolean> {
       for (let i = 0; i < poolBtns.length; i += 1) {
         if (safeInterrupted()) return false;
         const btn = poolBtns[i];
-        const isPicked = btn.getAttribute('aria-pressed') === 'true' || btn.classList.contains('picked');
-        if (!btn.disabled && isPicked !== targetSet.has(i)) {
+        if (!btn.disabled && isCardPicked(btn) && !targetSet.has(i)) {
+          btn.click();
+          await humanSleep(180, 360);
+        }
+      }
+      for (let i = 0; i < poolBtns.length; i += 1) {
+        if (safeInterrupted()) return false;
+        const btn = poolBtns[i];
+        if (!btn.disabled && !isCardPicked(btn) && targetSet.has(i)) {
           btn.click();
           await humanSleep(180, 360);
         }

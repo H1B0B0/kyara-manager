@@ -2,9 +2,9 @@ import { kyaraApi } from '../api';
 import { state } from '../state';
 import { appendJournal } from '../journal';
 import { mapLimit } from '../../lib/concurrency';
+import { computeLiveMarketDepth } from '../../lib/analytics/market-depth';
 import { nextRepriceCeiling, resolveSellProfile } from '../../lib/analytics/sell-profile';
 import type { CardLedger } from '../safety';
-import { fetchLiveStats } from './sell-live';
 
 const HINTS_KEY = 'kmRepriceHints';
 export const HINT_TTL_MS = 24 * 3600 * 1000;
@@ -59,18 +59,14 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
   const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U'];
   const dupById = new Map<number, any>(duplicates.map((d) => [Number(d.characterId), d]));
 
-  // First, fetch live lowest market price in parallel for all active listings (max 10)
-  const liveStatsResults = await mapLimit(book.listings, 5, (l) =>
-    fetchLiveStats({ characterId: listingCharacterId(l) }).catch(() => null)
-  );
-  const liveLowestByListing = new Map<string, number | null>();
-  book.listings.forEach((listing, idx) => {
-    const res = liveStatsResults[idx];
-    const stats = res && res.status === 'fulfilled' ? res.value : null;
-    liveLowestByListing.set(String(listing.id), stats?.lowestFixed ?? null);
-  });
-
-  const staleItems: Array<{ listing: any; liveLowest: number | null; isEvicted: boolean }> = [];
+  const eligible: Array<{
+    listing: any;
+    characterId: number;
+    rarity: string | undefined;
+    dup: any;
+    profile: ReturnType<typeof resolveSellProfile>;
+    ageMinutes: number;
+  }> = [];
 
   for (const listing of book.listings) {
     const characterId = listingCharacterId(listing);
@@ -82,16 +78,36 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
     const dup = dupById.get(characterId);
     const profile = dup?.sellProfile ?? resolveSellProfile(settings, Number(listing.price) || null);
     const ageMinutes = (now - createdMs) / 60000;
-    const liveLowest = liveLowestByListing.get(String(listing.id)) ?? null;
+    if (ageMinutes < Math.min(15, profile.staleMinutes)) continue;
+
+    eligible.push({ listing, characterId, rarity, dup, profile, ageMinutes });
+  }
+
+  if (!eligible.length) return { cancelled: 0, chars };
+
+  // Fetch live lowest fixed listing price in parallel only for eligible listings (1 GET each).
+  const liveLowestResults = await mapLimit(eligible, 5, async ({ characterId }) => {
+    const listings = await kyaraApi(
+      `/market/listings?characterId=${characterId}&type=fixed&sort=price_asc&pageSize=20`,
+      { auth: true }
+    ).catch(() => null);
+    return computeLiveMarketDepth(listings?.items).lowestFixed;
+  });
+
+  const staleItems: Array<{ listing: any; liveLowest: number | null; isEvicted: boolean }> = [];
+
+  eligible.forEach(({ listing, characterId, rarity, dup, profile, ageMinutes }, idx) => {
+    const res = liveLowestResults[idx];
+    const liveLowest = res && res.status === 'fulfilled' ? res.value : null;
 
     // Check triggers:
     // a) Undercut detected: ageMinutes >= 15 AND liveLowest !== null && liveLowest < Number(listing.price)
     // b) Stale timer reached: ageMinutes >= profile.staleMinutes (20m fast, 45m normal, 90m patient)
     const isUndercut = ageMinutes >= 15 && liveLowest !== null && liveLowest < Number(listing.price);
     const isStale = ageMinutes >= profile.staleMinutes;
-    if (!isUndercut && !isStale) continue;
+    if (!isUndercut && !isStale) return;
 
-    const canRecycle = profile.recycleStale && settings.autoRecycleEnabled && recycleRarities.includes(rarity);
+    const canRecycle = profile.recycleStale && settings.autoRecycleEnabled && Boolean(rarity && recycleRarities.includes(rarity));
     const floor = Number(dup?.prices?.minSafe) || 0;
     let isEvicted = false;
 
@@ -111,16 +127,16 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
         if (book.listings.length >= maxSlots || hasWaiting) {
           isEvicted = true;
         } else {
-          continue;
+          return;
         }
       } else {
         // Within 2x window at floor with no recycle: keep listing
-        continue;
+        return;
       }
     }
 
     staleItems.push({ listing, liveLowest, isEvicted });
-  }
+  });
 
   if (!staleItems.length) return { cancelled: 0, chars };
   if (settings.dryRun) {

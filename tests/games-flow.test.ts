@@ -24,6 +24,7 @@ import {
   humanSleep,
   isGameFinishedScreen,
   setGamesFastModeForTest,
+  solveExpeditionStep,
   solveMainKyaraStep,
   waitForEnabledButton
 } from '../src/content/automation/games-extra';
@@ -1095,5 +1096,104 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     expect(REPLAY_BTN_RE.test('New team')).toBe(true);
     expect(REPLAY_BTN_RE.test('Replay for practice')).toBe(true);
     expect(REPLAY_BTN_RE.test('Replay chapter')).toBe(true);
+  });
+
+  it('clicks button.perk rendered in a document.body portal outside <main> in solveExpeditionStep', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/expedition');
+    const main = dom.el('main', {}, [dom.el('div', { className: 'arena' })]);
+    const atkPerk = dom.btn('+20% Attack damage', { className: 'perk' });
+    const otherPerk = dom.btn('+5% Speed', { className: 'perk' });
+    const portal = dom.el('div', { className: 'pk' }, [otherPerk, atkPerk]);
+    dom.doc.body.replaceChildren(main, portal);
+
+    expect(await solveExpeditionStep()).toBe(true);
+    expect(atkPerk.clickCount).toBe(1);
+    expect(otherPerk.clickCount).toBe(0);
+  });
+
+  it('clicks "Open the treasure" and "Choose a bonus" tile actions in solveExpeditionStep', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/expedition');
+
+    const treasureBtn = dom.btn('Open the treasure', { className: 'btn btn-acc' });
+    dom.doc.body.replaceChildren(
+      dom.el('main', {}, [dom.el('div', { className: 'foot' }, [dom.el('div', { className: 'actions' }, [treasureBtn])])])
+    );
+    expect(await solveExpeditionStep()).toBe(true);
+    expect(treasureBtn.clickCount).toBe(1);
+
+    const bonusBtn = dom.btn('Choose a bonus', { className: 'btn btn-acc' });
+    dom.doc.body.replaceChildren(
+      dom.el('main', {}, [dom.el('div', { className: 'foot' }, [dom.el('div', { className: 'actions' }, [bonusBtn])])])
+    );
+    expect(await solveExpeditionStep()).toBe(true);
+    expect(bonusBtn.clickCount).toBe(1);
+  });
+
+  it('uses 2-pass unpick-then-pick in solveExpeditionStep when pre-selected cards fill the budget and disable stronger cards', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/expedition');
+
+    const budget = 6;
+    const specs = [
+      { name: 'WeakA', rarity: 'C', atk: 5, hp: 5, cost: 3, picked: true },
+      { name: 'WeakB', rarity: 'C', atk: 5, hp: 5, cost: 3, picked: true },
+      { name: 'StrongA', rarity: 'M', atk: 80, hp: 80, cost: 3, picked: false },
+      { name: 'StrongB', rarity: 'M', atk: 80, hp: 80, cost: 3, picked: false }
+    ];
+    const clickOrder: string[] = [];
+    const confirmBtn = dom.btn('Confirm the team', { className: 'btn btn-acc' });
+    const buttons: StubHTMLButtonElement[] = [];
+
+    const syncDisabled = () => {
+      const used = specs.reduce((sum, s, idx) => sum + (buttons[idx].classList.contains('picked') ? s.cost : 0), 0);
+      specs.forEach((s, idx) => {
+        const picked = buttons[idx].classList.contains('picked');
+        buttons[idx].disabled = !picked && used + s.cost > budget;
+      });
+    };
+
+    specs.forEach((s) => {
+      const btn = dom.el(
+        'button',
+        { className: s.picked ? 'pick picked' : 'pick', attrs: { 'aria-pressed': s.picked ? 'true' : 'false' } },
+        [
+          dom.el('div', { className: `tcg pf p-${s.rarity}` }, [
+            dom.el('span', { className: 'pf-seal', text: s.rarity }),
+            dom.el('span', { className: 'pf-name', text: s.name }),
+            dom.el('span', { className: 'pcost', text: String(s.cost) }),
+            dom.el('div', { className: 'stats' }, [
+              dom.el('span', { attrs: { title: 'Attack' } }, [dom.el('b', { className: 'mono', text: String(s.atk) })]),
+              dom.el('span', { attrs: { title: 'Health' } }, [dom.el('b', { className: 'mono', text: String(s.hp) })])
+            ])
+          ])
+        ]
+      ) as StubHTMLButtonElement;
+      btn.addEventListener('click', () => {
+        const next = !btn.classList.contains('picked');
+        btn.classList.toggle('picked', next);
+        btn.setAttribute('aria-pressed', next ? 'true' : 'false');
+        clickOrder.push(`${next ? 'pick' : 'unpick'}:${s.name}`);
+        syncDisabled();
+      });
+      buttons.push(btn);
+    });
+    syncDisabled();
+
+    // Initially StrongA and StrongB are disabled because budget is 6/6
+    expect(buttons[2].disabled).toBe(true);
+    expect(buttons[3].disabled).toBe(true);
+
+    const picker = dom.el('div', { className: 'picker' }, [
+      dom.el('div', { className: 'gauge', text: '6 / 6' }),
+      dom.el('div', { className: 'pool' }, buttons),
+      dom.el('div', { className: 'foot' }, [confirmBtn])
+    ]);
+    dom.doc.body.replaceChildren(dom.el('main', {}, [picker]));
+
+    expect(await solveExpeditionStep()).toBe(true);
+    expect(clickOrder).toEqual(['unpick:WeakA', 'unpick:WeakB', 'pick:StrongA', 'pick:StrongB']);
+    expect(confirmBtn.clickCount).toBe(1);
   });
 });

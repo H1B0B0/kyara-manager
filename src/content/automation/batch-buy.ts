@@ -27,6 +27,14 @@ export interface BatchBuyResult {
 }
 
 const VALID_RARITIES = new Set<Rarity>(['C', 'U', 'R', 'E', 'L', 'M']);
+const FATAL_BUY_ERROR_CODES = new Set([
+  'pass_required',
+  'market_locked',
+  'insufficient_chakra',
+  'http_429',
+  'http_401',
+  'http_403'
+]);
 
 function clampParams(req: BatchBuyRequest) {
   const qty = Math.max(1, Math.min(150, Math.floor(Number(req.qty) || 1)));
@@ -122,48 +130,51 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
     const newestPages = [1, 2];
     const rawMatches: BatchMissingPreviewItem[] = [];
 
-    const scanRarity = async (rarityFilter: Rarity): Promise<BatchMissingPreviewItem[]> => {
+    const scanTargets = allowedRarities.flatMap((rarityFilter) => {
       const rarityParam = `&rarity=${encodeURIComponent(rarityFilter)}`;
-      const urls = [
-        ...pricePages.map((p) => `/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${p}${rarityParam}`),
-        ...newestPages.map((p) => `/market/listings?type=fixed&sort=newest&pageSize=50&page=${p}${rarityParam}`)
+      return [
+        ...pricePages.map((p) => ({
+          rarityFilter,
+          url: `/market/listings?type=fixed&sort=price_asc&pageSize=50&page=${p}${rarityParam}`
+        })),
+        ...newestPages.map((p) => ({
+          rarityFilter,
+          url: `/market/listings?type=fixed&sort=newest&pageSize=50&page=${p}${rarityParam}`
+        }))
       ];
-      const pages = await Promise.all(
-        urls.map((u) => kyaraApi(u, { auth: true }).catch(() => ({ items: [] })))
-      );
-      const seenListings = new Set<string>();
-      const found: BatchMissingPreviewItem[] = [];
-      for (const res of pages) {
-        const items = Array.isArray(res?.items) ? res.items : [];
-        for (const item of items) {
-          if (!item?.id || item.status !== 'active' || item.isMine) continue;
-          const lid = String(item.id);
-          if (seenListings.has(lid)) continue;
-          seenListings.add(lid);
-          if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
-          const price = Number(item?.price);
-          if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
-          const char = item.character || {};
-          const characterId = Number(char.id ?? item.characterId);
-          const rarity = (char.rarity || rarityFilter) as Rarity;
-          if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
-          if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
-          found.push({
-            listingId: lid,
-            characterId,
-            name: char.name || `Carte #${characterId}`,
-            series: char.series || '',
-            rarity,
-            price,
-            median7d: null
-          });
-        }
-      }
-      return found;
-    };
+    });
 
-    const perRarityLists = await Promise.all(allowedRarities.map((r) => scanRarity(r)));
-    for (const list of perRarityLists) rawMatches.push(...list);
+    const settledPages = await mapLimit(scanTargets, 5, async ({ rarityFilter, url }) => {
+      const res = await kyaraApi(url, { auth: true }).catch(() => ({ items: [] }));
+      return { rarityFilter, items: Array.isArray(res?.items) ? res.items : [] };
+    });
+
+    const seenListings = new Set<string>();
+    for (const { rarityFilter, items } of fulfilled(settledPages)) {
+      for (const item of items) {
+        if (!item?.id || item.status !== 'active' || item.isMine) continue;
+        const lid = String(item.id);
+        if (seenListings.has(lid)) continue;
+        seenListings.add(lid);
+        if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
+        const price = Number(item?.price);
+        if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
+        const char = item.character || {};
+        const characterId = Number(char.id ?? item.characterId);
+        const rarity = (char.rarity || rarityFilter) as Rarity;
+        if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
+        if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
+        rawMatches.push({
+          listingId: lid,
+          characterId,
+          name: char.name || `Carte #${characterId}`,
+          series: char.series || '',
+          rarity,
+          price,
+          median7d: null
+        });
+      }
+    }
 
     rawMatches.sort((a, b) => a.price - b.price);
     const seenCharIds = new Set<number>();
@@ -249,8 +260,12 @@ export async function executeBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
         failedCount += 1;
         continue;
       }
-    } catch {
+    } catch (err: any) {
       failedCount += 1;
+      if (err?.code && FATAL_BUY_ERROR_CODES.has(err.code)) {
+        stoppedReason = err?.message || String(err);
+        break;
+      }
       continue;
     }
 
@@ -271,7 +286,7 @@ export async function executeBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
     } catch (err: any) {
       failedCount += 1;
       lastErrorMsg = err?.message || String(err);
-      if (err?.code === 'pass_required' || err?.code === 'market_locked') {
+      if (err?.code && FATAL_BUY_ERROR_CODES.has(err.code)) {
         stoppedReason = lastErrorMsg;
         break;
       }

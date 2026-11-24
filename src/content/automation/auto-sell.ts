@@ -71,6 +71,7 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
   const maxSlots = Math.max(1, Math.min(10, Number(settings.autoSellMaxListings ?? 10)));
   let slots = Math.max(0, maxSlots - book.listings.length);
   result.slotsAvailable = slots;
+  if (slots <= 0) return result;
 
   const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U', 'R'];
   // With a forced mode, verdicts computed under the saved mode are not trusted: live data decides.
@@ -90,9 +91,10 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
   const normalPool = rawPool.filter((d) => !isEvicted(d));
   const evictedPool = rawPool.filter((d) => isEvicted(d));
   const pool = [...normalPool, ...evictedPool];
+  if (pool.length === 0) return result;
 
   // Market reads for upcoming cards run ahead while the current card is being listed.
-  const lookahead = Math.max(4, Math.min(10, slots * 2));
+  const lookahead = Math.min(pool.length, Math.max(1, Math.min(8, slots * 2)));
   const fetchLimiter = createLimiter(FETCH_CONCURRENCY);
   const live = new Map<number, ReturnType<typeof fetchLiveStats>>();
   const prefetch = (i: number) => {

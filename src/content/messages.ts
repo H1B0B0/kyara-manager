@@ -44,6 +44,10 @@ export function setupMessageListener(): () => void {
       sendResponse({ ok: true, busy: state.isOperationRunning || state.isLiveOpening || state.isGamesRunning });
       return false;
     }
+    if (message?.type === 'km:cmd:run-games-farm' && message.manual === false && state.isGamesRunning) {
+      sendResponse({ ok: true, skipped: true, reason: 'already_running' });
+      return false;
+    }
     const handle = async () => {
       try {
         if (!message || typeof message.type !== 'string') {

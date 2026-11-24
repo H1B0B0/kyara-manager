@@ -75,4 +75,10 @@ describe('content command safeguards', () => {
     expect((await message({ type: 'km:cmd:wishlist-add', characterId: 1, name: 'A', budgetChakra: 17, autoBuy: true })).ok).toBe(true);
     expect(data.kmWishlist[0]).toMatchObject({ characterId: 1, budgetChakra: 17, autoBuy: true });
   });
+  it('skips non-manual km:cmd:run-games-farm immediately when state.isGamesRunning is already true', async () => {
+    const { state, message } = await start();
+    state.isGamesRunning = true;
+    const response = await message({ type: 'km:cmd:run-games-farm', manual: false, gameId: 'expedition' });
+    expect(response).toEqual({ ok: true, skipped: true, reason: 'already_running' });
+  });
 });
