@@ -155,37 +155,57 @@ export async function placeBuyOrder(characterId: number, price: number, name = '
 
 export async function placeBatchBuyOrders(
   orders: Array<{ characterId: number; price: number; name?: string }>
-): Promise<{ placedCount: number; totalLocked: number; failedCount: number }> {
+): Promise<{
+  placedCount: number;
+  totalLocked: number;
+  failedCount: number;
+  placedIds: number[];
+  stoppedByReserve: boolean;
+  interrupted: boolean;
+}> {
   let placedCount = 0;
   let totalLocked = 0;
   let failedCount = 0;
-  if (!Array.isArray(orders) || orders.length === 0) return { placedCount, totalLocked, failedCount };
+  const placedIds: number[] = [];
+  let stoppedByReserve = false;
+  let interrupted = false;
+  if (!Array.isArray(orders) || orders.length === 0) {
+    return { placedCount, totalLocked, failedCount, placedIds, stoppedByReserve, interrupted };
+  }
 
   const bootstrap = await kyaraApi('/me/bootstrap');
   let currentChakra = Number((bootstrap?.me || bootstrap)?.chakra ?? 0);
   const minReserve = Math.max(0, Number(state.currentSettings.autoBuyMinChakraReserve ?? 200));
 
   for (const order of orders) {
-    if (isInterrupted()) break;
+    if (isInterrupted()) {
+      interrupted = true;
+      break;
+    }
     let charId: number;
     let bidPrice: number;
     try {
       charId = positiveInteger(order?.characterId, 'Carte');
       bidPrice = positiveInteger(order?.price, 'Prix');
     } catch { failedCount += 1; continue; }
-    if (currentChakra - bidPrice < minReserve) break;
+    if (currentChakra - bidPrice < minReserve) {
+      stoppedByReserve = true;
+      break;
+    }
     if (state.currentSettings.dryRun) {
       placedCount += 1; totalLocked += bidPrice; currentChakra -= bidPrice;
+      placedIds.push(charId);
       continue;
     }
     try {
       const res = await kyaraApi('/market/buy-orders', { method: 'POST', withPass: true, priority: 'high', body: { characterId: charId, price: bidPrice, qty: 1 } });
       placedCount += 1; totalLocked += bidPrice;
+      placedIds.push(charId);
       currentChakra = Number(res?.user?.chakra ?? currentChakra - bidPrice);
     } catch { failedCount += 1; }
   }
 
   const prefix = state.currentSettings.dryRun ? '[SIMULATION] ' : '';
   await appendJournal('buy', `${prefix}Ordres d'achat groupés : ${placedCount} ordre(s) placé(s) (${totalLocked} ◆ bloqués${failedCount > 0 ? `, ${failedCount} échec(s)` : ''})`);
-  return { placedCount, totalLocked, failedCount };
+  return { placedCount, totalLocked, failedCount, placedIds, stoppedByReserve, interrupted };
 }

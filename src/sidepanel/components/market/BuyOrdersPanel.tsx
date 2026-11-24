@@ -47,6 +47,8 @@ export const BuyOrdersPanel: React.FC<BuyOrdersPanelProps> = ({
     onUpdateSettings({ buyOrderDiscountPct: val });
   };
   const totalBidCost = useMemo(() => opportunities.reduce((sum, op) => sum + (op.suggestedBid || 0), 0), [opportunities]);
+  const minReserve = Math.max(0, Number(settings.autoBuyMinChakraReserve ?? 200));
+  const spendableChakra = Math.max(0, userChakra - minReserve);
 
   const handleScan = async () => {
     setScanning(true);
@@ -84,10 +86,18 @@ export const BuyOrdersPanel: React.FC<BuyOrdersPanelProps> = ({
         orders: opportunities.map((op) => ({ characterId: op.characterId, price: op.suggestedBid, name: op.name }))
       } as any) as Promise<any>);
       if (res?.ok) {
-        const placedCount = res.result?.placedCount ?? res.placedCount ?? opportunities.length;
-        const totalLocked = res.result?.totalLocked ?? res.totalLocked ?? totalBidCost;
-        setOpportunities([]);
-        onToast(`${placedCount} ordre(s) d'achat placé(s) (${totalLocked} ◆)`);
+        const r = res.result ?? res;
+        const placedCount = r?.placedCount ?? 0;
+        const totalLocked = r?.totalLocked ?? 0;
+        const failedCount = Number(r?.failedCount ?? 0);
+        const placedSet = new Set(Array.isArray(r?.placedIds) ? r.placedIds : []);
+        setOpportunities((prev) => prev.filter((op) => !placedSet.has(op.characterId)));
+        const notes: string[] = [];
+        if (r?.stoppedByReserve) notes.push(`réserve Chakra (${minReserve} ◆) atteinte`);
+        if (r?.interrupted) notes.push('interrompu');
+        if (failedCount > 0) notes.push(`${failedCount} échec(s)`);
+        const suffix = notes.length > 0 ? ` — ${notes.join(', ')}` : '';
+        onToast(`${placedCount} ordre(s) d'achat placé(s) (${totalLocked} ◆)${suffix}`);
         onRefresh();
       } else onToast(res?.error || 'Erreur lors du placement groupé');
     } finally { setPlacingBatch(false); }
@@ -191,7 +201,13 @@ export const BuyOrdersPanel: React.FC<BuyOrdersPanelProps> = ({
 
           <button
             type="button" className="btn btn--primary btn--sm bo-batch-btn"
-            disabled={placingBatch || totalBidCost > userChakra} onClick={handlePlaceBatch}
+            disabled={placingBatch || totalBidCost > spendableChakra}
+            title={
+              totalBidCost > spendableChakra
+                ? `Réserve Chakra protégée (${minReserve} ◆) : ${new Intl.NumberFormat('fr-FR').format(spendableChakra)} ◆ disponibles`
+                : undefined
+            }
+            onClick={handlePlaceBatch}
           >
             {placingBatch ? 'Placement du lot…' : `Placer tout le lot (${opportunities.length} · ${new Intl.NumberFormat('fr-FR').format(totalBidCost)} ◆)`}
           </button>

@@ -64,6 +64,7 @@ export function evaluateBoosterPack(
   const completionPct = totalPool > 0 ? Math.round(((totalPool - totalMissing) / totalPool) * 100) : 0;
 
   // RateUp handling
+  const poolIdSet = poolIds.length > 0 ? new Set<number>(poolIds) : null;
   const featuredIds = new Set<number>((pack?.rateUp?.characterIds || []).map(Number));
   const featuredRarities = new Set((pack?.rateUp?.rarities || []) as Rarity[]);
   const featuredShare = featuredRarities.size > 0 ? Math.min(1, Math.max(0, Number(pack?.rateUp?.share) || 0)) : 0;
@@ -71,6 +72,7 @@ export function evaluateBoosterPack(
   const totalFeaturedByRarity: Record<Rarity, number> = { C: 0, U: 0, R: 0, E: 0, L: 0, M: 0 };
 
   for (const fid of featuredIds) {
+    if (poolIdSet && !poolIdSet.has(fid)) continue;
     const ch = getChar(fid);
     const r = (ch?.rarity || 'C') as Rarity;
     if (RARITIES.includes(r)) {
@@ -109,10 +111,14 @@ export function evaluateBoosterPack(
 
         if (featuredRarities.has(r) && totalFeaturedByRarity[r] > 0) {
           const pFeatNew = missingFeaturedByRarity[r] / totalFeaturedByRarity[r];
-          const nonFeatTotal = Math.max(1, denom - totalFeaturedByRarity[r]);
-          const nonFeatMiss = Math.max(0, miss - missingFeaturedByRarity[r]);
-          const pNonFeatNew = nonFeatMiss / nonFeatTotal;
-          pNewGivenRarity = featuredShare * pFeatNew + (1 - featuredShare) * pNonFeatNew;
+          const nonFeatTotal = totalByRarity[r] - totalFeaturedByRarity[r];
+          if (nonFeatTotal <= 0) {
+            pNewGivenRarity = pFeatNew;
+          } else {
+            const nonFeatMiss = Math.max(0, miss - missingFeaturedByRarity[r]);
+            const pNonFeatNew = Math.min(1, nonFeatMiss / nonFeatTotal);
+            pNewGivenRarity = featuredShare * pFeatNew + (1 - featuredShare) * pNonFeatNew;
+          }
         }
 
         const contrib = rProb * pNewGivenRarity;
