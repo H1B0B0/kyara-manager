@@ -505,4 +505,81 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     expect(buyCalls).toHaveLength(1);
     expect(buyCalls[0]).toBe('/market/listings/l-fatal-1/buy');
   });
+
+  it('Test 14: executeAutoBuy stops immediately in its loop when isInterrupted() becomes true in auto mode', async () => {
+    mockChrome({ kmDashboard: { authenticated: true, me: { chakra: 1000 } } });
+    state.currentSettings = normalizeSettings({
+      masterEnabled: true,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['C'],
+      autoBuyMissingEnabled: true,
+      autoBuyMinChakraReserve: 100
+    });
+    state.abortWhenMasterOff = true;
+
+    const buyCalls: string[] = [];
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path === '/me/bootstrap') return { me: { chakra: 1000 } };
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-int-1', status: 'active', type: 'fixed', price: 2, character: { id: 8401, name: 'Int 1', rarity: 'C' } },
+            { id: 'l-int-2', status: 'active', type: 'fixed', price: 3, character: { id: 8402, name: 'Int 2', rarity: 'C' } }
+          ]
+        };
+      }
+      if (path === '/market/listings/l-int-1') return { id: 'l-int-1', status: 'active', type: 'fixed', price: 2 };
+      if (path === '/market/listings/l-int-2') return { id: 'l-int-2', status: 'active', type: 'fixed', price: 3 };
+      if (path.endsWith('/buy') && opts.method === 'POST') {
+        buyCalls.push(path);
+        // Simulate autopilot turned off mid-loop
+        state.currentSettings.masterEnabled = false;
+        return { user: { chakra: 998 } };
+      }
+      return {};
+    });
+
+    try {
+      const res = await executeAutoBuy({ me: { chakra: 1000 } }, { manual: false });
+      expect(res.dealsFound).toBe(2);
+      expect(res.boughtCount).toBe(1);
+      expect(buyCalls).toEqual(['/market/listings/l-int-1/buy']);
+    } finally {
+      state.abortWhenMasterOff = false;
+    }
+  });
+
+  it('Test 15: runMarketWatchTick acquires shared kyara-manager-domain-market-buy lock with { ifAvailable: true } and skips when busy', async () => {
+    const activeSettings = normalizeSettings({
+      masterEnabled: true,
+      autoMarketEnabled: true,
+      autoBuyMinChakraReserve: 100
+    });
+    mockChrome({
+      settings: activeSettings,
+      kmDashboard: { authenticated: true, me: { chakra: 500 } }
+    });
+    const locks = mockLocks();
+    state.currentSettings = activeSettings;
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path === '/me/bootstrap') return { me: { chakra: 500 } };
+      if (path.startsWith('/market/listings?')) return { items: [] };
+      return {};
+    });
+
+    const res = await runMarketWatchTick({ manual: false });
+    expect(res).toEqual({ ok: true, boughtCount: 0, dealsFound: 0 });
+    expect(locks.request).toHaveBeenCalledWith(
+      'kyara-manager-domain-market-buy',
+      { ifAvailable: true },
+      expect.any(Function)
+    );
+
+    locks.held.add('kyara-manager-domain-market-buy');
+    const skippedRes = await runMarketWatchTick({ manual: false });
+    expect(skippedRes).toEqual({ ok: true, boughtCount: 0, dealsFound: 0, skipped: true });
+    locks.held.delete('kyara-manager-domain-market-buy');
+  });
 });

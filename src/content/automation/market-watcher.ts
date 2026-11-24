@@ -37,7 +37,7 @@ export async function runMarketWatchTick({ manual = false } = {}): Promise<{
   }
 
   try {
-    return await navigator.locks.request('kyara-manager-watch', { ifAvailable: !manual }, async (lock) => {
+    return await navigator.locks.request('kyara-manager-domain-market-buy', { ifAvailable: !manual }, async (lock) => {
       if (!lock) {
         return { ok: true, boughtCount: 0, dealsFound: 0, skipped: true };
       }

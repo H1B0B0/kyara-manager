@@ -2,6 +2,7 @@ import { kyaraApi } from '../api';
 import { runtimeCache } from '../cache';
 import { state } from '../state';
 import { appendJournal } from '../journal';
+import { isInterrupted } from '../safety';
 import { notifyDesktop } from '../utils';
 import { getLastScannedListingsCount, scanMarketDealsInternal } from '../scanner';
 import { evaluateDeal } from '../../lib/analytics/deals';
@@ -162,6 +163,7 @@ export async function executeAutoBuy(
   let boughtCount = 0;
 
   for (const deal of deals) {
+    if (!options.manual && isInterrupted()) break;
     const rarity = deal.rarity as Rarity;
     const rarityRemaining = remainingByRarity[rarity];
     const rarityStillNeededForRenaissance = rarityRemaining === undefined || rarityRemaining > 0;

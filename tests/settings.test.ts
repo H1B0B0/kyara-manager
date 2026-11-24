@@ -26,6 +26,14 @@ describe('settings migrations', () => {
     const result = evaluateDuplicate({ id: 1, rarity: 'L' }, { qty: 3 }, { median7d: 110, median30d: 100, sales7d: 20 });
     expect(result.isSurging).toBe(false);
   });
+  it('normalizes autoSellIncludeL (default true) and autoSellIncludeM (default false)', () => {
+    const defaults = normalizeSettings({});
+    expect(defaults.autoSellIncludeL).toBe(true);
+    expect(defaults.autoSellIncludeM).toBe(false);
+    const custom = normalizeSettings({ autoSellIncludeL: false, autoSellIncludeM: true });
+    expect(custom.autoSellIncludeL).toBe(false);
+    expect(custom.autoSellIncludeM).toBe(true);
+  });
   it('disables real automation if persisted settings cannot be read', async () => {
     vi.stubGlobal('chrome', { storage: { local: { get: async () => { throw new Error('storage unavailable'); } } } });
     const { loadSettings } = await import('../src/content/state');

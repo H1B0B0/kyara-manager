@@ -146,7 +146,15 @@ async function executeCycle(manual: boolean): Promise<any> {
         dirty = false;
       }
       try {
-        summary.bought = (await executeAutoBuy(dashboard)).boughtCount;
+        const buyRes = await navigator.locks.request(
+          'kyara-manager-domain-market-buy',
+          { ifAvailable: !manual },
+          async (lock) => {
+            if (!lock) return { boughtCount: 0, dealsFound: 0 };
+            return executeAutoBuy(dashboard, { manual });
+          }
+        );
+        summary.bought = buyRes.boughtCount;
         dirty = summary.bought > 0;
       } catch (err: any) {
         await appendJournal('error', `Achats auto : ${err.message}`);
