@@ -82,15 +82,13 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
     .filter((d) => !listedChars.has(d.characterId) && (stale.chars.has(d.characterId) || eligible(d)))
     .sort((a, b) => sellPriority(b) - sellPriority(a));
 
-  // Skip candidates where hints evictedUntil > Date.now() unless there are free slots left after non-evicted candidates
+  // Exclude candidates currently in eviction cooldown so evicted cards are not immediately re-listed.
   const now = Date.now();
   const isEvicted = (d: any) => {
     const hint = hints.get(d.characterId);
     return Boolean(hint?.evictedUntil && hint.evictedUntil > now);
   };
-  const normalPool = rawPool.filter((d) => !isEvicted(d));
-  const evictedPool = rawPool.filter((d) => isEvicted(d));
-  const pool = [...normalPool, ...evictedPool];
+  const pool = rawPool.filter((d) => !isEvicted(d));
   if (pool.length === 0) return result;
 
   // Market reads for upcoming cards run ahead while the current card is being listed.

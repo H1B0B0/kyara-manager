@@ -126,4 +126,51 @@ describe('auto-sell', () => {
     expect(posts('/market/listings')).toHaveLength(1);
     expect(book.get(1).listed).toBe(0);
   });
+
+  it('does not re-list an evicted floor-locked card during its 2h cooldown even when slots remain free', async () => {
+    marketApi(13, { '/market/listings/L-evict/cancel': {} });
+    const { buildCardLedger, executeAutoSell } = await setup({
+      autoSellMode: 'fast',
+      autoRecycleEnabled: false,
+      autoSellMaxListings: 5
+    });
+    const stalledFloor = {
+      id: 'L-evict',
+      status: 'active',
+      characterId: 1,
+      character: { id: 1, rarity: 'R' },
+      price: 13,
+      createdAt: new Date(Date.now() - 45 * 60 * 1000).toISOString()
+    };
+    const dupEvicted = card(1, {
+      spare: 0,
+      canAutoSell: false,
+      sellProfile: resolveSellProfile({ ...DEFAULT_SETTINGS, autoSellMode: 'fast' }, 13),
+      prices: { minSafe: 13 }
+    });
+    const dupWaiting = card(2, { spare: 2, canAutoSell: true });
+
+    const book = buildCardLedger(
+      [
+        { characterId: 1, qty: 2, locked: 0 },
+        { characterId: 2, qty: 3, locked: 0 }
+      ],
+      [stalledFloor],
+      []
+    );
+
+    const res = await executeAutoSell({ duplicates: [dupEvicted, dupWaiting] }, book);
+    expect(res.repriced).toBe(1);
+    expect(res.listedCount).toBe(1);
+    const listedIds = posts('/market/listings').map(([, o]) => o.body.characterId);
+    expect(listedIds).toEqual([2]);
+
+    // Second pass with free slots and card 1 now having spare > 0 & canAutoSell: still blocked by evictedUntil cooldown
+    const res2 = await executeAutoSell(
+      { duplicates: [card(1, { spare: 1, canAutoSell: true })] },
+      buildCardLedger([{ characterId: 1, qty: 2, locked: 0 }], [], [])
+    );
+    expect(res2.listedCount).toBe(0);
+    expect(posts('/market/listings')).toHaveLength(1);
+  });
 });

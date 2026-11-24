@@ -58,6 +58,7 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
   const pinned = new Set<number>((Array.isArray(kmPinnedCards) ? kmPinnedCards : []).map(Number));
   const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U'];
   const dupById = new Map<number, any>(duplicates.map((d) => [Number(d.characterId), d]));
+  const listedIds = new Set<number>(book.listings.map((l) => listingCharacterId(l)).filter(Boolean));
 
   const eligible: Array<{
     listing: any;
@@ -118,12 +119,17 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
       } else if (ageMinutes >= profile.staleMinutes * 2) {
         // Stalled at floor for 2x stale window: free the slot if slots are full or other cards wait in inventory
         const maxSlots = Math.max(1, Math.min(10, Number(settings.autoSellMaxListings ?? 10)));
-        const hasWaiting = duplicates.some(
-          (d: any) =>
-            Number(d.characterId) !== characterId &&
-            !pinned.has(Number(d.characterId)) &&
-            (d.spare > 0 || d.canAutoSell)
-        );
+        const hasWaiting = duplicates.some((d: any) => {
+          const id = Number(d.characterId);
+          return (
+            id !== characterId &&
+            !listedIds.has(id) &&
+            !pinned.has(id) &&
+            Boolean(d.canAutoSell) &&
+            Number(d.spare) > 0 &&
+            !((hints.get(id)?.evictedUntil || 0) > now)
+          );
+        });
         if (book.listings.length >= maxSlots || hasWaiting) {
           isEvicted = true;
         } else {
@@ -180,9 +186,10 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
     };
     if (isEvicted) {
       hintEntry.evictedUntil = now + 2 * 3600 * 1000;
+    } else {
+      chars.add(characterId);
     }
     hints.set(characterId, hintEntry);
-    chars.add(characterId);
     cancelled += 1;
   });
 

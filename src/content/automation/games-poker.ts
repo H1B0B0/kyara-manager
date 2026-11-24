@@ -169,14 +169,26 @@ function findPlayActionButton(scope: ParentNode): HTMLButtonElement | null {
   return null;
 }
 
-async function applySlotSelection(slots: HTMLButtonElement[], indices: number[]): Promise<boolean> {
+export async function applySlotSelection(slots: HTMLButtonElement[], indices: number[]): Promise<boolean> {
   const targetSet = new Set(indices);
+  // Pass 1: deselect unwanted pressed slots first so the 5-card UI selection cap never blocks new picks.
   for (let i = 0; i < slots.length; i += 1) {
     if (safeInterrupted()) return false;
     const slot = slots[i];
     if (!isButtonUsable(slot)) continue;
     const isPressed = slot.getAttribute('aria-pressed') === 'true';
-    if (isPressed !== targetSet.has(i)) {
+    if (isPressed && !targetSet.has(i)) {
+      slot.click();
+      await humanSleep(160, 340);
+    }
+  }
+  // Pass 2: select target slots now that freed slots are available.
+  for (let i = 0; i < slots.length; i += 1) {
+    if (safeInterrupted()) return false;
+    const slot = slots[i];
+    if (!isButtonUsable(slot)) continue;
+    const isPressed = slot.getAttribute('aria-pressed') === 'true';
+    if (!isPressed && targetSet.has(i)) {
       slot.click();
       await humanSleep(160, 340);
     }

@@ -388,6 +388,7 @@ describe('v2.0.0 market triage & auto-recycle engine', () => {
       });
 
       expect(res2.cancelled).toBe(1);
+      expect(res2.chars.has(501)).toBe(false);
       expect(mocks.api).toHaveBeenCalledWith(
         '/market/listings/list-floor-2/cancel',
         expect.objectContaining({ method: 'POST', priority: 'high' })
@@ -397,6 +398,95 @@ describe('v2.0.0 market triage & auto-recycle engine', () => {
       const hint = savedHints2.get(501);
       expect(hint).toBeDefined();
       expect(hint?.evictedUntil).toBeGreaterThan(Date.now());
+    });
+
+    it('does not evict a floor-locked listing when other duplicates are not sellable, already listed, or on eviction cooldown', async () => {
+      const { retireStaleListings } = await import('../src/content/automation/reprice');
+
+      mocks.api.mockImplementation(async (path: string, options: any = {}) => {
+        if (options.method === 'POST' && path.includes('/cancel')) return { ok: true };
+        if (path.startsWith('/market/listings?')) return { items: [{ price: 13 }] };
+        return [];
+      });
+
+      const fortyFiveMinAgo = new Date(Date.now() - 45 * 60 * 1000).toISOString();
+      const listingFloor = {
+        id: 'list-floor-keep',
+        status: 'active',
+        characterId: 510,
+        character: { id: 510, rarity: 'R' },
+        price: 13,
+        createdAt: fortyFiveMinAgo
+      };
+      const listingOther = {
+        id: 'list-other-active',
+        status: 'active',
+        characterId: 511,
+        character: { id: 511, rarity: 'R' },
+        price: 25,
+        createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+      };
+
+      const book = buildCardLedger(
+        [
+          { characterId: 510, qty: 2 },
+          { characterId: 511, qty: 3 },
+          { characterId: 512, qty: 3 },
+          { characterId: 513, qty: 3 }
+        ],
+        [listingFloor, listingOther],
+        []
+      );
+
+      const dupFloor = {
+        characterId: 510,
+        name: 'Floor Card',
+        rarity: 'R',
+        spare: 0,
+        canAutoSell: false,
+        sellProfile: resolveSellProfile({ ...DEFAULT_SETTINGS, autoSellMode: 'fast' }, 13),
+        prices: { minSafe: 13 }
+      };
+      const dupAlreadyListed = {
+        characterId: 511,
+        name: 'Already Listed',
+        rarity: 'R',
+        spare: 1,
+        canAutoSell: true
+      };
+      const dupNonSellable = {
+        characterId: 512,
+        name: 'Conserver / Recycler Card',
+        rarity: 'R',
+        spare: 2,
+        canAutoSell: false,
+        verdict: 'CONSERVER'
+      };
+      const dupOnCooldown = {
+        characterId: 513,
+        name: 'Evicted Cooldown Card',
+        rarity: 'R',
+        spare: 2,
+        canAutoSell: true
+      };
+
+      const hints = new Map([
+        [513, { ceiling: 13, steps: 1, at: Date.now(), evictedUntil: Date.now() + 60 * 60 * 1000 }]
+      ]);
+
+      const res = await retireStaleListings({
+        book,
+        duplicates: [dupFloor, dupAlreadyListed, dupNonSellable, dupOnCooldown],
+        hints,
+        settings: { ...DEFAULT_SETTINGS, autoSellMode: 'fast', autoRecycleEnabled: false, autoSellMaxListings: 10 }
+      });
+
+      expect(res.cancelled).toBe(0);
+      expect(res.chars.size).toBe(0);
+      expect(mocks.api).not.toHaveBeenCalledWith(
+        '/market/listings/list-floor-keep/cancel',
+        expect.anything()
+      );
     });
   });
 });

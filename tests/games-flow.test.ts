@@ -29,6 +29,7 @@ import {
   waitForEnabledButton
 } from '../src/content/automation/games-extra';
 import { REPLAY_BTN_RE } from '../src/content/automation/games-core';
+import { applySlotSelection, solvePokerHandStep } from '../src/content/automation/games-poker';
 import { solveKyara21Step, solveMemoryStep, solveSoloQuizStep } from '../src/content/automation/games-classic';
 import {
   executeAutoGames,
@@ -1289,5 +1290,120 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     expect(res.playedGames).toBe(1);
     expect(res.ticketsEarned).toBe(4);
     expect(res.arcade?.today).toBe(60);
+  });
+
+  it('deselects [3,4,5,6,7] before selecting [0,1,2] in applySlotSelection and solvePokerHandStep under a strict 5-card selection cap', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/main-kyara');
+
+    const MAX_SELECTED = 5;
+    const clickLog: string[] = [];
+
+    const makeCappedSlots = (initialPressed: number[]) => {
+      const pressedSet = new Set(initialPressed);
+      const specs = [
+        { name: 'Tri1', series: 'SameSer', family: 'Fam1', rarity: 'L' },
+        { name: 'Tri2', series: 'SameSer', family: 'Fam2', rarity: 'L' },
+        { name: 'Tri3', series: 'SameSer', family: 'Fam3', rarity: 'L' },
+        { name: 'Junk3', series: 'S3', family: 'Fam4', rarity: 'C' },
+        { name: 'Junk4', series: 'S4', family: 'Fam5', rarity: 'C' },
+        { name: 'Junk5', series: 'S5', family: 'Fam6', rarity: 'C' },
+        { name: 'Junk6', series: 'S6', family: 'Fam7', rarity: 'C' },
+        { name: 'Junk7', series: 'S7', family: 'Fam8', rarity: 'C' }
+      ];
+      const slots: StubHTMLButtonElement[] = [];
+      specs.forEach((c, idx) => {
+        const slot = dom.el(
+          'button',
+          { className: 'slot', attrs: { 'aria-pressed': pressedSet.has(idx) ? 'true' : 'false' } },
+          [
+            dom.el('div', { className: `tcg pf p-${c.rarity}` }, [
+              dom.el('span', { className: 'pf-seal', text: c.rarity }),
+              dom.el('span', { className: 'pf-name', text: c.name }),
+              dom.el('span', { className: 'pf-ser', text: c.series }),
+              dom.el('span', { className: 'pf-rib', attrs: { title: c.family } })
+            ])
+          ]
+        ) as StubHTMLButtonElement;
+        slot.addEventListener('click', () => {
+          const isPressed = slot.getAttribute('aria-pressed') === 'true';
+          if (isPressed) {
+            slot.setAttribute('aria-pressed', 'false');
+            clickLog.push(`deselect:${idx}`);
+          } else {
+            const count = slots.filter((s) => s.getAttribute('aria-pressed') === 'true').length;
+            if (count >= MAX_SELECTED) {
+              clickLog.push(`blocked:${idx}`);
+              return;
+            }
+            slot.setAttribute('aria-pressed', 'true');
+            clickLog.push(`select:${idx}`);
+          }
+        });
+        slots.push(slot);
+      });
+      return slots;
+    };
+
+    // 1) Direct applySlotSelection test: [3,4,5,6,7] already selected -> switch to [0,1,2]
+    const directSlots = makeCappedSlots([3, 4, 5, 6, 7]);
+    const ok = await applySlotSelection(directSlots as unknown as HTMLButtonElement[], [0, 1, 2]);
+    expect(ok).toBe(true);
+    expect(clickLog).toEqual([
+      'deselect:3',
+      'deselect:4',
+      'deselect:5',
+      'deselect:6',
+      'deselect:7',
+      'select:0',
+      'select:1',
+      'select:2'
+    ]);
+    expect(directSlots.map((s) => s.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'true',
+      'true',
+      'false',
+      'false',
+      'false',
+      'false',
+      'false'
+    ]);
+
+    // 2) End-to-end solvePokerHandStep test: [3,4,5,6,7] selected via discard -> discard stays disabled -> fallback play selects [0,1,2]
+    clickLog.length = 0;
+    const hud = dom.el('div', { className: 'hud', text: 'Score 0 · Mains 4 · Défausses 3' });
+    const discardBtn = dom.btn('Défausser', { className: 'btn btn-ghost', disabled: true });
+    const playBtn = dom.btn('Jouer', { className: 'btn btn-acc', disabled: true });
+    const pokerSlots = makeCappedSlots([]);
+    pokerSlots.forEach((slot) => {
+      slot.addEventListener('click', () => {
+        const pressedCount = pokerSlots.filter((s) => s.getAttribute('aria-pressed') === 'true').length;
+        // Discard stays disabled to force the discard -> play fallback path
+        playBtn.disabled = pressedCount === 0;
+      });
+    });
+
+    const main = dom.el('main', {}, [
+      hud,
+      dom.el('div', { className: 'hand' }, pokerSlots),
+      dom.el('div', { className: 'foot' }, [dom.el('div', { className: 'actions' }, [discardBtn, playBtn])])
+    ]);
+    dom.doc.body.replaceChildren(main);
+
+    expect(await solvePokerHandStep(catalog)).toBe(true);
+    expect(discardBtn.clickCount).toBe(0);
+    expect(playBtn.clickCount).toBe(1);
+    expect(clickLog.some((e) => e.startsWith('blocked:'))).toBe(false);
+    expect(pokerSlots.map((s) => s.getAttribute('aria-pressed'))).toEqual([
+      'true',
+      'true',
+      'true',
+      'false',
+      'false',
+      'false',
+      'false',
+      'false'
+    ]);
   });
 });
