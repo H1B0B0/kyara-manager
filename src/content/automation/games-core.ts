@@ -8,7 +8,7 @@ export const ADVANCE_IGNORE_SEL = `${KM_IGNORE_SEL}, .play-tool, .tabs, .sh`;
 export const START_MODE_RE = /^(?:Play solo|Jouer solo|Jouer en solo)\b/i;
 
 export const REPLAY_BTN_RE =
-  /^(?:Play again|Rejouer|Try again|R[eé]essayer|New game|Nouvelle partie|New expedition|Nouvelle exp[eé]dition|Nouvelle [eé]quipe|Rejouer pour t'entra[iî]ner|Rejouer le chapitre|Rematch|Revanche|Quitter la table|Jouer [aà] Main Kyara|Play Kyara Hand)$/i;
+  /^(?:Play again|Rejouer|Try again|R[eé]essayer|New game|Nouvelle partie|New expedition|Nouvelle exp[eé]dition|New team|Nouvelle [eé]quipe|Replay for practice|Rejouer pour t'entra[iî]ner|Replay chapter|Rejouer le chapitre|Rematch|Revanche|Quitter la table|Jouer [aà] Main Kyara|Play Kyara Hand)$/i;
 
 export const NEXT_BTN_RE =
   /^(?:Suivant(?:e)?|Suite|Continuer|Voir le r[eé]sultat|Question suivante|Manche suivante|Main suivante|Tour suivant|Vague suivante|[EÉ]tape suivante|Combattre|Affronter le boss|Entrer dans la boutique|Ouvrir le tr[eé]sor|Reprendre la route|Attaquer|Valider|Confirmer(?:\s+l'[eé]quipe)?|Valider\s+l'[eé]quipe|Terminer(?:\s*[×x]\d+)?|Finir|Fin|Encaisser|R[eé]cup[eé]rer|R[eé]clamer|Collecter|Distribuer|Next(?:\s+(?:question|round|hand|turn|wave|step|stage))?|Continue|See the result|Proceed|Advance|Submit|Confirm(?:\s+the\s+team)?|Validate|Fight|Finish(?:\s*[×x]\d+)?|Done|Claim|Collect|Deal)(?:\s*[→➜›»>▶].*)?$/i;

@@ -231,6 +231,13 @@ function extractBlindTestHintText(arena: ParentNode, catalogById: Map<number, an
   return parts.join(' ').trim();
 }
 
+function readPlusAimeStreak(): number {
+  if (typeof document === 'undefined') return 0;
+  const hud = document.querySelector('main .hud');
+  const match = (hud?.textContent || '').match(/(?:Streak|S[eé]rie)\s*:?\s*(\d+)/i);
+  return match ? Number(match[1]) || 0 : 0;
+}
+
 export async function solveSoloQuizStep(path: string, catalogById: Map<number, any>): Promise<boolean> {
   if (typeof document === 'undefined') return false;
   const main = document.querySelector('main') || document;
@@ -258,9 +265,11 @@ export async function solveSoloQuizStep(path: string, catalogById: Map<number, a
       const ids = picks.map((p) => extractCardIdFromUrl(p.querySelector<HTMLImageElement>('img')?.src));
       const names = picks.map((p) => p.querySelector('.pf-name')?.textContent?.trim() || cleanBtnText(p));
       const { winnerIndex } = pickMostLovedWinner(ids, names, catalogById);
+      const streak = readPlusAimeStreak();
+      const pickIdx = streak >= 16 ? (winnerIndex === 0 ? 1 : 0) : winnerIndex;
       await humanSleep(1300, 2200);
       if (safeInterrupted()) return false;
-      picks[winnerIndex]?.click();
+      picks[pickIdx]?.click();
       await humanSleep(650, 1050);
       return true;
     }

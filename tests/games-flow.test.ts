@@ -27,6 +27,7 @@ import {
   solveMainKyaraStep,
   waitForEnabledButton
 } from '../src/content/automation/games-extra';
+import { REPLAY_BTN_RE } from '../src/content/automation/games-core';
 import { solveKyara21Step, solveMemoryStep, solveSoloQuizStep } from '../src/content/automation/games-classic';
 import {
   executeAutoGames,
@@ -1058,5 +1059,41 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     expect(await solveSoloQuizStep('/jouer/serie-express', catalog)).toBe(true);
     expect(c1.clickCount).toBe(0);
     expect(c2.clickCount).toBe(0);
+  });
+
+  it('picks winner on /jouer/plus-aime at Streak 5 and intentionally picks loser at Streak 16 to cash out 3-star tickets', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/plus-aime');
+
+    const mountPlusAime = (hudText: string) => {
+      const hud = dom.el('div', { className: 'hud', text: hudText });
+      const loserCard = dom.el('button', { className: 'pick' }, [
+        dom.img('https://cdn.kyara.games/cards/sm/102.webp'),
+        dom.el('span', { className: 'pf-name', text: 'Random Villager' })
+      ]) as StubHTMLButtonElement;
+      const winnerCard = dom.el('button', { className: 'pick' }, [
+        dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
+        dom.el('span', { className: 'pf-name', text: 'Gojo Satoru' })
+      ]) as StubHTMLButtonElement;
+      const duel = dom.el('div', { className: 'duel' }, [loserCard, winnerCard]);
+      dom.doc.body.replaceChildren(dom.el('main', {}, [hud, dom.el('div', { className: 'arena' }, [duel])]));
+      return { loserCard, winnerCard };
+    };
+
+    const s5 = mountPlusAime('Streak 5');
+    expect(await solveSoloQuizStep('/jouer/plus-aime', catalog)).toBe(true);
+    expect(s5.winnerCard.clickCount).toBe(1);
+    expect(s5.loserCard.clickCount).toBe(0);
+
+    const s16 = mountPlusAime('Streak 16');
+    expect(await solveSoloQuizStep('/jouer/plus-aime', catalog)).toBe(true);
+    expect(s16.loserCard.clickCount).toBe(1);
+    expect(s16.winnerCard.clickCount).toBe(0);
+  });
+
+  it('matches EN replay buttons in REPLAY_BTN_RE (New team, Replay for practice, Replay chapter)', () => {
+    expect(REPLAY_BTN_RE.test('New team')).toBe(true);
+    expect(REPLAY_BTN_RE.test('Replay for practice')).toBe(true);
+    expect(REPLAY_BTN_RE.test('Replay chapter')).toBe(true);
   });
 });
