@@ -1196,4 +1196,84 @@ describe('games DOM flow, next buttons, and anti-bot pacing', () => {
     expect(clickOrder).toEqual(['unpick:WeakA', 'unpick:WeakB', 'pick:StrongA', 'pick:StrongB']);
     expect(confirmBtn.clickCount).toBe(1);
   });
+
+  it('clicks Next button on /jouer/blind-test when choices display .right/.wrong (hasResult)', async () => {
+    setGamesFastModeForTest(true);
+    dom.setPath('/jouer/blind-test');
+
+    const c1 = dom.btn('Jujutsu Kaisen', { className: 'choice right' });
+    const c2 = dom.btn('Naruto', { className: 'choice wrong' });
+    // Button outside .foot/.actions (or without .btn-acc) so it exercises the blind-test hasResult branch
+    const nextBtn = dom.btn('Next', { className: 'btn' });
+    const arena = dom.el('div', { className: 'arena' }, [
+      dom.el('div', { className: 'choices' }, [c1, c2]),
+      nextBtn
+    ]);
+    dom.doc.body.replaceChildren(dom.el('main', {}, [arena]));
+
+    expect(await solveSoloQuizStep('/jouer/blind-test', catalog)).toBe(true);
+    expect(nextBtn.clickCount).toBe(1);
+    expect(c1.clickCount).toBe(0);
+    expect(c2.clickCount).toBe(0);
+  });
+
+  it('restarts a game cleanly from a residual end screen (Play again) and stops mid-batch when cap is reached', async () => {
+    mockChrome({
+      settings: {
+        dryRun: false,
+        autoGamesEnabled: true,
+        autoGamesDailyEnabled: false,
+        autoGamesTargetGame: 'qui-est-ce'
+      }
+    });
+
+    let today = 56;
+    let balance = 100;
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path === '/play/arcade') {
+        return { enabled: true, blocked: null, balance, today, dayCap: 60, week: 120, weekCap: 300, lots: [] };
+      }
+      return null;
+    });
+
+    const mountActiveQuiz = () => {
+      const qChoice = dom.btn('Gojo Satoru', { className: 'choice' });
+      const choices = dom.el('div', { className: 'choices' }, [
+        dom.btn('Naruto Uzumaki', { className: 'choice' }),
+        qChoice
+      ]);
+      const arena = dom.el('div', { className: 'arena' }, [
+        dom.img('https://cdn.kyara.games/cards/sm/101.webp'),
+        choices
+      ]);
+      const main = dom.el('main', {}, [arena]);
+      qChoice.addEventListener('click', () => {
+        balance += 4;
+        today += 4; // reaches dayCap (60/60) after 1st run
+        const replay = dom.btn('Play again');
+        replay.addEventListener('click', () => mountActiveQuiz());
+        main.replaceChildren(replay);
+      });
+      dom.doc.body.replaceChildren(main);
+    };
+
+    // Start already on /jouer/qui-est-ce showing a residual finished screen ("Play again")
+    dom.setPath('/jouer/qui-est-ce');
+    const initialReplay = dom.btn('Play again');
+    initialReplay.addEventListener('click', () => mountActiveQuiz());
+    dom.doc.body.replaceChildren(dom.el('main', {}, [initialReplay]));
+
+    // Dedicated tab SPA navigation stays on the existing DOM without resetting it
+    mocks.navigate.mockResolvedValue(true);
+
+    const res = await executeAutoGames(
+      { me: { id: 1 } },
+      { manual: false, gameId: 'qui-est-ce', dedicatedTab: true, _fastForTest: true }
+    );
+
+    expect(initialReplay.clickCount).toBe(1);
+    expect(res.playedGames).toBe(1);
+    expect(res.ticketsEarned).toBe(4);
+    expect(res.arcade?.today).toBe(60);
+  });
 });

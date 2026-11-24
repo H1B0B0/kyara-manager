@@ -143,4 +143,80 @@ describe('real price hydration & retroactive bestPulls rehydration', () => {
       })
     );
   });
+
+  it('negative-caches unresolved cards for 5 min in ensureCollectionPrices & ensureFairPlayPrices and caps chunk concurrency at 3', async () => {
+    mockChrome();
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-24T10:00:00Z'));
+
+    try {
+      let collectionCalls = 0;
+      let fairPlayCalls = 0;
+      mocks.api.mockImplementation(async (path: string) => {
+        if (path.startsWith('/me/collection/prices')) {
+          collectionCalls += 1;
+          return { prices: { '10': { median7d: null, sales7d: 0 } } };
+        }
+        if (path.startsWith('/fair-play/prices')) {
+          fairPlayCalls += 1;
+          return { prices: {} };
+        }
+        return null;
+      });
+
+      const { ensureCollectionPrices, ensureFairPlayPrices } = await import('../src/content/cache');
+
+      // Initial call queries both /me/collection/prices and /fair-play/prices once
+      await ensureCollectionPrices([10, 11]);
+      expect(collectionCalls).toBe(1);
+      expect(fairPlayCalls).toBe(1);
+
+      // Re-calling within 5 min (e.g. +2 min) must hit negative cache and make 0 HTTP calls
+      vi.advanceTimersByTime(2 * 60 * 1000);
+      await ensureCollectionPrices([10, 11]);
+      await ensureFairPlayPrices([10, 11]);
+      expect(collectionCalls).toBe(1);
+      expect(fairPlayCalls).toBe(1);
+
+      // After > 5 min (total +6 min), both endpoints are queried again
+      vi.advanceTimersByTime(4 * 60 * 1000 + 1000);
+      await ensureCollectionPrices([10, 11]);
+      expect(collectionCalls).toBe(2);
+      expect(fairPlayCalls).toBe(2);
+
+      // Concurrency bound test: 1000 IDs => 5 chunks of 200; max in-flight per endpoint must be <= 3
+      const manyIds = Array.from({ length: 1000 }, (_, i) => 1000 + i);
+      let inFlightCol = 0;
+      let maxInFlightCol = 0;
+      let inFlightFp = 0;
+      let maxInFlightFp = 0;
+
+      mocks.api.mockImplementation(async (path: string) => {
+        if (path.startsWith('/me/collection/prices')) {
+          inFlightCol += 1;
+          maxInFlightCol = Math.max(maxInFlightCol, inFlightCol);
+          await new Promise((r) => setTimeout(r, 20));
+          inFlightCol -= 1;
+          return { prices: {} };
+        }
+        if (path.startsWith('/fair-play/prices')) {
+          inFlightFp += 1;
+          maxInFlightFp = Math.max(maxInFlightFp, inFlightFp);
+          await new Promise((r) => setTimeout(r, 20));
+          inFlightFp -= 1;
+          return { prices: {} };
+        }
+        return null;
+      });
+
+      const hydrationPromise = ensureCollectionPrices(manyIds);
+      await vi.advanceTimersByTimeAsync(200);
+      await hydrationPromise;
+
+      expect(maxInFlightCol).toBe(3);
+      expect(maxInFlightFp).toBe(3);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });

@@ -77,6 +77,15 @@ async function clickSoloStartIfNeeded(gameSlug?: string): Promise<'started' | 'b
   if (hasDiscordGate()) return 'blocked';
   const scope = document.querySelector('main') || document;
 
+  if (isGameFinishedScreen(gameSlug || '')) {
+    const replayBtn = findButtonByText(scope, REPLAY_BTN_RE);
+    if (replayBtn) {
+      replayBtn.click();
+      await humanSleep(1200, 2000);
+      return hasDiscordGate() ? 'blocked' : 'started';
+    }
+  }
+
   if (gameSlug === 'memoire') {
     const lv8 = Array.from(scope.querySelectorAll<HTMLButtonElement>('.lvs > button.lvb')).find(
       (b) => isButtonUsable(b) && /^8\b/.test(cleanBtnText(b))
@@ -146,7 +155,8 @@ async function playGameRuns(
   runs: number,
   catalogById: Map<number, any>,
   meId?: string | number,
-  manual = false
+  manual = false,
+  shouldStopBeforeNextRun?: () => Promise<boolean>
 ): Promise<{ played: number; blocked: boolean }> {
   const targetPath = `/jouer/${encodeURIComponent(slug)}`;
   if (!(await navigateSpaTo(targetPath, { owner: 'games' }))) return { played: 0, blocked: false };
@@ -183,7 +193,7 @@ async function playGameRuns(
         await humanSleep(600, 900);
         continue;
       }
-      if (!didMove && idleSteps > 0 && idleSteps % 3 === 0 && !isGameFinishedScreen(slug)) {
+      if (!didMove && idleSteps > 0 && idleSteps % 3 === 0) {
         const retry = await clickSoloStartIfNeeded(slug);
         if (retry === 'blocked') return { played, blocked: true };
         if (retry === 'started') {
@@ -218,6 +228,7 @@ async function playGameRuns(
     if (slug === 'raid-du-jour') markDailyRaidPlayed(meId);
 
     if (run + 1 < runs && !isGamesAborted(manual)) {
+      if (shouldStopBeforeNextRun && (await shouldStopBeforeNextRun())) break;
       const replayBtn = findButtonByText(document.querySelector('main') || document, REPLAY_BTN_RE);
       if (replayBtn) {
         replayBtn.click();
@@ -277,6 +288,15 @@ export async function executeAutoGames(
     }
 
     let playedGames = 0;
+    let latestArcade: ArcadeSummary = arcadeBefore;
+    const isCapReached = (s: ArcadeSummary) => s.today >= (s.dayCap || 60) || s.week >= (s.weekCap || 300);
+    const isNearCap = (s: ArcadeSummary) => s.today >= (s.dayCap || 60) - 10 || s.week >= (s.weekCap || 300) - 10;
+    const shouldStopForCap = async (): Promise<boolean> => {
+      if (!isNearCap(latestArcade)) return false;
+      const fresh = await fetchArcadeSummary();
+      if (fresh) latestArcade = fresh;
+      return isCapReached(latestArcade);
+    };
     const manual = Boolean(options.manual);
     const previousPath = typeof location !== 'undefined' ? location.pathname : '';
     const dailyEnabled = state.currentSettings.autoGamesDailyEnabled !== false;
@@ -294,7 +314,13 @@ export async function executeAutoGames(
     }
 
     const maxRuns = manual ? 5 : 2;
-    if (!isGamesAborted(manual) && targetGame !== 'main-du-jour' && targetGame !== 'raid-du-jour' && today < dayCap && week < weekCap) {
+    const canPlaySolo =
+      !isGamesAborted(manual) &&
+      targetGame !== 'main-du-jour' &&
+      targetGame !== 'raid-du-jour' &&
+      !isCapReached(latestArcade) &&
+      !(playedGames > 0 && (await shouldStopForCap()));
+    if (canPlaySolo) {
       if (playedGames > 0) await humanSleep(2000, 3400);
       if (targetGame === 'all') {
         let soloPlayed = 0;
@@ -305,10 +331,13 @@ export async function executeAutoGames(
           if (res.blocked || !res.played) continue;
           playedGames += res.played;
           soloPlayed += 1;
-          if (soloPlayed < maxRuns && !isGamesAborted(manual)) await humanSleep(2000, 3400);
+          if (soloPlayed < maxRuns && !isGamesAborted(manual)) {
+            if (await shouldStopForCap()) break;
+            await humanSleep(2000, 3400);
+          }
         }
       } else {
-        playedGames += (await playGameRuns(targetGame, maxRuns, catalogById, meId, manual)).played;
+        playedGames += (await playGameRuns(targetGame, maxRuns, catalogById, meId, manual, shouldStopForCap)).played;
       }
     }
 
@@ -317,8 +346,8 @@ export async function executeAutoGames(
     }
     if (playedGames > 0 && !isGamesAborted(manual)) await humanSleep(1500, 2200);
 
-    const arcadeAfter = await fetchArcadeSummary();
-    const balanceNow = arcadeAfter?.balance ?? arcadeBefore.balance;
+    const arcadeAfter = (await fetchArcadeSummary()) || latestArcade;
+    const balanceNow = arcadeAfter.balance;
     const ticketsEarned = Math.max(0, balanceNow - arcadeBefore.balance);
     const isDailyOnly = targetGame === 'main-du-jour' || targetGame === 'raid-du-jour';
     const noCreditNote =
@@ -331,7 +360,7 @@ export async function executeAutoGames(
         `Salle de Jeux : ${playedGames} partie(s) jouée(s)${ticketsEarned > 0 ? `, +${ticketsEarned} ticket(s)` : ''}${noCreditNote} · Solde ${balanceNow} 🎟`
       );
     }
-    return { playedGames, ticketsEarned, arcade: arcadeAfter || arcadeBefore };
+    return { playedGames, ticketsEarned, arcade: arcadeAfter };
   } finally {
     setGamesFastModeForTest(false);
   }

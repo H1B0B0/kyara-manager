@@ -6,7 +6,8 @@ import { DEFAULT_RECYCLE_VALUES } from '../lib/analytics/constants';
 export const CATALOG_TTL_MS = 12 * 3600 * 1000;
 export const PACK_POOLS_TTL_MS = 12 * 3600 * 1000;
 export const PRICES_TTL_MS = 15 * 60 * 1000;
-const FAIR_PLAY_RETRY_COOLDOWN_MS = 15 * 1000;
+const NEGATIVE_PRICE_TTL_MS = 5 * 60 * 1000;
+const FAIR_PLAY_RETRY_COOLDOWN_MS = 5 * 60 * 1000;
 const HIGH_FLOOR_PRICES = new Set([15, 100, 815]);
 const ALL_FLOOR_PRICES = new Set([3, 15, 100, 815]);
 const PRICE_CACHE_MAX_ENTRIES = 2000;
@@ -220,27 +221,35 @@ export async function ensureCollectionPrices(characterIds: number[], force = fal
 
   const missingIds = uniqueIds.filter((id) => {
     if (force) return true;
-    const cached = runtimeCache.collectionPrices.get(id);
-    return !cached || now - cached.at > PRICES_TTL_MS || !(Number(cached.median7d) > 0);
+    const cached = runtimeCache.collectionPrices.get(id) as any;
+    if (!cached) return true;
+    if (Number(cached.median7d) > 0 && now - cached.at <= PRICES_TTL_MS) return false;
+    if ((cached.source === 'collection' || cached.source === 'detail') && now - cached.at <= NEGATIVE_PRICE_TTL_MS) {
+      return false;
+    }
+    return true;
   });
 
-  await Promise.all(
-    chunkIds(missingIds).map(async (chunk) => {
-      try {
-        const res = await kyaraApi(`/me/collection/prices?ids=${chunk.join(',')}`);
-        for (const cid of chunk) {
-          const existing = runtimeCache.collectionPrices.get(cid) as any;
-          if (!existing || force || now - existing.at > PRICES_TTL_MS) {
-            runtimeCache.collectionPrices.set(cid, {
-              ...existing, median7d: null, median30d: null, sales7d: 0, sales30d: 0,
-              lowestFixed: existing?.lowestFixed ?? null, lastPrice: existing?.lastPrice ?? null, source: 'collection', at: now
-            } as any);
-          }
+  await mapLimit(chunkIds(missingIds), 3, async (chunk) => {
+    try {
+      const res = await kyaraApi(`/me/collection/prices?ids=${chunk.join(',')}`);
+      for (const cid of chunk) {
+        const existing = runtimeCache.collectionPrices.get(cid) as any;
+        const stale =
+          !existing ||
+          force ||
+          now - existing.at > PRICES_TTL_MS ||
+          (!(Number(existing.median7d) > 0) && now - existing.at > NEGATIVE_PRICE_TTL_MS);
+        if (stale) {
+          runtimeCache.collectionPrices.set(cid, {
+            ...existing, median7d: null, median30d: null, sales7d: 0, sales30d: 0,
+            lowestFixed: existing?.lowestFixed ?? null, lastPrice: existing?.lastPrice ?? null, source: 'collection', at: now
+          } as any);
         }
-        applyPricePayload(res, now, 'collection', force);
-      } catch {}
-    })
-  );
+      }
+      applyPricePayload(res, now, 'collection', force);
+    } catch {}
+  });
 
   const unresolvedIds = uniqueIds.filter((id) => !(Number(runtimeCache.collectionPrices.get(id)?.median7d) > 0));
   if (unresolvedIds.length > 0) await ensureFairPlayPrices(unresolvedIds, force);
@@ -262,19 +271,17 @@ export async function ensureFairPlayPrices(characterIds: number[], force = false
   });
   if (missingIds.length === 0) return runtimeCache.collectionPrices;
 
-  await Promise.all(
-    chunkIds(missingIds).map(async (chunk) => {
-      try {
-        const res = await kyaraApi(`/fair-play/prices?ids=${chunk.join(',')}`, { auth: true });
-        for (const cid of chunk) {
-          const existing = runtimeCache.collectionPrices.get(cid) as any;
-          if (existing) existing._fpAt = now;
-          else runtimeCache.collectionPrices.set(cid, { median7d: null, median30d: null, sales7d: 0, sales30d: null, _fpAt: now, at: now } as any);
-        }
-        applyPricePayload(res, now, 'fair-play', force);
-      } catch {}
-    })
-  );
+  await mapLimit(chunkIds(missingIds), 3, async (chunk) => {
+    try {
+      const res = await kyaraApi(`/fair-play/prices?ids=${chunk.join(',')}`, { auth: true });
+      for (const cid of chunk) {
+        const existing = runtimeCache.collectionPrices.get(cid) as any;
+        if (existing) existing._fpAt = now;
+        else runtimeCache.collectionPrices.set(cid, { median7d: null, median30d: null, sales7d: 0, sales30d: null, _fpAt: now, at: now } as any);
+      }
+      applyPricePayload(res, now, 'fair-play', force);
+    } catch {}
+  });
   return runtimeCache.collectionPrices;
 }
 

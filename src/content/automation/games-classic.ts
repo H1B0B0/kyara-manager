@@ -314,6 +314,7 @@ export async function solveSoloQuizStep(path: string, catalogById: Map<number, a
         (c) => c.classList.contains('right') || c.classList.contains('wrong') || c.classList.contains('mine')
       );
       if (hasResult) {
+        if (await clickAdvanceOrNextButton(main)) return true;
         await humanSleep(450, 700);
         return true;
       }
