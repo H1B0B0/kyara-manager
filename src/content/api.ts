@@ -2,6 +2,23 @@ import { KyaraApiOptions } from './types';
 import { sleep, randomJitter, readSiteAuth } from './utils';
 import { state } from './state';
 
+export const MAX_COOLDOWN_MS = 60_000;
+
+export function parseRetryAfterMs(header: string | null, now = Date.now()): number | null {
+  if (!header) return null;
+  const trimmed = header.trim();
+  if (!trimmed) return null;
+  const seconds = Number(trimmed);
+  if (Number.isFinite(seconds)) {
+    return seconds >= 0 ? Math.round(seconds * 1000) : null;
+  }
+  const parsedDate = Date.parse(trimmed);
+  if (Number.isFinite(parsedDate)) {
+    return Math.max(0, parsedDate - now);
+  }
+  return null;
+}
+
 const WRITE_GAP_MS = 180;
 const WRITE_JITTER_MS = 60;
 let lastWriteAt = 0;
@@ -13,17 +30,52 @@ type WriteWaiter = () => void;
 const writeQueues: WriteWaiter[][] = [[], []];
 let pumping = false;
 
+function isDisposed(): boolean {
+  return state.disposed || (typeof chrome !== 'undefined' && !chrome.runtime?.id);
+}
+
+function drainWriteQueues(): void {
+  for (const queue of writeQueues) {
+    while (queue.length > 0) {
+      queue.shift()?.();
+    }
+  }
+}
+
 async function pumpWrites(): Promise<void> {
   if (pumping) return;
   pumping = true;
   try {
     for (;;) {
+      if (isDisposed()) {
+        drainWriteQueues();
+        return;
+      }
       const next = writeQueues[0].shift() ?? writeQueues[1].shift();
       if (!next) break;
       const now = Date.now();
-      if (cooldownUntil > now) await sleep(cooldownUntil - now);
+      if (cooldownUntil > now) {
+        if (isDisposed()) {
+          next();
+          drainWriteQueues();
+          return;
+        }
+        await sleep(Math.min(MAX_COOLDOWN_MS, cooldownUntil - now));
+      }
+      if (isDisposed()) {
+        next();
+        drainWriteQueues();
+        return;
+      }
       const waitMs = lastWriteAt + WRITE_GAP_MS * rushMultiplier + randomJitter(WRITE_JITTER_MS) - Date.now();
-      if (waitMs > 0) await sleep(waitMs);
+      if (waitMs > 0) {
+        await sleep(waitMs);
+      }
+      if (isDisposed()) {
+        next();
+        drainWriteQueues();
+        return;
+      }
       lastWriteAt = Date.now();
       next();
     }
@@ -54,7 +106,7 @@ export async function kyaraApi<T = any>(
     if (isWrite) {
       await waitForWriteSlot(priority);
     } else if (cooldownUntil > Date.now()) {
-      await sleep(cooldownUntil - Date.now());
+      await sleep(Math.min(MAX_COOLDOWN_MS, cooldownUntil - Date.now()));
     }
 
     if (state.disposed || !chrome.runtime?.id) throw new Error('Extension rechargée. Actualise cet onglet Kyara.');
@@ -100,11 +152,12 @@ export async function kyaraApi<T = any>(
     }
 
     if (response.status === 429 || response.status === 503) {
-      const retryAfter = Number(response.headers.get('Retry-After'));
-      const backoff =
-        Number.isFinite(retryAfter) && retryAfter > 0
-          ? retryAfter * 1000
+      const retryAfterMs = parseRetryAfterMs(response.headers.get('Retry-After'));
+      const rawBackoff =
+        retryAfterMs !== null
+          ? retryAfterMs
           : 1500 * Math.pow(2, attempt) + randomJitter(400);
+      const backoff = Math.min(MAX_COOLDOWN_MS, rawBackoff);
       cooldownUntil = Math.max(cooldownUntil, Date.now() + backoff);
       // A 503 can arrive after a write committed. Never replay an ambiguous mutation.
       if (attempt + 1 < maxAttempts && (!isWrite || response.status === 429)) {

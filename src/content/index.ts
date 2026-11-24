@@ -70,7 +70,7 @@ function initKyaraManager(): void {
   (async () => {
     await loadSettings();
     if (disposed) return;
-    mountFloatingHud();
+    cleanups.push(mountFloatingHud());
     cleanups.push(setupOverlayListeners());
     cleanups.push(setupInPageEnhancer());
     cleanups.push(setupAntiAfkObserver());

@@ -94,9 +94,10 @@ function renderUpdateToast(update: UpdateState | null | undefined): void {
   toast.hidden = false;
 }
 
-export function mountFloatingHud(): void {
+export function mountFloatingHud(): () => void {
   document.getElementById('km-floating-hud')?.remove();
   document.getElementById('km-update-toast')?.remove();
+  let disposed = false;
 
   const hud = document.createElement('aside');
   hud.id = 'km-floating-hud';
@@ -322,13 +323,25 @@ export function mountFloatingHud(): void {
   document.body.appendChild(toast);
 
   void chrome.storage?.local?.get('kmUpdate').then(({ kmUpdate }) => {
+    if (disposed) return;
     renderUpdateToast(kmUpdate as UpdateState | undefined);
   }).catch(() => {});
-  chrome.storage?.onChanged?.addListener((changes, area) => {
+  const onStorageChanged = (changes: Record<string, chrome.storage.StorageChange>, area: string) => {
+    if (disposed) return;
     if (area === 'local' && changes.kmUpdate) {
       renderUpdateToast(changes.kmUpdate.newValue as UpdateState | undefined);
     }
-  });
+  };
+  chrome.storage?.onChanged?.addListener?.(onStorageChanged);
+
+  return () => {
+    disposed = true;
+    chrome.storage?.onChanged?.removeListener?.(onStorageChanged);
+    hud.remove();
+    toast.remove();
+    document.getElementById('km-floating-hud')?.remove();
+    document.getElementById('km-update-toast')?.remove();
+  };
 }
 
 export function setHudStatusText(text: string): void {
