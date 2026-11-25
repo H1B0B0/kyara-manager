@@ -227,7 +227,7 @@ export const SettingsTab: React.FC<SettingsTabProps> = ({ settings, onUpdateSett
             <label className="check-row">
               <input
                 type="checkbox"
-                checked={form.autoSellIncludeL !== false}
+                checked={Boolean(form.autoSellIncludeL)}
                 onChange={(e) => handleChange('autoSellIncludeL', e.target.checked)}
               />
               <span>Inclure doublons [L]</span>

@@ -278,7 +278,7 @@ export function evaluateDuplicate(
     verdict === 'VENDRE' &&
     !isPinned &&
     spare > 0 &&
-    (rarity !== 'L' || settings?.autoSellIncludeL !== false) &&
+    (rarity !== 'L' || Boolean(settings?.autoSellIncludeL)) &&
     (rarity !== 'M' || Boolean(settings?.autoSellIncludeM));
 
   const hourlyExpectedChakra = Math.round(((netProceeds * ((saleProb.p12h || 0) / 100)) / 12) * 100) / 100;

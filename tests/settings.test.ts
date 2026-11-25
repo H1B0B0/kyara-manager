@@ -26,13 +26,15 @@ describe('settings migrations', () => {
     const result = evaluateDuplicate({ id: 1, rarity: 'L' }, { qty: 3 }, { median7d: 110, median30d: 100, sales7d: 20 });
     expect(result.isSurging).toBe(false);
   });
-  it('normalizes autoSellIncludeL (default true) and autoSellIncludeM (default false)', () => {
+  it('normalizes autoSellIncludeL (opt-in, default false) and autoSellIncludeM (opt-in, default false)', () => {
     const defaults = normalizeSettings({});
-    expect(defaults.autoSellIncludeL).toBe(true);
+    expect(defaults.autoSellIncludeL).toBe(false);
     expect(defaults.autoSellIncludeM).toBe(false);
-    const custom = normalizeSettings({ autoSellIncludeL: false, autoSellIncludeM: true });
-    expect(custom.autoSellIncludeL).toBe(false);
+    const custom = normalizeSettings({ autoSellIncludeL: true, autoSellIncludeM: true });
+    expect(custom.autoSellIncludeL).toBe(true);
     expect(custom.autoSellIncludeM).toBe(true);
+    const legacyUnset = normalizeSettings({ autoSellIncludeL: undefined });
+    expect(legacyUnset.autoSellIncludeL).toBe(false);
   });
   it('disables real automation if persisted settings cannot be read', async () => {
     vi.stubGlobal('chrome', { storage: { local: { get: async () => { throw new Error('storage unavailable'); } } } });

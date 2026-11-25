@@ -173,4 +173,41 @@ describe('auto-sell', () => {
     expect(res2.listedCount).toBe(0);
     expect(posts('/market/listings')).toHaveLength(1);
   });
+
+  it('Issue #3: never lists or reprices Legendary [L] or Mythic [M] duplicates unless explicitly opted in', async () => {
+    marketApi(180);
+    const { buildCardLedger, executeAutoSell } = await setup({ autoSellIncludeL: false, autoSellIncludeM: false });
+    const leg = card(701, {
+      name: 'Akame',
+      rarity: 'L',
+      verdict: 'VENDRE',
+      canAutoSell: false,
+      referenceMedian: 180,
+      prices: { recommended: 179, minSafe: 126 }
+    });
+    const myth = card(702, {
+      name: 'Mythic',
+      rarity: 'M',
+      verdict: 'VENDRE',
+      canAutoSell: false,
+      referenceMedian: 750,
+      prices: { recommended: 749, minSafe: 525 }
+    });
+    const staleLeg = {
+      id: 'L-manual-akame',
+      status: 'active',
+      characterId: 701,
+      character: { id: 701, rarity: 'L' },
+      price: 200,
+      createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString()
+    };
+    const res = await executeAutoSell(
+      { duplicates: [leg, myth] },
+      buildCardLedger(entries(701, 702), [staleLeg], []),
+      { mode: 'fast' }
+    );
+    expect(res.repriced).toBe(0);
+    expect(res.listedCount).toBe(0);
+    expect(posts()).toHaveLength(0);
+  });
 });

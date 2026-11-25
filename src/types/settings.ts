@@ -142,7 +142,7 @@ export const DEFAULT_SETTINGS: KyaraSettings = {
   autoBuyFlipEnabled: false,
   autoBuyMissingEnabled: false,
   autoBuyMinChakraReserve: 200,
-  autoSellIncludeL: true,
+  autoSellIncludeL: false,
   autoSellIncludeM: false,
   autoClaimMissionsEnabled: true,
   autoClaimMissions: true,
@@ -240,7 +240,7 @@ export function normalizeSettings(raw: Partial<KyaraSettings> = {}): KyaraSettin
   settings.batchBuyDefaultMaxPrice = mergedMaxPrices;
   settings.autoOpenGoldenSniper = raw.autoOpenGoldenSniper !== false;
   settings.autoOpenUseBonusPacks = Boolean(raw.autoOpenUseBonusPacks ?? false);
-  settings.autoSellIncludeL = raw.autoSellIncludeL !== false;
+  settings.autoSellIncludeL = Boolean(raw.autoSellIncludeL ?? false);
   settings.autoSellIncludeM = Boolean(raw.autoSellIncludeM ?? false);
   settings.autoGamesEnabled = raw.autoGamesEnabled !== false;
   settings.autoGamesDailyEnabled = raw.autoGamesDailyEnabled !== false;

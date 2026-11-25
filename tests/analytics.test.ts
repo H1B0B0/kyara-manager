@@ -63,6 +63,46 @@ describe('Kyara Manager Analytics (TypeScript)', () => {
     expect(res.verdict).toBe('VENDRE');
   });
 
+  it('Issue #3: keeps Legendary [L] and Mythic [M] duplicates opt-in for auto-sell (false by default)', () => {
+    const legDefault = Analytics.evaluateDuplicate(
+      { id: 701, name: 'Akame', rarity: 'L' },
+      { characterId: 701, qty: 2, locked: 0 },
+      { median7d: 180, lowestFixed: 175, sales7d: 10 },
+      Analytics.DEFAULT_RECYCLE_VALUES,
+      { ...DEFAULT_SETTINGS }
+    );
+    expect(legDefault.verdict).toBe('VENDRE');
+    expect(legDefault.canAutoSell).toBe(false);
+
+    const legUndefined = Analytics.evaluateDuplicate(
+      { id: 701, name: 'Akame', rarity: 'L' },
+      { characterId: 701, qty: 2, locked: 0 },
+      { median7d: 180, lowestFixed: 175, sales7d: 10 },
+      Analytics.DEFAULT_RECYCLE_VALUES,
+      { ...DEFAULT_SETTINGS, autoSellIncludeL: undefined }
+    );
+    expect(legUndefined.canAutoSell).toBe(false);
+
+    const legOptIn = Analytics.evaluateDuplicate(
+      { id: 701, name: 'Akame', rarity: 'L' },
+      { characterId: 701, qty: 2, locked: 0 },
+      { median7d: 180, lowestFixed: 175, sales7d: 10 },
+      Analytics.DEFAULT_RECYCLE_VALUES,
+      { ...DEFAULT_SETTINGS, autoSellIncludeL: true }
+    );
+    expect(legOptIn.canAutoSell).toBe(true);
+
+    const mythDefault = Analytics.evaluateDuplicate(
+      { id: 702, name: 'Mythic', rarity: 'M' },
+      { characterId: 702, qty: 2, locked: 0 },
+      { median7d: 750, lowestFixed: 740, sales7d: 6 },
+      Analytics.DEFAULT_RECYCLE_VALUES,
+      { ...DEFAULT_SETTINGS }
+    );
+    expect(mythDefault.verdict).toBe('VENDRE');
+    expect(mythDefault.canAutoSell).toBe(false);
+  });
+
   it('Market deal evaluation identifies profitable flip after 5% + 2% fees', () => {
     const deal = Analytics.evaluateDeal(
       {

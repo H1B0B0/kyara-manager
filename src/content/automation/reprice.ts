@@ -74,7 +74,7 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
     const rarity = listing.character?.rarity || listing.rarity || dupById.get(characterId)?.rarity;
     const createdMs = Date.parse(listing.createdAt || '');
     if (!Number.isFinite(createdMs) || pinned.has(characterId)) continue;
-    if ((rarity === 'M' && !settings.autoSellIncludeM) || (rarity === 'L' && settings.autoSellIncludeL === false)) continue;
+    if ((rarity === 'M' && !settings.autoSellIncludeM) || (rarity === 'L' && !settings.autoSellIncludeL)) continue;
 
     const dup = dupById.get(characterId);
     const profile = dup?.sellProfile ?? resolveSellProfile(settings, Number(listing.price) || null);
