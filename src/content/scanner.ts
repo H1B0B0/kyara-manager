@@ -12,6 +12,79 @@ const MARKET_PRICE_NEG_CACHE_TTL_MS = 5 * 60 * 1000;
 let previousTradesCount = 0;
 let lastScannedListingsCount = 0;
 
+function pickNum(allowZero: boolean, ...vals: unknown[]): number | null {
+  for (const v of vals) {
+    if (v === null || v === undefined || v === '' || typeof v === 'boolean') continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && (allowZero ? n >= 0 : n > 0)) return n;
+  }
+  return null;
+}
+
+/**
+ * Hydrates `runtimeCache.collectionPrices` from inline listing price payloads (`item.prices`,
+ * `item`, `item.character`) and returns the set of character IDs that still require bulk lookup.
+ */
+export function hydrateInlineListingPrices(combined: any[], now = Date.now()): Set<number> {
+  const missingPriceIds = new Set<number>();
+  for (const item of combined) {
+    const charId = Number(item?.character?.id ?? item?.characterId);
+    if (!Number.isFinite(charId) || charId <= 0) continue;
+
+    const cached = runtimeCache.collectionPrices.get(charId);
+    const pricesObj =
+      item?.prices && typeof item.prices === 'object' && !Array.isArray(item.prices)
+        ? item.prices
+        : null;
+    const inlineM7 = pickNum(false, pricesObj?.median7d, item?.median7d, item?.character?.median7d);
+    const inlineM30 = pickNum(false, pricesObj?.median30d, item?.median30d, item?.character?.median30d);
+    const inlineLast = pickNum(false, pricesObj?.lastPrice, item?.lastPrice, item?.character?.lastPrice);
+    const inlineS7 = pickNum(true, pricesObj?.sales7d, item?.sales7d, item?.character?.sales7d);
+    const inlineS30 = pickNum(true, pricesObj?.sales30d, item?.sales30d, item?.character?.sales30d);
+    const inlineLowest = pickNum(false, pricesObj?.lowestFixed, pricesObj?.lowestPrice, item?.lowestFixed, item?.character?.lowestFixed);
+
+    const isPositiveCached = Boolean(cached && Number(cached.median7d) > 0);
+    const isPosExpired = !cached || now - Number(cached.at || 0) > PRICES_TTL_MS;
+    const shouldRefresh = !cached || isPosExpired || !isPositiveCached;
+
+    const hasInline = Boolean(pricesObj) || inlineM7 !== null || inlineM30 !== null || inlineLast !== null;
+    if (hasInline && shouldRefresh) {
+      const cachedFresh = Boolean(cached && now - Number(cached.at || 0) <= PRICES_TTL_MS);
+      const hasFreshInlineTs = Boolean(pricesObj) || inlineM7 !== null || inlineM30 !== null;
+      runtimeCache.collectionPrices.set(charId, {
+        ...cached,
+        median7d: inlineM7 ?? (cachedFresh && isPositiveCached ? cached!.median7d : null),
+        median30d: inlineM30 ?? (cachedFresh ? (cached?.median30d ?? null) : null),
+        lastPrice: inlineLast ?? (cachedFresh ? (cached?.lastPrice ?? null) : null),
+        sales7d: inlineS7 ?? (cachedFresh ? (cached?.sales7d ?? 0) : 0),
+        sales30d: inlineS30 ?? (cachedFresh ? (cached?.sales30d ?? null) : null),
+        lowestFixed: inlineLowest ?? cached?.lowestFixed ?? null,
+        at: hasFreshInlineTs ? now : (cached?.at ?? 0),
+        source: pricesObj || inlineM7 !== null ? 'listing' : cached?.source,
+        ...(hasFreshInlineTs ? { _marketPriceAt: now } : {})
+      });
+    }
+    if (pricesObj || inlineM7 !== null) {
+      missingPriceIds.delete(charId);
+      continue;
+    }
+
+    if (!cached) {
+      missingPriceIds.add(charId);
+    } else if (isPositiveCached) {
+      if (now - Number(cached.at || 0) > PRICES_TTL_MS) {
+        missingPriceIds.add(charId);
+      }
+    } else {
+      const negTs = Math.max(Number(cached.at || 0), Number(cached._marketPriceAt || 0));
+      if (!negTs || now - negTs > MARKET_PRICE_NEG_CACHE_TTL_MS) {
+        missingPriceIds.add(charId);
+      }
+    }
+  }
+  return missingPriceIds;
+}
+
 export function getLastScannedListingsCount(): number {
   return lastScannedListingsCount;
 }
@@ -116,30 +189,7 @@ export async function scanMarketDealsInternal(
   lastScannedListingsCount = combined.length;
 
   // Hydrate inline & collection prices first, then probe /market/prices/:id for unowned cards
-  const now = Date.now();
-  const missingPriceIds = new Set<number>();
-  for (const item of combined) {
-    const charId = Number(item.character?.id ?? item.characterId);
-    if (!Number.isFinite(charId) || charId <= 0) continue;
-    const cached = runtimeCache.collectionPrices.get(charId);
-    const inlineMedian = Number(item.median7d ?? item.prices?.median7d ?? item.character?.median7d);
-    if (Number.isFinite(inlineMedian) && inlineMedian > 0 && !(cached && Number(cached.median7d) > 0)) {
-      const inlineM30 = Number(item.median30d ?? item.prices?.median30d ?? item.character?.median30d);
-      const inlineS7 = Number(item.sales7d ?? item.prices?.sales7d ?? item.character?.sales7d);
-      const inlineS30 = Number(item.sales30d ?? item.prices?.sales30d ?? item.character?.sales30d);
-      runtimeCache.collectionPrices.set(charId, {
-        median7d: inlineMedian,
-        median30d: Number.isFinite(inlineM30) && inlineM30 > 0 ? inlineM30 : null,
-        sales7d: Number.isFinite(inlineS7) && inlineS7 >= 0 ? inlineS7 : 0,
-        sales30d: Number.isFinite(inlineS30) && inlineS30 >= 0 ? inlineS30 : null,
-        at: now
-      });
-      continue;
-    }
-    if (!cached) {
-      missingPriceIds.add(charId);
-    }
-  }
+  const missingPriceIds = hydrateInlineListingPrices(combined, Date.now());
   if (missingPriceIds.size > 0) {
     await ensureCollectionPrices(Array.from(missingPriceIds), false);
   }

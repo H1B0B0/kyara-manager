@@ -29,8 +29,12 @@ export interface PriceInfo {
   median30d: number | null;
   sales7d: number | null;
   sales30d: number | null;
+  lastPrice?: number | null;
+  lowestFixed?: number | null;
+  source?: string;
   at: number;
   _marketPriceAt?: number;
+  _fpAt?: number;
 }
 
 export interface RuntimeCache {

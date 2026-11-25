@@ -4,7 +4,7 @@ import { DEFAULT_SETTINGS, normalizeSettings } from '../src/types/settings';
 import { computeRenaissanceSummary } from '../src/lib/analytics/renaissance';
 import { computeRecyclableCopies, computeSpareCopies } from '../src/lib/analytics/fees';
 import { state } from '../src/content/state';
-import { runtimeCache } from '../src/content/cache';
+import { PRICES_TTL_MS, runtimeCache } from '../src/content/cache';
 import { scanMarketDealsInternal, scanProfitableTrades } from '../src/content/scanner';
 import { executeAutoBuy } from '../src/content/automation/auto-buy';
 import { runMarketWatchTick } from '../src/content/automation/market-watcher';
@@ -715,5 +715,123 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
       isWishlistMatch: true,
       autoBuyWish: true
     });
+  });
+
+  it('Test 18: scanMarketDealsInternal hydrates runtimeCache.collectionPrices from item.prices (including null median7d/median30d and median7d=0 mask) without calling price endpoints', async () => {
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            {
+              id: 'l-masked-zero',
+              status: 'active',
+              type: 'fixed',
+              price: 20,
+              median7d: 0,
+              prices: { median7d: 50, median30d: 45, lastPrice: 48, sales7d: 4 },
+              character: { id: 7201, name: 'Masked Zero', rarity: 'E' }
+            },
+            {
+              id: 'l-m30-inline',
+              status: 'active',
+              type: 'fixed',
+              price: 8,
+              prices: { median7d: null, median30d: 18, lastPrice: 15, sales7d: 0 },
+              character: { id: 7202, name: 'Inline M30', rarity: 'R' }
+            },
+            {
+              id: 'l-null-inline',
+              status: 'active',
+              type: 'fixed',
+              price: 10,
+              prices: { median7d: null, median30d: null, sales7d: 0 },
+              character: { id: 7203, name: 'Inline Null', rarity: 'R' }
+            }
+          ]
+        };
+      }
+      throw new Error(`Unexpected API call: ${path}`);
+    });
+
+    const deals = await scanMarketDealsInternal(new Set(), new Map(), 1000);
+    const calledPaths = mocks.api.mock.calls.map(([p]) => String(p));
+    expect(calledPaths.some((p) => p.includes('/me/collection/prices'))).toBe(false);
+    expect(calledPaths.some((p) => p.includes('/fair-play/prices'))).toBe(false);
+    expect(calledPaths.some((p) => p.includes('/market/prices/'))).toBe(false);
+
+    expect(runtimeCache.collectionPrices.get(7201)).toMatchObject({
+      median7d: 50,
+      median30d: 45,
+      lastPrice: 48,
+      sales7d: 4,
+      source: 'listing'
+    });
+    expect(runtimeCache.collectionPrices.get(7202)).toMatchObject({
+      median7d: null,
+      median30d: 18,
+      lastPrice: 15,
+      sales7d: 0,
+      source: 'listing'
+    });
+    expect(runtimeCache.collectionPrices.get(7203)).toMatchObject({
+      median7d: null,
+      median30d: null,
+      source: 'listing'
+    });
+    expect(runtimeCache.collectionPrices.get(7203)?._marketPriceAt).toBeTypeOf('number');
+
+    expect(deals.find((d) => d.characterId === 7201)).toMatchObject({ refMedian: 50, discountPct: 60 });
+    expect(deals.find((d) => d.characterId === 7202)).toMatchObject({ refMedian: 18, discountPct: 56 });
+  });
+
+  it('Test 19: scanMarketDealsInternal refreshes expired (> PRICES_TTL_MS) cache from item.prices while preserving _fpAt and lowestFixed without calling /market/prices/:id', async () => {
+    const expiredAt = Date.now() - PRICES_TTL_MS - 60_000;
+    runtimeCache.collectionPrices.set(7301, {
+      median7d: 30,
+      median30d: 28,
+      sales7d: 2,
+      sales30d: 5,
+      lowestFixed: 25,
+      _fpAt: 123456,
+      at: expiredAt
+    });
+
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            {
+              id: 'l-refresh-7301',
+              status: 'active',
+              type: 'fixed',
+              price: 20,
+              prices: { median7d: 60, median30d: 55, lastPrice: 58, sales7d: 8, sales30d: 20 },
+              character: { id: 7301, name: 'Refreshed Card', rarity: 'E' }
+            }
+          ]
+        };
+      }
+      throw new Error(`Unexpected API call: ${path}`);
+    });
+
+    const deals = await scanMarketDealsInternal(new Set(), new Map(), 1000);
+    const calledPaths = mocks.api.mock.calls.map(([p]) => String(p));
+    expect(calledPaths.some((p) => p.includes('/me/collection/prices'))).toBe(false);
+    expect(calledPaths.some((p) => p.includes('/fair-play/prices'))).toBe(false);
+    expect(calledPaths.some((p) => p.includes('/market/prices/'))).toBe(false);
+
+    const entry = runtimeCache.collectionPrices.get(7301);
+    expect(entry).toMatchObject({
+      median7d: 60,
+      median30d: 55,
+      lastPrice: 58,
+      sales7d: 8,
+      sales30d: 20,
+      lowestFixed: 25,
+      _fpAt: 123456,
+      source: 'listing'
+    });
+    expect(Number(entry?.at)).toBeGreaterThan(expiredAt);
+    expect(deals[0]).toMatchObject({ characterId: 7301, refMedian: 60, discountPct: 67 });
   });
 });

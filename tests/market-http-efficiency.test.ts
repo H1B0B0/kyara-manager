@@ -183,4 +183,73 @@ describe('market HTTP efficiency', () => {
       expect(res.stoppedReason).toBe(`fatal:${errorCode}`);
     }
   );
+
+  it('batch-buy hydrates from inline item.prices without calling /me/collection/prices, /fair-play/prices, or /market/prices/:id', async () => {
+    const { previewBatchMissingBuy } = await import('../src/content/automation/batch-buy');
+    const { runtimeCache } = await import('../src/content/cache');
+    runtimeCache.collectionPrices.clear();
+
+    mocks.api.mockImplementation(async (path: string) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            {
+              id: 'l-inline-m7',
+              status: 'active',
+              price: 4,
+              prices: { median7d: 14, median30d: 12, lastPrice: 13, sales7d: 5 },
+              character: { id: 301, name: 'Inline M7', rarity: 'R' }
+            },
+            {
+              id: 'l-inline-m30',
+              status: 'active',
+              price: 5,
+              prices: { median7d: null, median30d: 18, lastPrice: 15, sales7d: 0 },
+              character: { id: 302, name: 'Inline M30', rarity: 'R' }
+            },
+            {
+              id: 'l-inline-null',
+              status: 'active',
+              price: 6,
+              prices: { median7d: null, median30d: null, sales7d: 0 },
+              character: { id: 303, name: 'Inline Null', rarity: 'R' }
+            },
+            {
+              id: 'l-no-prices',
+              status: 'active',
+              price: 7,
+              character: { id: 304, name: 'No Inline', rarity: 'R' }
+            }
+          ]
+        };
+      }
+      if (path === '/me/collection/prices?ids=304') {
+        return [{ characterId: 304, median7d: 16, sales7d: 2 }];
+      }
+      return { items: [] };
+    });
+
+    const preview = await previewBatchMissingBuy({ rarity: 'R', maxUnitPrice: 10, qty: 10 });
+    expect(preview.items.map((i) => i.characterId)).toEqual([301, 302, 303, 304]);
+    expect(preview.items[0].median7d).toBe(14);
+    expect(preview.items[1].median7d).toBeNull();
+    expect(preview.items[3].median7d).toBe(16);
+
+    const calledPaths = mocks.api.mock.calls.map(([p]) => String(p));
+    expect(calledPaths.filter((p) => p.includes('/me/collection/prices'))).toEqual(['/me/collection/prices?ids=304']);
+    expect(calledPaths.some((p) => p.includes('/fair-play/prices'))).toBe(false);
+    expect(calledPaths.some((p) => p.includes('/market/prices/'))).toBe(false);
+    expect(runtimeCache.collectionPrices.get(302)).toMatchObject({
+      median7d: null,
+      median30d: 18,
+      lastPrice: 15,
+      source: 'listing'
+    });
+    expect(runtimeCache.collectionPrices.get(303)).toMatchObject({
+      median7d: null,
+      median30d: null,
+      source: 'listing'
+    });
+  });
 });

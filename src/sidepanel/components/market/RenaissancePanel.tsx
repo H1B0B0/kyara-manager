@@ -3,6 +3,7 @@ import type { Rarity, RarityProgress, RenaissanceSummary } from '../../../types/
 import type { KyaraSettings } from '../../../types/settings';
 import { RarityPill } from '../common/RarityPill';
 import { sendCommand } from '../../hooks/useDashboard';
+import { OFFICIAL_REBIRTH_1_TARGETS } from '../../../lib/analytics/renaissance';
 
 export interface RenaissancePanelProps {
   renaissance?: RenaissanceSummary;
@@ -14,7 +15,15 @@ export interface RenaissancePanelProps {
 }
 
 const RARITIES: Rarity[] = ['C', 'U', 'R', 'E', 'L', 'M'];
-const OFFICIAL_TARGETS: Record<Rarity, number> = { C: 1432, U: 1432, R: 1432, E: 505, L: 70, M: 10 };
+
+function resolveDisplayTarget(r: Rarity, base: RarityProgress | undefined, explicit: number | undefined): number {
+  const total = base?.total ?? 0;
+  if (typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0) {
+    const floored = Math.floor(explicit);
+    return total > 0 ? Math.min(total, floored) : floored;
+  }
+  return base?.target ?? OFFICIAL_REBIRTH_1_TARGETS[r];
+}
 
 const ChevronIcon: React.FC<{ open: boolean }> = ({ open }) => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.18s ease' }}>
@@ -53,12 +62,10 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
   useEffect(() => {
     const next: Record<Rarity, string> = { C: '', U: '', R: '', E: '', L: '', M: '' };
     for (const r of RARITIES) {
-      const explicit = settings.renaissanceTargets?.[r];
-      const val = typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0 ? Math.floor(explicit) : OFFICIAL_TARGETS[r];
-      next[r] = String(val);
+      next[r] = String(resolveDisplayTarget(r, renaissance?.byRarity?.[r], settings.renaissanceTargets?.[r]));
     }
     setDraftTargets(next);
-  }, [settings.renaissanceTargets]);
+  }, [settings.renaissanceTargets, renaissance?.byRarity]);
 
   useEffect(() => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return;
@@ -106,10 +113,7 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
     const base = renaissance?.byRarity?.[r];
     const owned = base?.owned ?? 0;
     const total = base?.total ?? 0;
-    const explicit = settings.renaissanceTargets?.[r];
-    const target = typeof explicit === 'number' && Number.isFinite(explicit) && explicit >= 0
-      ? Math.floor(explicit)
-      : OFFICIAL_TARGETS[r];
+    const target = resolveDisplayTarget(r, base, settings.renaissanceTargets?.[r]);
     const remainingForTarget = Math.max(0, target - owned);
     const targetPct = target > 0 ? Math.min(100, Math.round((owned / target) * 100)) : 100;
     return {

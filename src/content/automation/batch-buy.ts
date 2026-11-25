@@ -1,7 +1,8 @@
 import { kyaraApi } from '../api';
-import { ensureCollectionPrices, ensureFairPlayPrices, runtimeCache } from '../cache';
+import { ensureCollectionPrices, runtimeCache } from '../cache';
 import { appendJournal } from '../journal';
 import { isInterrupted } from '../safety';
+import { hydrateInlineListingPrices } from '../scanner';
 import { state } from '../state';
 import { fulfilled, mapLimit } from '../../lib/concurrency';
 import { OFFICIAL_REBIRTH_1_TARGETS } from '../../lib/analytics/renaissance';
@@ -58,21 +59,24 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
   const { qty, maxUnitPrice, maxTotalBudget } = clampParams(req);
   const ownedSet = buildOwnedSet(await kyaraApi('/me/collection?lean=1'));
   const now = Date.now();
+  const scannedListings: any[] = [];
   let uniqueMissing: BatchMissingPreviewItem[] = [];
 
   if (Array.isArray(req.characterIds) && req.characterIds.length > 0) {
     const missingTargetIds = Array.from(
       new Set(req.characterIds.map(Number).filter((id) => Number.isFinite(id) && id > 0 && !ownedSet.has(id)))
     );
-    const settled = await mapLimit(missingTargetIds, 5, async (id): Promise<BatchMissingPreviewItem | null> => {
+    const settled = await mapLimit(missingTargetIds, 5, async (id) => {
       const res = await kyaraApi(`/market/listings?characterId=${id}&type=fixed&sort=price_asc&pageSize=3`, { auth: true }).catch(() => ({ items: [] }));
       const items = Array.isArray(res?.items) ? res.items : [];
       let best: BatchMissingPreviewItem | null = null;
+      const matched: any[] = [];
       for (const item of items) {
         const price = Number(item?.price);
         if (!item?.id || item.status !== 'active' || item.isMine) continue;
         if (item.endsAt && Date.parse(item.endsAt) <= now) continue;
         if (!Number.isFinite(price) || price <= 0 || price > maxUnitPrice) continue;
+        matched.push(item);
         const char = item.character || {};
         const rarity: Rarity = VALID_RARITIES.has(char.rarity) ? char.rarity : 'C';
         if (!best || price < best.price) {
@@ -87,9 +91,14 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
           };
         }
       }
-      return best;
+      return { best, matched };
     });
-    uniqueMissing = (fulfilled(settled).filter(Boolean) as BatchMissingPreviewItem[]).sort((a, b) => a.price - b.price);
+    const resolved = fulfilled(settled);
+    for (const entry of resolved) scannedListings.push(...entry.matched);
+    uniqueMissing = resolved
+      .map((entry) => entry.best)
+      .filter((b): b is BatchMissingPreviewItem => Boolean(b))
+      .sort((a, b) => a.price - b.price);
   } else {
     const targetRarities = state.currentSettings.renaissanceTargetRarities;
     let configuredFocus: Rarity[] =
@@ -164,6 +173,7 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
         const rarity = (char.rarity || rarityFilter) as Rarity;
         if (!VALID_RARITIES.has(rarity) || !allowedSet.has(rarity)) continue;
         if (!Number.isFinite(characterId) || characterId <= 0 || ownedSet.has(characterId)) continue;
+        scannedListings.push(item);
         rawMatches.push({
           listingId: lid,
           characterId,
@@ -181,6 +191,7 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
     uniqueMissing = rawMatches.filter((item) => !seenCharIds.has(item.characterId) && Boolean(seenCharIds.add(item.characterId)));
   }
 
+  const missingPriceIds = scannedListings.length > 0 ? hydrateInlineListingPrices(scannedListings, now) : new Set<number>();
   const picked: BatchMissingPreviewItem[] = [];
   let runningCost = 0;
   for (const item of uniqueMissing) {
@@ -190,9 +201,10 @@ export async function previewBatchMissingBuy(req: BatchBuyRequest): Promise<Batc
   }
 
   if (picked.length > 0) {
-    const pickedIds = picked.map((p) => p.characterId);
-    await ensureCollectionPrices(pickedIds, false);
-    await ensureFairPlayPrices(pickedIds, false);
+    const missingPickedIds = picked.map((p) => p.characterId).filter((id) => missingPriceIds.has(id));
+    if (missingPickedIds.length > 0) {
+      await ensureCollectionPrices(missingPickedIds, false);
+    }
     for (const item of picked) item.median7d = runtimeCache.collectionPrices.get(item.characterId)?.median7d ?? null;
   }
   const totalCost = picked.reduce((sum, item) => sum + item.price, 0);
