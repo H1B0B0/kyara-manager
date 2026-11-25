@@ -84,14 +84,20 @@ export function evaluateWishlistMatch(
   const listingCharId = Number(listing.character?.id ?? listing.characterId);
   if (wishCharId !== listingCharId) return null;
 
-  const buyPrice =
-    listing.type === 'fixed'
-      ? Number(listing.price)
-      : Number.isFinite(listing.buyoutPrice) && listing.buyoutPrice > 0
-        ? Number(listing.buyoutPrice)
-        : Number(listing.price);
+  const buyout = Number(listing.buyoutPrice);
+  if (listing.type !== 'fixed' && !(buyout > 0)) return null;
 
-  const maxBudget = Number(wishItem.maxBudget || wishItem.budget || wishItem.budgetChakra || Infinity);
+  const buyPrice = listing.type === 'fixed' ? Number(listing.price) : buyout;
+  if (!Number.isFinite(buyPrice) || buyPrice <= 0) return null;
+
+  const rawBudget = [wishItem.maxBudget, wishItem.budget, wishItem.budgetChakra].find(
+    (v) => v !== undefined && v !== null && v !== ''
+  );
+  const parsedBudget =
+    rawBudget !== undefined && typeof rawBudget !== 'boolean' && String(rawBudget).trim() !== ''
+      ? Number(rawBudget)
+      : NaN;
+  const maxBudget = Number.isFinite(parsedBudget) && parsedBudget >= 0 ? parsedBudget : Infinity;
   const isUnderBudget = buyPrice <= maxBudget;
   const canAfford = userChakra >= buyPrice + reserve;
   const savings = maxBudget !== Infinity ? Math.max(0, maxBudget - buyPrice) : 0;

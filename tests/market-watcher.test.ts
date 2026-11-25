@@ -582,4 +582,138 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     expect(skippedRes).toEqual({ ok: true, boughtCount: 0, dealsFound: 0, skipped: true });
     locks.held.delete('kyara-manager-domain-market-buy');
   });
+
+  it('Test 16: executeAutoBuy blocks overpriced Renaissance E listings (35/30/16 ◆ when refMedian=12) while buying fair 12 ◆ and high-median 45 ◆ (refMedian=48)', async () => {
+    mockChrome({ kmDashboard: { authenticated: true, me: { chakra: 1000 } } });
+    state.currentSettings = normalizeSettings({
+      masterEnabled: true,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['E'],
+      autoBuyMissingEnabled: false,
+      autoBuyMinChakraReserve: 100
+    });
+
+    const bought: string[] = [];
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') return [];
+      if (path === '/me/bootstrap') return { me: { chakra: 1000 } };
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-over-35', status: 'active', type: 'fixed', price: 35, character: { id: 8501, name: 'Overpriced 35', rarity: 'E' } },
+            { id: 'l-over-30', status: 'active', type: 'fixed', price: 30, character: { id: 8502, name: 'Overpriced 30', rarity: 'E' } },
+            { id: 'l-over-16', status: 'active', type: 'fixed', price: 16, character: { id: 8505, name: 'Overpriced 16', rarity: 'E' } },
+            { id: 'l-fair-12', status: 'active', type: 'fixed', price: 12, character: { id: 8503, name: 'Fair 12', rarity: 'E' } },
+            { id: 'l-high-45', status: 'active', type: 'fixed', price: 45, character: { id: 8504, name: 'High Median 45', rarity: 'E' } }
+          ]
+        };
+      }
+      if (path.startsWith('/me/collection/prices')) {
+        return [
+          { characterId: 8501, median7d: 12, sales7d: 5 },
+          { characterId: 8502, median7d: 12, sales7d: 5 },
+          { characterId: 8503, median7d: 12, sales7d: 5 },
+          { characterId: 8504, median7d: 48, sales7d: 5 },
+          { characterId: 8505, median7d: 12, sales7d: 5 }
+        ];
+      }
+      if (path === '/market/listings/l-fair-12') return { id: 'l-fair-12', status: 'active', type: 'fixed', price: 12 };
+      if (path === '/market/listings/l-high-45') return { id: 'l-high-45', status: 'active', type: 'fixed', price: 45 };
+      if (path.endsWith('/buy') && opts.method === 'POST') {
+        bought.push(path);
+        return { user: { chakra: 950 } };
+      }
+      return {};
+    });
+
+    const res = await executeAutoBuy({ me: { chakra: 1000 } });
+    expect(res.boughtCount).toBe(2);
+    expect(bought).toEqual(['/market/listings/l-fair-12/buy', '/market/listings/l-high-45/buy']);
+  });
+
+  it('Test 17: scanMarketDealsInternal queries per-character wishlist listings (capped at 20 unowned), handles nullish API mocks, and surfaces cards outside global top-50', async () => {
+    state.currentSettings = normalizeSettings({
+      wishlistAutoBuyEnabled: true,
+      autoBuyMinChakraReserve: 100
+    });
+
+    const globalItems = Array.from({ length: 50 }, (_, idx) => ({
+      id: `g-${idx + 1}`,
+      status: 'active',
+      type: 'fixed',
+      price: 20 + idx,
+      character: { id: 2000 + idx, name: `Global ${idx + 1}`, rarity: 'E' }
+    }));
+
+    const wishlistMap = new Map<number, any>();
+    // Already-owned card must be skipped from targeted wishlist queries
+    wishlistMap.set(1, { characterId: 1, name: 'Owned Wish', rarity: 'E', budgetChakra: 50, autoBuy: true });
+    wishlistMap.set(9501, { characterId: 9501, name: 'Off-Top50 Wish', rarity: 'E', budgetChakra: 45, autoBuy: true });
+    for (let i = 0; i < 24; i += 1) {
+      const cid = 9600 + i;
+      wishlistMap.set(cid, { characterId: cid, name: `Extra Wish ${i}`, rarity: 'E', budgetChakra: 50 });
+    }
+
+    let wishInFlight = 0;
+    let wishMaxInFlight = 0;
+    mocks.api.mockImplementation((path: string) => {
+      if (path === '/market/listings?characterId=9501&type=fixed&sort=price_asc&pageSize=3') {
+        return (async () => {
+          wishInFlight += 1;
+          wishMaxInFlight = Math.max(wishMaxInFlight, wishInFlight);
+          await new Promise((r) => setTimeout(r, 2));
+          wishInFlight -= 1;
+          return {
+            items: [
+              { id: 'w-9501', status: 'active', type: 'fixed', price: 40, character: { id: 9501, name: 'Off-Top50 Wish', rarity: 'E' } }
+            ]
+          };
+        })();
+      }
+      if (path.startsWith('/market/listings?characterId=')) {
+        if (path.includes('characterId=9600')) {
+          return (async () => {
+            wishInFlight += 1;
+            wishMaxInFlight = Math.max(wishMaxInFlight, wishInFlight);
+            await new Promise((r) => setTimeout(r, 2));
+            wishInFlight -= 1;
+            return null as any;
+          })();
+        }
+        if (path.includes('characterId=9601') || path.includes('characterId=9602') || path.includes('characterId=9603') || path.includes('characterId=9604')) {
+          return (async () => {
+            wishInFlight += 1;
+            wishMaxInFlight = Math.max(wishMaxInFlight, wishInFlight);
+            await new Promise((r) => setTimeout(r, 2));
+            wishInFlight -= 1;
+            return { items: [] };
+          })();
+        }
+        // Deliberately return raw undefined (non-Promise) to verify nullish mock resilience
+        return undefined as any;
+      }
+      if (path.startsWith('/market/listings?')) {
+        return Promise.resolve({ items: globalItems });
+      }
+      if (path.startsWith('/me/collection/prices')) return Promise.resolve([]);
+      return Promise.resolve({});
+    });
+
+    const deals = await scanMarketDealsInternal(new Set([1]), wishlistMap, 1000);
+    const wishQueries = mocks.api.mock.calls
+      .map(([p]) => String(p))
+      .filter((p) => p.includes('/market/listings?characterId='));
+
+    expect(wishQueries).toHaveLength(20);
+    expect(wishMaxInFlight).toBeLessThanOrEqual(4);
+    expect(wishQueries).toContain('/market/listings?characterId=9501&type=fixed&sort=price_asc&pageSize=3');
+    expect(wishQueries).not.toContain('/market/listings?characterId=1&type=fixed&sort=price_asc&pageSize=3');
+    expect(deals[0]).toMatchObject({
+      listingId: 'w-9501',
+      characterId: 9501,
+      buyPrice: 40,
+      isWishlistMatch: true,
+      autoBuyWish: true
+    });
+  });
 });

@@ -6,6 +6,7 @@ import { isInterrupted } from '../safety';
 import { notifyDesktop } from '../utils';
 import { getLastScannedListingsCount, scanMarketDealsInternal } from '../scanner';
 import { evaluateDeal } from '../../lib/analytics/deals';
+import { RARITY_PRICE_FLOORS } from '../../lib/analytics/constants';
 import { OFFICIAL_REBIRTH_1_TARGETS } from '../../lib/analytics/renaissance';
 import type { MarketWatchTelemetry, Rarity } from '../../types/kyara';
 
@@ -113,11 +114,22 @@ export async function executeAutoBuy(
       Number.isFinite(configured) && configured > 0
         ? configured
         : Number(s.autoBuyMissingMaxPrice) || DEFAULT_REN_MAX_PRICE[rarity] || 25;
-    if (refMedian && Number.isFinite(refMedian) && refMedian > baseCap) {
-      return Math.min(Math.round(baseCap * 1.6), Math.round(refMedian));
+    if (refMedian != null && Number.isFinite(refMedian) && refMedian > 0) {
+      if (refMedian > baseCap) {
+        return Math.min(Math.round(baseCap * 1.6), Math.round(refMedian));
+      }
+      if (refMedian < baseCap) {
+        return Math.min(
+          baseCap,
+          Math.max((RARITY_PRICE_FLOORS[rarity] || 3) + 2, Math.round(refMedian * 1.15))
+        );
+      }
     }
     return baseCap;
   };
+  const isWithinRenCap = (rarity: Rarity, deal: any): boolean =>
+    (deal.refMedian == null || deal.discountPct >= -15) &&
+    deal.buyPrice <= getRenMaxPrice(rarity, deal.refMedian);
 
   // Deep scan fallback: when the player already owns ~90%+ of a rarity (e.g. 487/505 Epics),
   // pages 1-2 of price_asc often contain only already-owned cards. Walk pages 3-5 to find unowned ones.
@@ -125,10 +137,7 @@ export async function executeAutoBuy(
     const existingIds = new Set<string>(deals.map((d: any) => String(d.listingId)));
     for (const r of activeFocusRarities) {
       const hasBuyableForRarity = deals.some(
-        (d: any) =>
-          d.rarity === r &&
-          !ownedSet.has(d.characterId) &&
-          d.buyPrice <= getRenMaxPrice(r, d.refMedian)
+        (d: any) => d.rarity === r && !ownedSet.has(d.characterId) && isWithinRenCap(r, d)
       );
       if (hasBuyableForRarity) continue;
       const capPrice = getRenMaxPrice(r, null);
@@ -148,7 +157,7 @@ export async function executeAutoBuy(
           const cid = Number(item.character?.id ?? item.characterId);
           if (!Number.isFinite(cid) || cid <= 0 || ownedSet.has(cid)) continue;
           const d: any = evaluateDeal(item, runtimeCache.collectionPrices.get(cid) || {}, ownedSet, evalSettings);
-          if (d && d.isRenaissanceNeed && d.buyPrice <= getRenMaxPrice(r, d.refMedian)) {
+          if (d && d.isRenaissanceNeed && isWithinRenCap(r, d)) {
             existingIds.add(String(item.id));
             deals.push(d);
             foundInPage += 1;
@@ -168,13 +177,12 @@ export async function executeAutoBuy(
     const rarityRemaining = remainingByRarity[rarity];
     const rarityStillNeededForRenaissance = rarityRemaining === undefined || rarityRemaining > 0;
     const shouldBuyFlip = Boolean((s.autoBuyFlipEnabled || s.autoMarketEnabled) && deal.isGoodFlip);
-    const renMaxPrice = getRenMaxPrice(rarity, deal.refMedian);
     const isRenaissanceBuy =
       Boolean(s.renaissanceFocusEnabled) &&
       (Boolean(deal.isRenaissanceNeed) || effectiveFocus.includes(rarity)) &&
       rarityStillNeededForRenaissance &&
       !ownedSet.has(deal.characterId) &&
-      deal.buyPrice <= renMaxPrice;
+      isWithinRenCap(rarity, deal);
     const shouldBuyMissing =
       (Boolean(s.autoBuyMissingEnabled) && !ownedSet.has(deal.characterId) && Boolean(deal.isGoodMissingBuy)) ||
       isRenaissanceBuy;

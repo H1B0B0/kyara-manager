@@ -246,6 +246,64 @@ describe('Kyara Manager Analytics (TypeScript)', () => {
     expect(suggestions[0].series).toBe('Naruto');
   });
 
+  it('evaluateWishlistMatch ignores auctions without buyoutPrice and respects maxBudget: 0', () => {
+    const wish = { characterId: 501, name: 'Zero Budget', budgetChakra: 50, maxBudget: 0, autoBuy: true };
+
+    // Auction without buyoutPrice must return null rather than falling back to listing.price
+    expect(
+      Analytics.evaluateWishlistMatch(
+        { characterId: 501, maxBudget: 100, autoBuy: true },
+        { id: 'auc-1', type: 'auction', price: 10, character: { id: 501 } },
+        1000,
+        0
+      )
+    ).toBeNull();
+    expect(
+      Analytics.evaluateWishlistMatch(
+        { characterId: 501, maxBudget: 100, autoBuy: true },
+        { id: 'auc-0', type: 'auction', price: 10, buyoutPrice: 0, character: { id: 501 } },
+        1000,
+        0
+      )
+    ).toBeNull();
+
+    // Auction with buyoutPrice > 0 uses buyoutPrice
+    const aucMatch = Analytics.evaluateWishlistMatch(
+      { characterId: 501, maxBudget: 30, autoBuy: true },
+      { id: 'auc-ok', type: 'auction', price: 10, buyoutPrice: 25, character: { id: 501 } },
+      1000,
+      0
+    );
+    expect(aucMatch).toMatchObject({ buyPrice: 25, maxBudget: 30, isUnderBudget: true, shouldAutoBuy: true });
+
+    // maxBudget: 0 (or budgetChakra: 0) must stay 0, never coerce to Infinity
+    const zeroMax = Analytics.evaluateWishlistMatch(
+      wish,
+      { id: 'fix-1', type: 'fixed', price: 15, character: { id: 501 } },
+      1000,
+      0
+    );
+    expect(zeroMax).toMatchObject({
+      buyPrice: 15,
+      maxBudget: 0,
+      isUnderBudget: false,
+      savings: 0,
+      shouldAutoBuy: false
+    });
+
+    const zeroChakraField = Analytics.evaluateWishlistMatch(
+      { characterId: 501, budgetChakra: 0, autoBuy: true },
+      { id: 'fix-2', type: 'fixed', price: 5, character: { id: 501 } },
+      1000,
+      0
+    );
+    expect(zeroChakraField).toMatchObject({
+      maxBudget: 0,
+      isUnderBudget: false,
+      shouldAutoBuy: false
+    });
+  });
+
   it('i18n supports French, English, and Spanish dictionaries with parameter substitution', () => {
     i18n.setLanguage('fr');
     expect(i18n.t('tabAutopilot')).toBe('Pilote');

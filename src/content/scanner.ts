@@ -56,19 +56,60 @@ export async function scanMarketDealsInternal(
   }
 
   const pages = await Promise.all(
-    queries.map((q) => kyaraApi(q, { auth: true }).catch(() => ({ items: [] })))
+    queries.map(async (q) => {
+      try {
+        return (await kyaraApi(q, { auth: true })) || { items: [] };
+      } catch {
+        return { items: [] };
+      }
+    })
   );
 
   const seen = new Set<string>();
   const combined: any[] = [];
-  for (const page of pages) {
-    const items = Array.isArray(page?.items) ? page.items : [];
+  const pushUniqueListings = (items: unknown) => {
+    if (!Array.isArray(items)) return;
     for (const item of items) {
       if (!item?.id) continue;
       const idKey = String(item.id);
       if (seen.has(idKey)) continue;
       seen.add(idKey);
       combined.push(item);
+    }
+  };
+  for (const page of pages) {
+    pushUniqueListings(page?.items);
+  }
+
+  if (wishlistMap && wishlistMap.size > 0) {
+    const wishIds: number[] = [];
+    const seenWishIds = new Set<number>();
+    for (const [key, wish] of wishlistMap.entries()) {
+      const cid = Number(wish?.characterId ?? wish?.id ?? key);
+      if (!Number.isFinite(cid) || cid <= 0) continue;
+      if (ownedSet?.has(cid)) continue;
+      if (seenWishIds.has(cid)) continue;
+      seenWishIds.add(cid);
+      wishIds.push(cid);
+      if (wishIds.length >= 20) break;
+    }
+    if (wishIds.length > 0) {
+      const wishResults = await mapLimit(wishIds, 4, async (cid) => {
+        try {
+          const res = await kyaraApi(
+            `/market/listings?characterId=${cid}&type=fixed&sort=price_asc&pageSize=3`,
+            { auth: true }
+          );
+          return Array.isArray(res?.items) ? res.items : [];
+        } catch {
+          return [];
+        }
+      });
+      for (const res of wishResults) {
+        if (res.status === 'fulfilled') {
+          pushUniqueListings(res.value);
+        }
+      }
     }
   }
 
@@ -133,7 +174,12 @@ export async function scanMarketDealsInternal(
   }
   if (stillMissingSet.size > 0) {
     await mapLimit(Array.from(stillMissingSet), 6, async (cid) => {
-      const res = await kyaraApi(`/market/prices/${cid}`, { auth: false }).catch(() => null);
+      let res: any = null;
+      try {
+        res = await kyaraApi(`/market/prices/${cid}`, { auth: false });
+      } catch {
+        res = null;
+      }
       if (!res || typeof res !== 'object') return;
       const fetchedAt = Date.now();
       const existing = runtimeCache.collectionPrices.get(cid);
