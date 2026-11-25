@@ -3,6 +3,7 @@ import { state } from '../state';
 import { appendJournal } from '../journal';
 import { mapLimit } from '../../lib/concurrency';
 import { computeLiveMarketDepth } from '../../lib/analytics/market-depth';
+import { DEFAULT_RECYCLE_VALUES, RARITY_PRICE_FLOORS } from '../../lib/analytics/constants';
 import { nextRepriceCeiling, resolveSellProfile } from '../../lib/analytics/sell-profile';
 import type { CardLedger } from '../safety';
 
@@ -37,6 +38,33 @@ export async function clearRepriceHint(characterId: number): Promise<void> {
 }
 
 const listingCharacterId = (listing: any): number => Number(listing?.character?.id ?? listing?.characterId);
+
+function resolveListingProfile(
+  dup: any,
+  listing: any,
+  settings: RetireInput['settings']
+): ReturnType<typeof resolveSellProfile> {
+  const refPrice = dup?.referenceMedian ?? (Number(listing?.price) || null);
+  const resolved = resolveSellProfile(settings, refPrice);
+  return dup?.sellProfile?.tier === resolved.tier ? dup.sellProfile : resolved;
+}
+
+function resolveListingFloor(
+  dup: any,
+  rarity: string | undefined,
+  profile: ReturnType<typeof resolveSellProfile>
+): number {
+  if (!dup?.sellProfile || dup.sellProfile.tier === profile.tier) {
+    return Number(dup?.prices?.minSafe) || 0;
+  }
+  const refMedian = Number(dup?.referenceMedian) > 0 ? Number(dup.referenceMedian) : 0;
+  const medianFloorPct = Math.max(30, Math.min(100, profile.medianFloorPct));
+  const baseFloor = refMedian ? Math.ceil((refMedian * medianFloorPct) / 100) : 0;
+  const key = (rarity || dup?.rarity || 'C') as keyof typeof DEFAULT_RECYCLE_VALUES;
+  const recycleVal = Number(dup?.recycleValue) || DEFAULT_RECYCLE_VALUES[key] || 1;
+  const rarityFloor = RARITY_PRICE_FLOORS[key] ?? 3;
+  return Math.max(recycleVal + 1, rarityFloor, baseFloor);
+}
 
 interface RetireInput {
   book: CardLedger;
@@ -77,7 +105,7 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
     if ((rarity === 'M' && !settings.autoSellIncludeM) || (rarity === 'L' && !settings.autoSellIncludeL)) continue;
 
     const dup = dupById.get(characterId);
-    const profile = dup?.sellProfile ?? resolveSellProfile(settings, Number(listing.price) || null);
+    const profile = resolveListingProfile(dup, listing, settings);
     const ageMinutes = (now - createdMs) / 60000;
     if (ageMinutes < Math.min(15, profile.staleMinutes)) continue;
 
@@ -95,7 +123,12 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
     return computeLiveMarketDepth(listings?.items).lowestFixed;
   });
 
-  const staleItems: Array<{ listing: any; liveLowest: number | null; isEvicted: boolean }> = [];
+  const staleItems: Array<{
+    listing: any;
+    liveLowest: number | null;
+    isEvicted: boolean;
+    profile: ReturnType<typeof resolveSellProfile>;
+  }> = [];
 
   eligible.forEach(({ listing, characterId, rarity, dup, profile, ageMinutes }, idx) => {
     const res = liveLowestResults[idx];
@@ -109,7 +142,7 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
     if (!isUndercut && !isStale) return;
 
     const canRecycle = profile.recycleStale && settings.autoRecycleEnabled && Boolean(rarity && recycleRarities.includes(rarity));
-    const floor = Number(dup?.prices?.minSafe) || 0;
+    const floor = resolveListingFloor(dup, rarity, profile);
     let isEvicted = false;
 
     // Eliminate the Floor Deadlock
@@ -141,7 +174,7 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
       }
     }
 
-    staleItems.push({ listing, liveLowest, isEvicted });
+    staleItems.push({ listing, liveLowest, isEvicted, profile });
   });
 
   if (!staleItems.length) return { cancelled: 0, chars };
@@ -167,10 +200,8 @@ export async function retireStaleListings({ book, duplicates, hints, settings }:
       failures.push(String(result.reason?.message || result.reason));
       return;
     }
-    const { listing, liveLowest, isEvicted } = result.value;
+    const { listing, liveLowest, isEvicted, profile } = result.value;
     const characterId = listingCharacterId(listing);
-    const dup = dupById.get(characterId);
-    const profile = dup?.sellProfile ?? resolveSellProfile(settings, Number(listing.price) || null);
     book.listingCancelled(listing.id);
     state.previousActiveListings.delete(String(listing.id));
 

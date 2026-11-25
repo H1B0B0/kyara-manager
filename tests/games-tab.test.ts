@@ -277,4 +277,129 @@ describe('dedicated background games tab', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(chrome.tabs.remove).toHaveBeenCalledWith(93);
   });
+
+  it('does not close the dedicated worker tab in onAlarm or storage.onChanged while a manual run is in-flight', async () => {
+    const { chrome } = mockChrome({
+      settings: {
+        masterEnabled: true,
+        autoGamesEnabled: true,
+        autoGamesDedicatedTab: true,
+        autoGamesTargetGame: 'memoire'
+      },
+      kmDashboard: {
+        arcade: { enabled: true, blocked: null, today: 60, dayCap: 60, week: 120, weekCap: 300 }
+      }
+    });
+    const mainTab = { id: 10, url: 'https://kyara.games/collection', active: true, status: 'complete' };
+    const workerTab = { id: 94, url: 'https://kyara.games/jouer', active: false, pinned: true, status: 'complete' };
+    chrome.tabs.query.mockResolvedValue([mainTab]);
+    chrome.tabs.create.mockResolvedValue(workerTab);
+    chrome.tabs.get.mockResolvedValue(workerTab);
+
+    let resolveManualRun!: (val: any) => void;
+    chrome.tabs.sendMessage.mockImplementation(async (_id: number, payload: any) => {
+      if (payload.type === 'km:ping') return { ok: true, version: chrome.runtime.getManifest().version };
+      if (payload.type === 'km:cmd:run-games-farm') {
+        return await new Promise((resolve) => { resolveManualRun = resolve; });
+      }
+      return { ok: true };
+    });
+
+    await import('../src/background/service-worker');
+    const message = (payload: any) => new Promise<any>((resolve) => chrome.runtime.onMessage.emit(payload, {}, resolve));
+
+    const manualPromise = message({ type: 'km:cmd:run-games-farm', gameId: 'memoire' });
+    await new Promise((r) => setTimeout(r, 10));
+
+    // Alarm fires while dashboard arcade is capped (60/60) -> must NOT close tab mid-run
+    await Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+
+    // Settings turn autoGamesEnabled and masterEnabled off via storage.onChanged -> must NOT close tab mid-run
+    await chrome.storage.local.set({
+      settings: {
+        masterEnabled: false,
+        autoGamesEnabled: false,
+        autoGamesDedicatedTab: true
+      }
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    await Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+
+    // Once manual run finishes (even uncapped), deferred close runs cleanly
+    resolveManualRun({ ok: true, arcade: { enabled: true, blocked: null, today: 15, dayCap: 60, week: 45, weekCap: 300 } });
+    const manualRes = await manualPromise;
+    expect(manualRes.ok).toBe(true);
+    expect(chrome.tabs.remove).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(94);
+  });
+
+  it('serializes overlapping alarm and manual runs without closing the tab or clearing in-flight state between them', async () => {
+    const { chrome } = mockChrome({
+      settings: {
+        masterEnabled: true,
+        autoGamesEnabled: true,
+        autoGamesDedicatedTab: true,
+        autoGamesTargetGame: 'memoire'
+      },
+      kmDashboard: {
+        arcade: { enabled: true, blocked: null, today: 58, dayCap: 60, week: 100, weekCap: 300 }
+      }
+    });
+    const mainTab = { id: 10, url: 'https://kyara.games/collection', active: true, status: 'complete' };
+    const workerTab = { id: 95, url: 'https://kyara.games/jouer', active: false, pinned: true, status: 'complete' };
+    chrome.tabs.query.mockResolvedValue([mainTab]);
+    chrome.tabs.create.mockResolvedValue(workerTab);
+    chrome.tabs.get.mockResolvedValue(workerTab);
+
+    let farmCalls = 0;
+    let resolveRun1!: (val: any) => void;
+    let resolveRun2!: (val: any) => void;
+    chrome.tabs.sendMessage.mockImplementation(async (_id: number, payload: any) => {
+      if (payload.type === 'km:ping') return { ok: true, version: chrome.runtime.getManifest().version };
+      if (payload.type === 'km:cmd:run-games-farm') {
+        farmCalls += 1;
+        if (farmCalls === 1) return await new Promise((resolve) => { resolveRun1 = resolve; });
+        return await new Promise((resolve) => { resolveRun2 = resolve; });
+      }
+      return { ok: true };
+    });
+
+    await import('../src/background/service-worker');
+    const message = (payload: any) => new Promise<any>((resolve) => chrome.runtime.onMessage.emit(payload, {}, resolve));
+
+    // Start alarm run (#1)
+    const alarmPromise = Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    await new Promise((r) => setTimeout(r, 10));
+    expect(farmCalls).toBe(1);
+
+    // Queue manual run (#2) while alarm run (#1) is still in-flight
+    const manualPromise = message({ type: 'km:cmd:run-games-farm', gameId: 'expedition' });
+    await new Promise((r) => setTimeout(r, 10));
+    expect(farmCalls).toBe(1);
+
+    // Finish alarm run (#1) with capped arcade -> must NOT close tab or clear session in-flight flag while #2 is queued
+    resolveRun1({ ok: true, arcade: { enabled: true, blocked: null, today: 60, dayCap: 60, week: 102, weekCap: 300 } });
+    await alarmPromise;
+    await new Promise((r) => setTimeout(r, 10));
+
+    expect(farmCalls).toBe(2);
+    expect(chrome.tabs.create).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.remove).not.toHaveBeenCalled();
+    expect(chrome.storage.session.remove).not.toHaveBeenCalledWith('kmWorkerGamesInFlightAt');
+    expect((await chrome.storage.session.get('kmWorkerGamesInFlightAt')).kmWorkerGamesInFlightAt).toBeTypeOf('number');
+
+    // Overlapping alarm while #2 is running must NOT start a 3rd run
+    await Promise.all(chrome.alarms.onAlarm.emit({ name: 'kyara-manager-tick' }));
+    expect(farmCalls).toBe(2);
+
+    // Finish manual run (#2) -> now session flag is cleared and capped worker tab closes
+    resolveRun2({ ok: true, arcade: { enabled: true, blocked: null, today: 60, dayCap: 60, week: 102, weekCap: 300 } });
+    const manualRes = await manualPromise;
+    expect(manualRes.ok).toBe(true);
+    expect(chrome.storage.session.remove).toHaveBeenCalledWith('kmWorkerGamesInFlightAt');
+    expect(chrome.tabs.remove).toHaveBeenCalledTimes(1);
+    expect(chrome.tabs.remove).toHaveBeenCalledWith(95);
+  });
 });

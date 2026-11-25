@@ -210,4 +210,104 @@ describe('auto-sell', () => {
     expect(res.listedCount).toBe(0);
     expect(posts()).toHaveLength(0);
   });
+
+  it('triggers 0 fetchLiveStats GETs for non-sellable L, M, CONSERVER, and ineligible RECYCLER duplicates in fast mode', async () => {
+    marketApi(30);
+    const { buildCardLedger, executeAutoSell } = await setup({
+      autoSellMode: 'adaptive',
+      autoSellIncludeL: false,
+      autoSellIncludeM: false,
+      autoRecycleEnabled: false,
+      speculateHoldSurging: true
+    });
+    const { runtimeCache } = await import('../src/content/cache');
+    const now = Date.now();
+    runtimeCache.collectionPrices.set(701, { median7d: 200, median30d: 200, sales7d: 10, sales30d: null, at: now });
+    runtimeCache.collectionPrices.set(702, { median7d: 900, median30d: 900, sales7d: 10, sales30d: null, at: now });
+    runtimeCache.collectionPrices.set(703, { median7d: null, median30d: null, sales7d: 0, sales30d: null, at: now });
+    runtimeCache.collectionPrices.set(704, { median7d: 100, median30d: 70, sales7d: 5, sales30d: null, at: now });
+    runtimeCache.collectionPrices.set(705, { median7d: null, median30d: null, sales7d: 0, sales30d: null, at: now });
+    runtimeCache.collectionPrices.set(706, { median7d: 30, median30d: 30, sales7d: 1, sales30d: null, at: now });
+
+    // Only 701..705 (all non-sellable under fast mode): 0 HTTP requests at all
+    const nonSellables = [
+      card(701, { rarity: 'L', verdict: 'VENDRE', canAutoSell: false, referenceMedian: 200 }),
+      card(702, { rarity: 'M', verdict: 'VENDRE', canAutoSell: false, referenceMedian: 900 }),
+      card(703, { rarity: 'E', verdict: 'CONSERVER', canAutoSell: false, referenceMedian: null, sales7d: 0 }),
+      card(704, { rarity: 'E', verdict: 'CONSERVER', canAutoSell: false, referenceMedian: 100, isSurging: true }),
+      card(705, { rarity: 'R', verdict: 'RECYCLER', canAutoSell: false, canAutoRecycle: true, referenceMedian: null, sales7d: 0 })
+    ];
+    const emptyRes = await executeAutoSell(
+      { duplicates: nonSellables },
+      buildCardLedger(entries(701, 702, 703, 704, 705), [], []),
+      { mode: 'fast' }
+    );
+    expect(emptyRes.listedCount).toBe(0);
+    expect(mocks.api).not.toHaveBeenCalled();
+
+    // Adding card 706 (slow mover E at 30 ◆: CONSERVER in normal/adaptive, VENDRE in fast) fetches only 706
+    const slowEpic = card(706, {
+      rarity: 'E',
+      verdict: 'CONSERVER',
+      canAutoSell: false,
+      referenceMedian: 30,
+      sales7d: 1
+    });
+    const resWithSlow = await executeAutoSell(
+      { duplicates: [...nonSellables, slowEpic] },
+      buildCardLedger(entries(701, 702, 703, 704, 705, 706), [], []),
+      { mode: 'fast' }
+    );
+    expect(resWithSlow.listedCount).toBe(1);
+    const marketGetPaths = mocks.api.mock.calls
+      .filter(([, opts]) => !opts?.method || opts.method === 'GET')
+      .map(([path]) => String(path));
+    expect(marketGetPaths).toHaveLength(3);
+    expect(marketGetPaths.every((p) => p.includes('706'))).toBe(true);
+    for (const skippedId of [701, 702, 703, 704, 705]) {
+      expect(marketGetPaths.some((p) => p.includes(String(skippedId)))).toBe(false);
+    }
+  });
+
+  it('retireStaleListings applies fast profile (staleMinutes: 20 and fast floor/discount) when dup was precomputed as patient', async () => {
+    marketApi(90, { '/market/listings/L-patient-fast/cancel': {} });
+    await setup({ autoSellMode: 'fast', autoRecycleEnabled: false });
+    const { buildCardLedger } = await import('../src/content/safety');
+    const { retireStaleListings, loadRepriceHints } = await import('../src/content/automation/reprice');
+    const { nextRepriceCeiling } = await import('../src/lib/analytics/sell-profile');
+
+    const twentyFiveMinAgo = new Date(Date.now() - 25 * 60 * 1000).toISOString();
+    const listing = {
+      id: 'L-patient-fast',
+      status: 'active',
+      characterId: 801,
+      character: { id: 801, rarity: 'E' },
+      price: 65,
+      createdAt: twentyFiveMinAgo
+    };
+    // Precomputed in patient mode: staleMinutes=90, minSafe=68 (would block cancellation at 25m and price 65)
+    const dup = card(801, {
+      rarity: 'E',
+      spare: 0,
+      canAutoSell: false,
+      referenceMedian: 80,
+      recycleValue: 10,
+      sellProfile: resolveSellProfile({ ...DEFAULT_SETTINGS, autoSellMode: 'patient' }, 80),
+      prices: { minSafe: 68 }
+    });
+
+    const book = buildCardLedger([{ characterId: 801, qty: 2 }], [listing], []);
+    const res = await retireStaleListings({
+      book,
+      duplicates: [dup],
+      hints: new Map(),
+      settings: { ...DEFAULT_SETTINGS, autoSellMode: 'fast', autoRecycleEnabled: false }
+    });
+
+    expect(res.cancelled).toBe(1);
+    expect(res.chars.has(801)).toBe(true);
+    expect(posts('/market/listings/L-patient-fast/cancel')).toHaveLength(1);
+    const savedHint = (await loadRepriceHints()).get(801);
+    expect(savedHint?.ceiling).toBe(nextRepriceCeiling(65, 8));
+  });
 });

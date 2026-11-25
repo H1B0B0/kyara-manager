@@ -30,12 +30,64 @@ function sellPriority(d: any): number {
   return p * (d.fees?.netProceeds ?? 0);
 }
 
+function evaluateDuplicateFromCache(
+  charId: number,
+  seed: any,
+  book: CardLedger,
+  recycleMap: Record<string, number>,
+  settings: typeof state.currentSettings
+) {
+  const avail = book.get(charId);
+  const catalogCard = runtimeCache.catalogById?.get(charId) || {
+    id: charId,
+    name: seed?.name || avail.entry?.name || `Carte #${charId}`,
+    rarity: seed?.rarity || avail.entry?.rarity || 'C',
+    series: seed?.series || avail.entry?.series || ''
+  };
+  const cachedStats = runtimeCache.collectionPrices.get(charId);
+  const stats =
+    cachedStats ??
+    (seed
+      ? {
+          median7d: seed.referenceMedian ?? null,
+          median30d:
+            seed.median30d ??
+            (seed.isSurging && seed.referenceMedian && seed.trendPct
+              ? Math.floor(seed.referenceMedian / (1 + seed.trendPct / 100))
+              : seed.referenceMedian) ??
+            null,
+          lowestFixed: seed.lowestFixed ?? null,
+          highestFixed: seed.highestFixed ?? null,
+          sales7d: seed.sales7d ?? null
+        }
+      : {});
+  const cardRecycleMap =
+    seed && Number.isFinite(Number(seed.recycleValue)) && Number(seed.recycleValue) > 0
+      ? { ...recycleMap, [catalogCard.rarity]: Number(seed.recycleValue) }
+      : recycleMap;
+  const pinned = seed?.pinned ? new Set<number>([...avail.pinned, charId]) : avail.pinned;
+  return evaluateDuplicate(
+    catalogCard,
+    avail.entry || { characterId: charId, qty: seed ? 0 : 2 },
+    stats,
+    cardRecycleMap,
+    settings,
+    avail.listed,
+    pinned
+  );
+}
+
 export async function executeAutoSell(dashboard: any, ledger?: CardLedger, options: SellOptions = {}): Promise<SellResult> {
   const settings = options.mode ? { ...state.currentSettings, autoSellMode: options.mode } : state.currentSettings;
   const result: SellResult = { listedCount: 0, slotsAvailable: 0, repriced: 0, recycledCopies: 0 };
-  const duplicates: any[] = dashboard?.duplicates ? [...dashboard.duplicates] : [];
   const book = ledger ?? (await loadCardLedger());
   const hints = await loadRepriceHints();
+  const recycleMap = runtimeCache.recycleMap || { ...DEFAULT_RECYCLE_VALUES };
+
+  const sourceDuplicates: any[] = dashboard?.duplicates ? [...dashboard.duplicates] : [];
+  const duplicates: any[] = options.mode
+    ? sourceDuplicates.map((d: any) => evaluateDuplicateFromCache(Number(d.characterId), d, book, recycleMap, settings))
+    : sourceDuplicates;
 
   const stale = await retireStaleListings({ book, duplicates, hints, settings });
   result.repriced = stale.cancelled;
@@ -43,27 +95,9 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
   // Ensure cards in stale.chars that are NOT in duplicates are added to duplicates
   // using book.get(charId) and runtimeCache.catalogById?.get(charId) so they are never orphaned after cancellation
   const knownDupIds = new Set<number>(duplicates.map((d: any) => Number(d.characterId)));
-  const recycleMap = runtimeCache.recycleMap || { ...DEFAULT_RECYCLE_VALUES };
   for (const charId of stale.chars) {
     if (!knownDupIds.has(charId)) {
-      const avail = book.get(charId);
-      const catalogCard = runtimeCache.catalogById?.get(charId) || {
-        id: charId,
-        name: avail.entry?.name || `Carte #${charId}`,
-        rarity: avail.entry?.rarity || 'C',
-        series: avail.entry?.series || ''
-      };
-      const stats = runtimeCache.collectionPrices.get(charId) || {};
-      const ev = evaluateDuplicate(
-        catalogCard,
-        avail.entry || { characterId: charId, qty: 2 },
-        stats,
-        recycleMap,
-        settings,
-        avail.listed,
-        avail.pinned
-      );
-      duplicates.push(ev);
+      duplicates.push(evaluateDuplicateFromCache(charId, null, book, recycleMap, settings));
       knownDupIds.add(charId);
     }
   }
@@ -74,9 +108,18 @@ export async function executeAutoSell(dashboard: any, ledger?: CardLedger, optio
   if (slots <= 0) return result;
 
   const recycleRarities: string[] = Array.isArray(settings.autoRecycleRarities) ? settings.autoRecycleRarities : ['C', 'U', 'R'];
-  // With a forced mode, verdicts computed under the saved mode are not trusted: live data decides.
   const eligible = (d: any) =>
-    !d.pinned && d.spare > 0 && (options.mode ? d.verdict !== 'PROTÉGÉ' : Boolean(d.canAutoSell));
+    !d.pinned &&
+    d.spare > 0 &&
+    (d.rarity !== 'L' || Boolean(settings.autoSellIncludeL)) &&
+    (d.rarity !== 'M' || Boolean(settings.autoSellIncludeM)) &&
+    Boolean(
+      d.canAutoSell ||
+        (d.canAutoRecycle &&
+          settings.autoRecycleEnabled &&
+          recycleRarities.includes(d.rarity) &&
+          d.sellProfile?.turbo)
+    );
   const listedChars = new Set<number>(book.listings.map((l: any) => Number(l.character?.id ?? l.characterId)));
   const rawPool = duplicates
     .filter((d) => !listedChars.has(d.characterId) && (stale.chars.has(d.characterId) || eligible(d)))

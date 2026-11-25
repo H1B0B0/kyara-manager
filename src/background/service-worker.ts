@@ -23,6 +23,10 @@ const WORKER_GAMES_COOLDOWN_MS = 3 * 60 * 1000;
 const WORKER_GAMES_INFLIGHT_TTL_MS = 8 * 60 * 1000;
 const WORKER_GAMES_INFLIGHT_KEY = 'kmWorkerGamesInFlightAt';
 let workerGamesInFlight = false;
+let workerGamesActiveCount = 0;
+let activeWorkerGamesRun: Promise<any> | null = null;
+let pendingDedicatedTabClose = false;
+let lastWorkerGamesShouldClose = false;
 
 chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch((err) => {
   console.warn('[Kyara Manager] setPanelBehavior warning:', err);
@@ -113,30 +117,49 @@ export async function findKyaraTabs(
 }
 
 async function isWorkerGamesInFlight(): Promise<boolean> {
-  if (workerGamesInFlight) return true;
+  if (workerGamesInFlight || activeWorkerGamesRun || workerGamesActiveCount > 0) return true;
   try {
     const stored = await chrome.storage.session?.get?.(WORKER_GAMES_INFLIGHT_KEY);
+    if (workerGamesInFlight || activeWorkerGamesRun || workerGamesActiveCount > 0) return true;
     const startedAt = Number(stored?.[WORKER_GAMES_INFLIGHT_KEY]) || 0;
     if (startedAt > 0 && Date.now() - startedAt < WORKER_GAMES_INFLIGHT_TTL_MS) return true;
     if (startedAt > 0) await chrome.storage.session?.remove?.(WORKER_GAMES_INFLIGHT_KEY).catch(() => {});
   } catch {}
-  return false;
+  return Boolean(workerGamesInFlight || activeWorkerGamesRun || workerGamesActiveCount > 0);
 }
 
-async function runDedicatedGamesFarm(payload: any, targetGame?: string): Promise<any> {
+function runDedicatedGamesFarm(payload: any, targetGame?: string): Promise<any> {
+  workerGamesActiveCount += 1;
   workerGamesInFlight = true;
-  try {
-    await chrome.storage.session?.set?.({ [WORKER_GAMES_INFLIGHT_KEY]: Date.now() }).catch(() => {});
-    const res = await sendToGameWorkerTab(payload, targetGame);
-    if (isArcadeDoneOrBlocked(res?.arcade) || Boolean(res?.blocked)) {
-      void closeGameWorkerTab().catch(() => {});
+  const previousRun = activeWorkerGamesRun;
+  const run = (previousRun ? previousRun.catch(() => {}) : Promise.resolve()).then(async () => {
+    try {
+      lastWorkerGamesShouldClose = false;
+      await chrome.storage.session?.set?.({ [WORKER_GAMES_INFLIGHT_KEY]: Date.now() }).catch(() => {});
+      const res = await sendToGameWorkerTab(payload, targetGame);
+      lastWorkerGamesShouldClose = isArcadeDoneOrBlocked(res?.arcade) || Boolean(res?.blocked);
+      return res;
+    } finally {
+      if (workerGamesActiveCount <= 1) {
+        await chrome.storage.session?.remove?.(WORKER_GAMES_INFLIGHT_KEY).catch(() => {});
+        await chrome.storage.local.set({ kmLastWorkerGamesAt: Date.now() }).catch(() => {});
+        if (workerGamesActiveCount <= 1 && (pendingDedicatedTabClose || lastWorkerGamesShouldClose)) {
+          pendingDedicatedTabClose = false;
+          lastWorkerGamesShouldClose = false;
+          await closeGameWorkerTab().catch(() => {});
+        }
+      }
+      workerGamesActiveCount = Math.max(0, workerGamesActiveCount - 1);
+      if (workerGamesActiveCount === 0) {
+        workerGamesInFlight = false;
+        if (activeWorkerGamesRun === run) {
+          activeWorkerGamesRun = null;
+        }
+      }
     }
-    return res;
-  } finally {
-    workerGamesInFlight = false;
-    await chrome.storage.session?.remove?.(WORKER_GAMES_INFLIGHT_KEY).catch(() => {});
-    await chrome.storage.local.set({ kmLastWorkerGamesAt: Date.now() }).catch(() => {});
-  }
+  });
+  activeWorkerGamesRun = run;
+  return run;
 }
 
 async function sendToGameWorkerTab(payload: any, targetGame?: string): Promise<any> {
@@ -251,7 +274,12 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
   };
   const settings = stored.settings;
   if (!settings?.masterEnabled) {
-    void closeGameWorkerTab().catch(() => {});
+    const inFlight = Boolean(activeWorkerGamesRun) || (await isWorkerGamesInFlight());
+    if (inFlight || activeWorkerGamesRun || workerGamesInFlight) {
+      pendingDedicatedTabClose = true;
+    } else {
+      void closeGameWorkerTab().catch(() => {});
+    }
     return;
   }
 
@@ -264,14 +292,19 @@ chrome.alarms.onAlarm.addListener(async (alarm) => {
     !settings.autoGamesEnabled ||
     settings.autoGamesDedicatedTab === false ||
     isArcadeDoneOrBlocked(arcade);
+  const inFlight = Boolean(activeWorkerGamesRun) || (await isWorkerGamesInFlight());
+  const stillInFlight = inFlight || Boolean(activeWorkerGamesRun) || workerGamesInFlight;
   if (shouldCloseDedicated) {
-    void closeGameWorkerTab().catch(() => {});
+    if (stillInFlight) {
+      pendingDedicatedTabClose = true;
+    } else {
+      void closeGameWorkerTab().catch(() => {});
+    }
   }
 
-  const inFlight = await isWorkerGamesInFlight();
   const canFarmDedicated =
     !shouldCloseDedicated &&
-    !inFlight &&
+    !stillInFlight &&
     Boolean(arcade?.enabled) &&
     Date.now() - (Number(stored.kmLastWorkerGamesAt) || 0) >= WORKER_GAMES_COOLDOWN_MS;
 
@@ -297,7 +330,14 @@ chrome.storage.onChanged.addListener(async (changes, areaName) => {
     await updateBadgeFromState();
     const nextSettings = changes.settings.newValue as KyaraSettings | undefined;
     if (!nextSettings?.masterEnabled || !nextSettings?.autoGamesEnabled || nextSettings?.autoGamesDedicatedTab === false) {
-      void closeGameWorkerTab().catch(() => {});
+      const inFlight = Boolean(activeWorkerGamesRun) || (await isWorkerGamesInFlight());
+      if (inFlight || activeWorkerGamesRun || workerGamesInFlight) {
+        pendingDedicatedTabClose = true;
+      } else {
+        void closeGameWorkerTab().catch(() => {});
+      }
+    } else {
+      pendingDedicatedTabClose = false;
     }
   }
 });
