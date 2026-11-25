@@ -59,9 +59,21 @@ describe('content command safeguards', () => {
   });
   it('advertises busy state and suspends new operations before an update', async () => {
     const { state, message } = await start();
+    expect(await message({ type: 'km:prepare-update' })).toMatchObject({ ok: true, busy: false });
     state.isOperationRunning = true;
     expect(await message({ type: 'km:prepare-update' })).toMatchObject({ ok: true, busy: true });
     expect(state.updatePending).toBe(true);
+  });
+  it('reports busy: true on km:prepare-update when isCycleRunning or isMarketWatchRunning is active', async () => {
+    const cycleCtx = await start();
+    cycleCtx.state.isCycleRunning = true;
+    expect(await cycleCtx.message({ type: 'km:prepare-update' })).toMatchObject({ ok: true, busy: true });
+    expect(cycleCtx.state.updatePending).toBe(true);
+
+    const watchCtx = await start();
+    watchCtx.state.isMarketWatchRunning = true;
+    expect(await watchCtx.message({ type: 'km:prepare-update' })).toMatchObject({ ok: true, busy: true });
+    expect(watchCtx.state.updatePending).toBe(true);
   });
   it('rejects invalid wishlist ids and budgets instead of silently inventing a budget', async () => {
     const { message, data } = await start();

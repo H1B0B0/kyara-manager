@@ -14,6 +14,125 @@ const ALL_RARITIES: Rarity[] = ['C', 'U', 'R', 'E', 'L', 'M'];
 const DEFAULT_REN_MAX_PRICE: Record<Rarity, number> = { C: 5, U: 6, R: 10, E: 35, L: 140, M: 600 };
 let totalBoughtSession = 0;
 
+interface RemainingSnapshot {
+  remainingByRarity: Partial<Record<Rarity, number>>;
+  liveOwnedCounts: Partial<Record<Rarity, number>>;
+}
+
+function computeRemainingByRarity(
+  dashboard: any,
+  ownedSet: Set<number>,
+  s: typeof state.currentSettings
+): RemainingSnapshot {
+  const remainingByRarity: Partial<Record<Rarity, number>> = {};
+  const liveOwnedCounts: Partial<Record<Rarity, number>> = {};
+  const renByRarity = dashboard?.renaissance?.byRarity;
+
+  if (renByRarity && typeof renByRarity === 'object') {
+    for (const r of ALL_RARITIES) {
+      const rem = renByRarity[r]?.remainingForTarget;
+      if (typeof rem === 'number' && Number.isFinite(rem)) {
+        remainingByRarity[r] = Math.max(0, rem);
+      }
+    }
+  }
+
+  if (runtimeCache.catalogById && runtimeCache.catalogById.size > 0) {
+    const ownedCounts: Record<Rarity, number> = { C: 0, U: 0, R: 0, E: 0, L: 0, M: 0 };
+    const catalogCounts: Record<Rarity, number> = { C: 0, U: 0, R: 0, E: 0, L: 0, M: 0 };
+    for (const [cid, ch] of runtimeCache.catalogById.entries()) {
+      const r = (ch?.rarity || 'C') as Rarity;
+      if (!ALL_RARITIES.includes(r)) continue;
+      catalogCounts[r] += 1;
+      if (ownedSet.has(Number(cid))) {
+        ownedCounts[r] += 1;
+      }
+    }
+    for (const r of ALL_RARITIES) {
+      if (catalogCounts[r] <= 0) continue;
+      const explicitRaw = s.renaissanceTargets?.[r];
+      const explicitTarget =
+        explicitRaw !== undefined && explicitRaw !== null && Number.isFinite(Number(explicitRaw)) && Number(explicitRaw) >= 0
+          ? Math.floor(Number(explicitRaw))
+          : NaN;
+      const dashTarget = Number(renByRarity?.[r]?.target);
+      const rawTarget = Number.isFinite(explicitTarget)
+        ? explicitTarget
+        : Number.isFinite(dashTarget) && dashTarget > 0
+          ? Math.floor(dashTarget)
+          : OFFICIAL_REBIRTH_1_TARGETS[r];
+      const target = Number.isFinite(explicitTarget) ? Math.min(catalogCounts[r], rawTarget) : rawTarget;
+      const dashTotal = Number(renByRarity?.[r]?.total);
+      const hasCompleteCatalog =
+        catalogCounts[r] >= target && !(Number.isFinite(dashTotal) && dashTotal > catalogCounts[r]);
+      if (hasCompleteCatalog) {
+        liveOwnedCounts[r] = ownedCounts[r];
+        remainingByRarity[r] = Math.max(0, target - ownedCounts[r]);
+      } else if (remainingByRarity[r] === undefined && !renByRarity) {
+        remainingByRarity[r] = Math.max(0, rawTarget - ownedCounts[r]);
+      }
+    }
+  }
+
+  return { remainingByRarity, liveOwnedCounts };
+}
+
+function syncDashboardRenaissance(
+  baseDashboard: any,
+  remainingByRarity: Partial<Record<Rarity, number>>,
+  liveOwnedCounts: Partial<Record<Rarity, number>>,
+  boughtByRarity: Partial<Record<Rarity, number>>
+): any {
+  const ren = baseDashboard?.renaissance;
+  if (!ren?.byRarity || typeof ren.byRarity !== 'object') return ren;
+
+  const nextByRarity: Record<string, any> = { ...ren.byRarity };
+  let changed = false;
+
+  for (const r of ALL_RARITIES) {
+    const prevEntry = nextByRarity[r];
+    if (!prevEntry || typeof prevEntry !== 'object') continue;
+    const boughtR = boughtByRarity[r] || 0;
+    const prevRem =
+      typeof prevEntry.remainingForTarget === 'number' && Number.isFinite(prevEntry.remainingForTarget)
+        ? Math.max(0, prevEntry.remainingForTarget)
+        : undefined;
+    const nextRem =
+      liveOwnedCounts[r] !== undefined && remainingByRarity[r] !== undefined
+        ? remainingByRarity[r]
+        : boughtR > 0 && prevRem !== undefined
+          ? Math.max(0, prevRem - boughtR)
+          : prevRem;
+    const prevOwned =
+      typeof prevEntry.owned === 'number' && Number.isFinite(prevEntry.owned) ? prevEntry.owned : undefined;
+    const nextOwned =
+      prevOwned === undefined
+        ? undefined
+        : liveOwnedCounts[r] !== undefined
+          ? liveOwnedCounts[r]! + boughtR
+          : boughtR > 0
+            ? prevOwned + boughtR
+            : prevOwned;
+
+    if (nextRem === prevRem && nextOwned === prevOwned) continue;
+    changed = true;
+    const updated: Record<string, any> = { ...prevEntry };
+    if (nextRem !== undefined) updated.remainingForTarget = nextRem;
+    if (nextOwned !== undefined) {
+      updated.owned = nextOwned;
+      if (typeof prevEntry.total === 'number' && Number.isFinite(prevEntry.total)) {
+        updated.missing = Math.max(0, prevEntry.total - nextOwned);
+      }
+      if (typeof prevEntry.target === 'number' && prevEntry.target > 0) {
+        updated.targetPct = Math.min(100, Math.round((nextOwned / prevEntry.target) * 1000) / 10);
+      }
+    }
+    nextByRarity[r] = updated;
+  }
+
+  return changed ? { ...ren, byRarity: nextByRarity } : ren;
+}
+
 export async function executeAutoBuy(
   dashboard: any,
   options: { manual?: boolean } = {}
@@ -53,28 +172,7 @@ export async function executeAutoBuy(
       ? dashChakra
       : 0;
 
-  const remainingByRarity: Partial<Record<Rarity, number>> = {};
-  const renByRarity = dashboard?.renaissance?.byRarity;
-  if (renByRarity && typeof renByRarity === 'object') {
-    for (const r of ALL_RARITIES) {
-      const rem = renByRarity[r]?.remainingForTarget;
-      if (typeof rem === 'number' && Number.isFinite(rem)) {
-        remainingByRarity[r] = Math.max(0, rem);
-      }
-    }
-  } else if (runtimeCache.catalogById && runtimeCache.catalogById.size > 0) {
-    const ownedCounts: Record<Rarity, number> = { C: 0, U: 0, R: 0, E: 0, L: 0, M: 0 };
-    for (const [cid, ch] of runtimeCache.catalogById.entries()) {
-      const r = (ch?.rarity || 'C') as Rarity;
-      if (ALL_RARITIES.includes(r) && ownedSet.has(Number(cid))) {
-        ownedCounts[r] += 1;
-      }
-    }
-    for (const r of ALL_RARITIES) {
-      const target = Number(s.renaissanceTargets?.[r]) || OFFICIAL_REBIRTH_1_TARGETS[r];
-      remainingByRarity[r] = Math.max(0, target - ownedCounts[r]);
-    }
-  }
+  const { remainingByRarity, liveOwnedCounts } = computeRemainingByRarity(dashboard, ownedSet, s);
 
   const configuredFocus: Rarity[] =
     Array.isArray(s.renaissanceTargetRarities) && s.renaissanceTargetRarities.length
@@ -170,6 +268,7 @@ export async function executeAutoBuy(
 
   const minReserve = Math.max(0, Number(s.autoBuyMinChakraReserve ?? 500));
   let boughtCount = 0;
+  const boughtByRarity: Partial<Record<Rarity, number>> = {};
 
   for (const deal of deals) {
     if (!options.manual && isInterrupted()) break;
@@ -211,9 +310,10 @@ export async function executeAutoBuy(
       if (s.dryRun) {
         boughtCount += 1;
         currentChakra -= freshPrice;
+        const wasUnowned = !ownedSet.has(deal.characterId);
         ownedSet.add(deal.characterId);
-        if (isRenaissanceBuy && remainingByRarity[rarity] !== undefined) {
-          remainingByRarity[rarity] = Math.max(0, (remainingByRarity[rarity] || 0) - 1);
+        if (wasUnowned && remainingByRarity[rarity] !== undefined) {
+          remainingByRarity[rarity] = Math.max(0, remainingByRarity[rarity]! - 1);
         }
         await appendJournal(
           'buy',
@@ -231,9 +331,13 @@ export async function executeAutoBuy(
       });
       boughtCount += 1;
       currentChakra = Number(buyRes?.user?.chakra ?? currentChakra - freshPrice);
+      const wasUnowned = !ownedSet.has(deal.characterId);
       ownedSet.add(deal.characterId);
-      if (isRenaissanceBuy && remainingByRarity[rarity] !== undefined) {
-        remainingByRarity[rarity] = Math.max(0, (remainingByRarity[rarity] || 0) - 1);
+      if (wasUnowned) {
+        boughtByRarity[rarity] = (boughtByRarity[rarity] || 0) + 1;
+        if (remainingByRarity[rarity] !== undefined) {
+          remainingByRarity[rarity] = Math.max(0, remainingByRarity[rarity]! - 1);
+        }
       }
       const reasonTag = shouldBuyWish
         ? `Envie de collection (budget max : ${deal.wishlistMatch?.maxBudget} ◆)`
@@ -288,10 +392,14 @@ export async function executeAutoBuy(
         ? dashboard
         : null;
   if (baseDashboard) {
+    const nextRenaissance = !s.dryRun
+      ? syncDashboardRenaissance(baseDashboard, remainingByRarity, liveOwnedCounts, boughtByRarity)
+      : baseDashboard.renaissance;
     await chrome.storage.local
       .set({
         kmDashboard: {
           ...baseDashboard,
+          ...(nextRenaissance !== undefined ? { renaissance: nextRenaissance } : {}),
           deals: deals.slice(0, 100),
           marketWatch,
           me: baseDashboard.me

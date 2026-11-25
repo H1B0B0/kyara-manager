@@ -7,7 +7,8 @@ import { state } from '../src/content/state';
 import { PRICES_TTL_MS, runtimeCache } from '../src/content/cache';
 import { scanMarketDealsInternal, scanProfitableTrades } from '../src/content/scanner';
 import { executeAutoBuy } from '../src/content/automation/auto-buy';
-import { runMarketWatchTick } from '../src/content/automation/market-watcher';
+import { MARKET_WATCH_INTERVAL_MS, runMarketWatchTick, startMarketWatcher } from '../src/content/automation/market-watcher';
+import { PLAYSTYLE_PRESETS } from '../src/lib/presets';
 import { computeLiveMarketDepth } from '../src/lib/analytics/market-depth';
 
 const mocks = vi.hoisted(() => ({
@@ -27,6 +28,7 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     mockLocks();
     state.currentSettings = { ...DEFAULT_SETTINGS };
     state.isCycleRunning = false;
+    state.isMarketWatchRunning = false;
     state.isOperationRunning = false;
     state.updatePending = false;
     state.disposed = false;
@@ -833,5 +835,182 @@ describe('v2.3.1 Renaissance Rebirth 1 targets & active market watcher', () => {
     });
     expect(Number(entry?.at)).toBeGreaterThan(expiredAt);
     expect(deals[0]).toMatchObject({ characterId: 7301, refMedian: 60, discountPct: 67 });
+  });
+
+  it('Test 20: rush_renaissance decrements kmDashboard.renaissance.byRarity[r].remainingForTarget and stops exactly at target across consecutive startMarketWatcher ticks without overshoot or isGoodMissingBuy bypass', async () => {
+    vi.useFakeTimers();
+    const prevCatalog = runtimeCache.catalogById;
+    runtimeCache.catalogById = null;
+
+    const rushPatch = PLAYSTYLE_PRESETS.find((p) => p.id === 'rush_renaissance')!.patch;
+    const renSettings = normalizeSettings({
+      ...DEFAULT_SETTINGS,
+      ...rushPatch,
+      masterEnabled: true,
+      renaissanceTargetRarities: ['C'],
+      autoBuyMinChakraReserve: 100
+    });
+    expect(renSettings.autoBuyMissingEnabled).toBe(false);
+
+    const { data } = mockChrome({
+      settings: renSettings,
+      kmDashboard: {
+        authenticated: true,
+        me: { chakra: 1000 },
+        renaissance: {
+          byRarity: {
+            C: { owned: 1430, total: 1600, target: 1432, remainingForTarget: 2 },
+            U: { owned: 1432, total: 1600, target: 1432, remainingForTarget: 0 },
+            R: { owned: 1432, total: 1600, target: 1432, remainingForTarget: 0 },
+            E: { owned: 505, total: 900, target: 505, remainingForTarget: 0 },
+            L: { owned: 70, total: 200, target: 70, remainingForTarget: 0 },
+            M: { owned: 10, total: 100, target: 10, remainingForTarget: 0 }
+          }
+        }
+      }
+    });
+    state.currentSettings = renSettings;
+
+    let tickPass = 1;
+    let chakra = 1000;
+    const owned: Array<{ characterId: number; qty: number }> = [];
+    const bought: string[] = [];
+
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      if (path === '/me/collection?lean=1') return [...owned];
+      if (path === '/me/bootstrap') return { me: { chakra } };
+      if (path.startsWith('/market/listings?')) {
+        const items: any[] = [];
+        if (tickPass === 1) {
+          items.push({ id: 'l-c1', status: 'active', type: 'fixed', price: 3, character: { id: 9701, name: 'Ren C1', rarity: 'C' } });
+        } else {
+          items.push(
+            { id: 'l-c2', status: 'active', type: 'fixed', price: 3, character: { id: 9702, name: 'Ren C2', rarity: 'C' } },
+            { id: 'l-c3', status: 'active', type: 'fixed', price: 3, character: { id: 9703, name: 'Ren C3 Overshoot', rarity: 'C' } },
+            { id: 'l-m1', status: 'active', type: 'fixed', price: 10, character: { id: 9704, name: 'Cheap Mythic Bypass', rarity: 'M' } }
+          );
+        }
+        return { items };
+      }
+      if (path === '/market/listings/l-c1') return { id: 'l-c1', status: 'active', type: 'fixed', price: 3 };
+      if (path === '/market/listings/l-c2') return { id: 'l-c2', status: 'active', type: 'fixed', price: 3 };
+      if (path === '/market/listings/l-c3') return { id: 'l-c3', status: 'active', type: 'fixed', price: 3 };
+      if (path === '/market/listings/l-m1') return { id: 'l-m1', status: 'active', type: 'fixed', price: 10 };
+      if (path.endsWith('/buy') && opts.method === 'POST') {
+        bought.push(path);
+        const charMap: Record<string, { cid: number; price: number }> = {
+          '/market/listings/l-c1/buy': { cid: 9701, price: 3 },
+          '/market/listings/l-c2/buy': { cid: 9702, price: 3 },
+          '/market/listings/l-c3/buy': { cid: 9703, price: 3 },
+          '/market/listings/l-m1/buy': { cid: 9704, price: 10 }
+        };
+        const info = charMap[path];
+        if (info) {
+          owned.push({ characterId: info.cid, qty: 1 });
+          chakra -= info.price;
+        }
+        return { user: { chakra } };
+      }
+      return {};
+    });
+
+    const flushMicrotasks = async () => {
+      for (let i = 0; i < 30; i += 1) {
+        await Promise.resolve();
+      }
+    };
+
+    const stopWatcher = startMarketWatcher();
+    try {
+      await vi.advanceTimersByTimeAsync(MARKET_WATCH_INTERVAL_MS);
+      await flushMicrotasks();
+      expect(bought).toEqual(['/market/listings/l-c1/buy']);
+      expect(data.kmDashboard.renaissance.byRarity.C).toMatchObject({ owned: 1431, remainingForTarget: 1 });
+      expect(state.isMarketWatchRunning).toBe(false);
+
+      tickPass = 2;
+      await vi.advanceTimersByTimeAsync(MARKET_WATCH_INTERVAL_MS);
+      await flushMicrotasks();
+      expect(bought).toEqual(['/market/listings/l-c1/buy', '/market/listings/l-c2/buy']);
+      expect(data.kmDashboard.renaissance.byRarity.C).toMatchObject({ owned: 1432, remainingForTarget: 0 });
+      expect(state.isMarketWatchRunning).toBe(false);
+
+      tickPass = 3;
+      await vi.advanceTimersByTimeAsync(MARKET_WATCH_INTERVAL_MS);
+      await flushMicrotasks();
+      expect(bought).toEqual(['/market/listings/l-c1/buy', '/market/listings/l-c2/buy']);
+      expect(data.kmDashboard.renaissance.byRarity.C).toMatchObject({ owned: 1432, remainingForTarget: 0 });
+    } finally {
+      stopWatcher();
+      runtimeCache.catalogById = prevCatalog;
+      vi.useRealTimers();
+    }
+  });
+
+  it('Test 21: executeAutoBuy recomputes live remainingForTarget from runtimeCache.catalogById and ownedSet when kmDashboard.renaissance is stale', async () => {
+    const prevCatalog = runtimeCache.catalogById;
+    runtimeCache.catalogById = new Map<number, any>([
+      [1, { id: 1, name: 'C1', rarity: 'C' }],
+      [2, { id: 2, name: 'C2', rarity: 'C' }],
+      [3, { id: 3, name: 'C3', rarity: 'C' }],
+      [4, { id: 4, name: 'C4', rarity: 'C' }],
+      [5, { id: 5, name: 'C5', rarity: 'C' }]
+    ]);
+
+    const renSettings = normalizeSettings({
+      masterEnabled: true,
+      renaissanceFocusEnabled: true,
+      renaissanceTargetRarities: ['C'],
+      renaissanceTargets: { C: 3 },
+      autoBuyMissingEnabled: false,
+      autoBuyMinChakraReserve: 100
+    });
+    const { data } = mockChrome({
+      settings: renSettings,
+      kmDashboard: {
+        authenticated: true,
+        me: { chakra: 800 },
+        renaissance: {
+          byRarity: {
+            C: { owned: 1, total: 5, target: 3, remainingForTarget: 2 }
+          }
+        }
+      }
+    });
+    state.currentSettings = renSettings;
+
+    const bought: string[] = [];
+    mocks.api.mockImplementation(async (path: string, opts: any = {}) => {
+      // Player already owns 3/5 C cards (e.g. pulled from boosters since last snapshot)
+      if (path === '/me/collection?lean=1') {
+        return [
+          { characterId: 1, qty: 1 },
+          { characterId: 2, qty: 1 },
+          { characterId: 3, qty: 1 }
+        ];
+      }
+      if (path === '/me/bootstrap') return { me: { chakra: 800 } };
+      if (path.startsWith('/market/listings?')) {
+        return {
+          items: [
+            { id: 'l-stale-c4', status: 'active', type: 'fixed', price: 3, character: { id: 4, name: 'C4', rarity: 'C' } }
+          ]
+        };
+      }
+      if (path.endsWith('/buy') && opts.method === 'POST') {
+        bought.push(path);
+        return { user: { chakra: 797 } };
+      }
+      return {};
+    });
+
+    try {
+      const res = await executeAutoBuy(data.kmDashboard);
+      expect(res.boughtCount).toBe(0);
+      expect(bought).toHaveLength(0);
+      expect(data.kmDashboard.renaissance.byRarity.C).toMatchObject({ owned: 3, remainingForTarget: 0 });
+    } finally {
+      runtimeCache.catalogById = prevCatalog;
+    }
   });
 });

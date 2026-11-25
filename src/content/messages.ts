@@ -41,7 +41,15 @@ export function setupMessageListener(): () => void {
     }
     if (message?.type === 'km:prepare-update') {
       state.updatePending = true;
-      sendResponse({ ok: true, busy: state.isOperationRunning || state.isLiveOpening || state.isGamesRunning });
+      sendResponse({
+        ok: true,
+        busy:
+          state.isOperationRunning ||
+          state.isCycleRunning ||
+          state.isMarketWatchRunning ||
+          state.isLiveOpening ||
+          state.isGamesRunning
+      });
       return false;
     }
     if (message?.type === 'km:cmd:run-games-farm' && message.manual === false && state.isGamesRunning) {

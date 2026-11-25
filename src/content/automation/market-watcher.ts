@@ -2,7 +2,6 @@ import { state } from '../state';
 import { executeAutoBuy } from './auto-buy';
 
 export const MARKET_WATCH_INTERVAL_MS = 6_000;
-let isWatchTickRunning = false;
 
 function isAnyMarketBuyEnabled(): boolean {
   const s = state.currentSettings;
@@ -28,7 +27,7 @@ export async function runMarketWatchTick({ manual = false } = {}): Promise<{
     (
       !state.currentSettings.masterEnabled ||
       !isAnyMarketBuyEnabled() ||
-      isWatchTickRunning ||
+      state.isMarketWatchRunning ||
       state.updatePending ||
       state.disposed
     )
@@ -43,17 +42,17 @@ export async function runMarketWatchTick({ manual = false } = {}): Promise<{
       }
       if (
         !manual &&
-        (!state.currentSettings.masterEnabled || !isAnyMarketBuyEnabled() || isWatchTickRunning)
+        (!state.currentSettings.masterEnabled || !isAnyMarketBuyEnabled() || state.isMarketWatchRunning)
       ) {
         return { ok: true, boughtCount: 0, dealsFound: 0, skipped: true };
       }
-      isWatchTickRunning = true;
+      state.isMarketWatchRunning = true;
       try {
         const { kmDashboard } = (await chrome.storage.local.get('kmDashboard')) as { kmDashboard?: any };
         const res = await executeAutoBuy(kmDashboard || null, { manual });
         return { ok: true, boughtCount: res.boughtCount, dealsFound: res.dealsFound ?? 0 };
       } finally {
-        isWatchTickRunning = false;
+        state.isMarketWatchRunning = false;
       }
     });
   } catch (err: any) {

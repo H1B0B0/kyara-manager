@@ -67,6 +67,10 @@ describe('v2.3.0 ergonomics, presets, overlay & backup', () => {
     for (const preset of PLAYSTYLE_PRESETS) {
       expect(detectActivePreset(mergeSettings(DEFAULT_SETTINGS, preset.patch))).toBe(preset.id);
     }
+    const rush = PLAYSTYLE_PRESETS.find((p) => p.id === 'rush_renaissance');
+    expect(rush?.patch.renaissanceFocusEnabled).toBe(true);
+    expect(rush?.patch.autoBuyMissingEnabled).toBe(false);
+    expect(mergeSettings(DEFAULT_SETTINGS, rush!.patch).autoBuyMissingEnabled).toBe(false);
     expect(detectActivePreset(mergeSettings(DEFAULT_SETTINGS, { renaissanceFocusEnabled: false, autoSellMode: 'adaptive' }))).toBeNull();
     expect(detectActivePreset(mergeSettings(DEFAULT_SETTINGS, { renaissanceFocusEnabled: true, autoSellMode: 'fast' }))).toBeNull();
     expect(detectActivePreset(mergeSettings(DEFAULT_SETTINGS, { renaissanceFocusEnabled: false, autoSellMode: 'normal' }))).toBeNull();

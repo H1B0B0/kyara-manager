@@ -336,14 +336,7 @@ export const AutopilotTab: React.FC<AutopilotTabProps> = ({
                   id="sw-autopilot-renaissance"
                   className="switch switch--sm"
                   checked={Boolean(settings.renaissanceFocusEnabled)}
-                  onChange={(e) =>
-                    onUpdateSettings({
-                      renaissanceFocusEnabled: e.target.checked,
-                      ...(e.target.checked && !settings.autoBuyMissingEnabled && !settings.autoMarketEnabled
-                        ? { autoBuyMissingEnabled: true }
-                        : {})
-                    })
-                  }
+                  onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })}
                 />
               </div>
               <div className="module-card__footer">

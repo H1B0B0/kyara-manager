@@ -5,6 +5,7 @@ import { setLanguage } from '../lib/i18n';
 export const state = {
   currentSettings: { ...DEFAULT_SETTINGS } as KyaraSettings,
   isCycleRunning: false,
+  isMarketWatchRunning: false,
   isOperationRunning: false,
   updatePending: false,
   disposed: false,

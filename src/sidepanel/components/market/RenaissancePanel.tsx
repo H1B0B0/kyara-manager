@@ -188,14 +188,7 @@ export const RenaissancePanel: React.FC<RenaissancePanelProps> = ({
             type="checkbox" role="switch" id="sw-renaissance-focus" className="switch switch--sm"
             aria-label="Activer le Focus Renaissance"
             checked={Boolean(settings.renaissanceFocusEnabled)}
-            onChange={(e) =>
-              onUpdateSettings({
-                renaissanceFocusEnabled: e.target.checked,
-                ...(e.target.checked && !settings.autoBuyMissingEnabled && !settings.autoMarketEnabled
-                  ? { autoBuyMissingEnabled: true }
-                  : {})
-              })
-            }
+            onChange={(e) => onUpdateSettings({ renaissanceFocusEnabled: e.target.checked })}
           />
           <button
             type="button" className="ren-collapse-btn" aria-expanded={expanded}
