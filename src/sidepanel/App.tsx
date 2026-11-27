@@ -16,6 +16,7 @@ import { useJournal, useCumulativeStats } from './hooks/useJournal';
 import { useWishlist } from './hooks/useWishlist';
 import { useBestPulls } from './hooks/useBestPulls';
 import { UpdateNotice } from './components/UpdateNotice';
+import { DesktopPromoBanner } from './components/DesktopPromoBanner';
 
 export const App: React.FC = () => {
   const [activeTab, setActiveTab] = useState<TabId>('autopilot');
@@ -96,6 +97,7 @@ export const App: React.FC = () => {
 
       <main className="app-main">
         <UpdateNotice />
+        <DesktopPromoBanner />
         {(error || dashboard?.error) && <div className="connection-notice" role="alert">
           <p>{error || dashboard?.error}</p>
           <button className="btn btn--ghost btn--xs" onClick={() => void chrome.runtime.sendMessage({ type: 'km:open-kyara-tab' })}>Ouvrir Kyara</button>

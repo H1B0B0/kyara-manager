@@ -1,0 +1,36 @@
+{
+  "name": "kyara-manager-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Application desktop multi-comptes silencieuse et hybride pour Kyara Manager.",
+  "main": "dist/main/index.js",
+  "type": "module",
+  "author": "H1B0B0",
+  "license": "MIT",
+  "scripts": {
+    "dev": "node scripts/build.mjs --extension-only && electron .",
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
+    "dist:mac": "node scripts/build.mjs && electron-builder --mac --publish never",
+    "dist:win": "node scripts/build.mjs && electron-builder --win --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2",
+    "lucide-react": "^1.69.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "electron": "^35.1.5",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "vitest": "^5.1.0"
+  }
+}

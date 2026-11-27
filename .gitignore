@@ -3,3 +3,7 @@ dist/
 .DS_Store
 *.log
 .codegraph/
+desktop/node_modules/
+desktop/dist/
+desktop/release/
+desktop/resources/extension/

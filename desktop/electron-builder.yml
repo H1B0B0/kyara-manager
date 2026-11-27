@@ -1,0 +1,38 @@
+appId: com.kyara.manager.desktop
+productName: Kyara Manager Desktop
+directories:
+  output: release
+  buildResources: resources
+files:
+  - dist/**/*
+  - package.json
+extraResources:
+  - from: resources/extension
+    to: extension
+publish:
+  provider: generic
+  url: https://github.com/H1B0B0/kyara-manager/releases/download/desktop-latest
+mac:
+  category: public.app-category.games
+  icon: resources/icon.png
+  artifactName: Kyara-Manager-Desktop-${version}-mac-${arch}.${ext}
+  target:
+    - target: zip
+      arch:
+        - arm64
+        - x64
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+win:
+  icon: resources/icon.png
+  artifactName: Kyara-Manager-Desktop-${version}-win-${arch}.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false
