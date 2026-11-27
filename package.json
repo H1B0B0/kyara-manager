@@ -1,6 +1,6 @@
 {
   "name": "kyara-manager",
-  "version": "2.8.12",
+  "version": "2.8.13",
   "description": "Pilote automatique et tableau de bord analytique pour Kyara.games (Manifest V3) : auto-vente des doublons, auto-recyclage, flip marché et ouverture live de boosters.",
   "license": "MIT",
   "repository": {
