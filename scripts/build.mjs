@@ -24,7 +24,7 @@ fs.mkdirSync(distDir, { recursive: true });
 
 // 1. Build Sidepanel with Vite
 console.log('📦 [1/4] Building React Sidepanel with Vite...');
-execFileSync('npx', ['vite', 'build'], {
+execFileSync(process.execPath, [path.join(rootDir, 'node_modules/vite/bin/vite.js'), 'build'], {
   cwd: rootDir,
   stdio: 'inherit'
 });

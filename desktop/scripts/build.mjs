@@ -24,7 +24,7 @@ function copyDir(src, dest) {
 }
 
 console.log('⚡ Ensuring root Chrome extension dist/ is up to date...');
-execFileSync('npm', ['run', 'build'], { cwd: rootDir, stdio: 'inherit' });
+execFileSync(process.execPath, [path.join(rootDir, 'scripts/build.mjs')], { cwd: rootDir, stdio: 'inherit' });
 
 if (fs.existsSync(extResDir)) fs.rmSync(extResDir, { recursive: true, force: true });
 fs.mkdirSync(extResDir, { recursive: true });
@@ -41,7 +41,10 @@ if (fs.existsSync(desktopDistDir)) fs.rmSync(desktopDistDir, { recursive: true, 
 fs.mkdirSync(desktopDistDir, { recursive: true });
 
 console.log('📦 [1/3] Building Desktop React shell with Vite...');
-execFileSync('npx', ['vite', 'build'], { cwd: desktopDir, stdio: 'inherit' });
+execFileSync(process.execPath, [path.join(desktopDir, 'node_modules/vite/bin/vite.js'), 'build'], {
+  cwd: desktopDir,
+  stdio: 'inherit'
+});
 
 console.log('⚙️  [2/3] Bundling Electron Main process (ESM)...');
 await esbuild.build({
